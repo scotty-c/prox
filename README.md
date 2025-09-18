@@ -214,6 +214,22 @@ Nodes (node)
 	- Example:
 		prox node describe promox01
 
+Nodes (node)
+- list
+	- Command: `prox node ls`
+	- Description: List cluster nodes in a compact table (NAME, STATUS, TYPE, ID). Matches the VM/CT table UX.
+	- Example:
+		prox node ls
+
+- describe <name|id> (alias: info)
+	- Command: `prox node describe <name|id>` or `prox node info <name|id>`
+	- Description: Show detailed information for a node: basic info, resource summary (CPU, memory, disk, uptime) and primary node IP if available.
+	- Notes: Memory and disk are shown in GiB with percentages. Uptime is formatted as days/hours/minutes.
+	- Example:
+		prox node describe promox01
+
+- Environment variable:
+	- `PROX_NODE` can be set to specify a default node name for scripts/tests (see `tests/e2e/config.env`).
 
 - migrate <id> <targetNode>
 	- Flags: -s, --source <node>; --online; --with-local-disks

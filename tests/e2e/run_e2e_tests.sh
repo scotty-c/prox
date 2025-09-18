@@ -1440,6 +1440,22 @@ main() {
     # Show results
     show_summary
     create_test_report
+
+    # Node commands validation: list nodes and show info for NODE_NAME (if provided)
+    local target_node
+    target_node="${NODE_NAME:-$SOURCE_NODE}"
+    print_info "Running node checks: prox node ls and prox node info $target_node"
+    if [[ "$DRY_RUN" == "true" ]]; then
+        print_info "[DRY RUN] Would run: $PROX_BINARY node ls"
+        print_info "[DRY RUN] Would run: $PROX_BINARY node info $target_node"
+    else
+        if ! $PROX_BINARY node ls; then
+            print_warning "'prox node ls' failed (non-fatal)"
+        fi
+        if ! $PROX_BINARY node info "$target_node"; then
+            print_warning "'prox node info $target_node' failed (non-fatal)"
+        fi
+    fi
 }
 
 # Handle script interruption and ensure cleanup
