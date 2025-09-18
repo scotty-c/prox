@@ -199,6 +199,22 @@ VMs (vm)
 	- Flags: -n, --node <node>; -N, --name <name> (optional); -f, --full (full clone)
 	- Notes: If NAME is provided positionally and --name is also set and they differ, positional NAME takes precedence; a warning is printed.
 
+Nodes (node)
+- list
+	- Command: `prox node ls`
+	- Description: List cluster nodes in a compact table (NAME, STATUS, TYPE, ID). Matches the VM/CT table UX.
+	- Flags: - none currently (node auto-discovery is used when relevant)
+	- Example:
+		prox node ls
+
+- describe <name|id> (alias: info)
+	- Command: `prox node describe <name|id>` or `prox node info <name|id>`
+	- Description: Show detailed information for a node: basic info, resource summary (CPU, memory, disk, uptime) and primary node IP if available.
+	- Notes: Memory and disk are shown in GiB with percentages. Uptime is formatted as days/hours/minutes.
+	- Example:
+		prox node describe promox01
+
+
 - migrate <id> <targetNode>
 	- Flags: -s, --source <node>; --online; --with-local-disks
 
