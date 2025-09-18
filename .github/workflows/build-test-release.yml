@@ -1,0 +1,226 @@
+name: Build, Test, and Release
+
+on:
+  push:
+    branches: [ main ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ main ]
+  release:
+    types: [ published ]
+  workflow_dispatch:
+    inputs:
+      push:
+        description: "Actually push image to GHCR"
+        type: boolean
+        default: false
+      tag:
+        description: "Optional tag to apply when testing (e.g., test-123)"
+        type: string
+        required: false
+
+jobs:
+  build-test:
+    name: Build and Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Required for version determination from git tags
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+          check-latest: true
+          cache: true
+
+      - name: Install dependencies
+        run: make mod-download
+
+      - name: Format check
+        run: |
+          make fmt
+          git diff --exit-code || (echo "Code is not properly formatted. Run 'make fmt' locally." && exit 1)
+
+      - name: Vet check
+        run: make vet
+
+      - name: Run tests
+        run: make test
+
+      - name: Run tests with coverage
+        run: make test-coverage
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage.html
+
+      - name: Build
+        run: make build
+
+  release:
+    name: Release
+    needs: build-test
+    if: ${{ (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')) || (github.event_name == 'release' && startsWith(github.event.release.tag_name, 'v')) }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # Required for creating GitHub releases
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Required for version determination from git tags
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+          check-latest: true
+          cache: true
+
+      - name: Install dependencies
+        run: make mod-download
+
+      - name: Build multi-platform binaries
+        run: make build-all
+
+      - name: Create release
+        id: create_release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            ./bin/prox-linux-amd64
+            ./bin/prox-linux-arm64
+            ./bin/prox-darwin-amd64
+            ./bin/prox-darwin-arm64
+            ./bin/prox-windows-amd64.exe
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+
+  docker:
+    name: Docker Build and Push
+    needs: build-test
+    if: ${{ (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')) || (github.event_name == 'release' && startsWith(github.event.release.tag_name, 'v')) || (github.event_name == 'workflow_dispatch') }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write # Required for pushing to GitHub Container Registry
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GitHub Container Registry
+        if: ${{ github.event_name != 'workflow_dispatch' }}
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GHCR_TOKEN || secrets.GITHUB_TOKEN }}
+
+      - name: Login to GitHub Container Registry (manual)
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.push }}
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GHCR_TOKEN || secrets.GITHUB_TOKEN }}
+
+      - name: Create GHCR package namespace if needed
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.push }}
+        run: |
+          # Use a more explicit token approach
+          TOKEN="${{ secrets.GHCR_TOKEN }}"
+          if [ -z "$TOKEN" ]; then
+            TOKEN="${{ secrets.GITHUB_TOKEN }}"
+            echo "Using GITHUB_TOKEN (may have limited permissions for first push)"
+          else
+            echo "Using GHCR_TOKEN"
+          fi
+          
+          # Check if package exists
+          if ! docker manifest inspect ghcr.io/${{ github.repository_owner }}/prox:latest >/dev/null 2>&1; then
+            echo "Package doesn't exist, creating namespace with a test push..."
+            
+            # Create a minimal image and push it to establish the package
+            cat > Dockerfile.init << 'EOF'
+          FROM alpine:latest
+          RUN echo "Package initialization" > /tmp/init
+          EOF
+            
+            docker build -f Dockerfile.init -t ghcr.io/${{ github.repository_owner }}/prox:init .
+            
+            # Try to push the init image to create the package namespace
+            if docker push ghcr.io/${{ github.repository_owner }}/prox:init; then
+              echo "✅ Package namespace created successfully"
+              # Clean up the init tag
+              rm -f Dockerfile.init
+            else
+              echo "⚠️  Failed to create package namespace, but continuing..."
+              echo "This might be due to token permissions. Consider using a PAT with write:packages scope."
+            fi
+          else
+            echo "✅ Package already exists, proceeding..."
+          fi
+
+      - name: Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/prox
+          tags: |
+            type=semver,pattern={{version}}
+            type=raw,value=latest
+
+      - name: Build image (manual)
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: ${{ inputs.push }}
+          platforms: linux/amd64,linux/arm64
+          tags: |
+            ${{ steps.meta.outputs.tags }}
+            ${{ inputs.tag != '' && format('ghcr.io/{0}/prox:{1}', github.repository_owner, inputs.tag) || '' }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+      - name: Build and push Docker image (tags/releases)
+        if: ${{ github.event_name != 'workflow_dispatch' }}
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          platforms: linux/amd64,linux/arm64
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+      - name: Verify push success
+        if: ${{ (github.event_name != 'workflow_dispatch' || inputs.push) && success() }}
+        run: |
+          echo "✅ Images pushed successfully!"
+          echo "Available tags:"
+          docker manifest inspect ghcr.io/${{ github.repository_owner }}/prox:latest || echo "❌ Latest tag verification failed"
+          
+      - name: Push failure guidance
+        if: ${{ (github.event_name != 'workflow_dispatch' || inputs.push) && failure() }}
+        run: |
+          echo "❌ Push failed with 403 Forbidden error"
+          echo ""
+          echo "🔧 To fix this issue:"
+          echo "1. Create a Personal Access Token (PAT) at: https://github.com/settings/tokens"
+          echo "2. Grant these permissions: write:packages, read:packages"
+          echo "3. Add it as repository secret 'GHCR_TOKEN' at:"
+          echo "   https://github.com/${{ github.repository }}/settings/secrets/actions"
+          echo "4. Re-run this workflow"
+          echo ""
+          echo "📖 More info: https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry"
