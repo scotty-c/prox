@@ -1034,6 +1034,57 @@ func (c *ProxmoxClient) GetContainerIPAlternative(ctx context.Context, node stri
 	return "N/A", nil
 }
 
+// GetNodeIP attempts to get a primary IP address for a Proxmox node.
+// This uses the node network API and returns the first non-loopback IPv4 it finds.
+func (c *ProxmoxClient) GetNodeIP(ctx context.Context, node string) (string, error) {
+	path := fmt.Sprintf("/nodes/%s/network", node)
+	body, err := c.makeRequest(ctx, "GET", path, nil)
+	if err != nil {
+		return "N/A", err
+	}
+
+	var resp APIResponse
+	if err := json.Unmarshal(body, &resp); err != nil {
+		return "N/A", err
+	}
+
+	if ifaces, ok := resp.Data.([]interface{}); ok {
+		for _, iface := range ifaces {
+			ifm, ok := iface.(map[string]interface{})
+			if !ok {
+				continue
+			}
+
+			// try common fields: address, cidr, inet
+			if addr, ok := ifm["address"].(string); ok && addr != "" && addr != "127.0.0.1" {
+				// some responses include CIDR; strip if present
+				if strings.Contains(addr, "/") {
+					return strings.Split(addr, "/")[0], nil
+				}
+				return addr, nil
+			}
+
+			if cidr, ok := ifm["cidr"].(string); ok && cidr != "" {
+				if strings.Contains(cidr, "/") {
+					parts := strings.Split(cidr, "/")
+					if parts[0] != "127.0.0.1" {
+						return parts[0], nil
+					}
+				}
+			}
+
+			if inet, ok := ifm["inet"].(string); ok && inet != "" && inet != "127.0.0.1" {
+				if strings.Contains(inet, "/") {
+					return strings.Split(inet, "/")[0], nil
+				}
+				return inet, nil
+			}
+		}
+	}
+
+	return "N/A", nil
+}
+
 // UpdateVM updates a virtual machine configuration
 func (c *ProxmoxClient) UpdateVM(ctx context.Context, node string, vmid int, config map[string]interface{}) (string, error) {
 	path := fmt.Sprintf("/nodes/%s/qemu/%d/config", node, vmid)
