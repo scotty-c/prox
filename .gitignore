@@ -43,3 +43,6 @@ config.local
 
 # Log files
 *.log
+
+# Environment files
+test/e2e/config.env
