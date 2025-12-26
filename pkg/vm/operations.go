@@ -23,13 +23,13 @@ func GetID(id int) error {
 
 	for _, resource := range resources {
 		if resource.Type == "qemu" && resource.VMID != nil && *resource.VMID == id {
-			fmt.Printf("❌ VM ID %d is already in use on node %s\n", id, resource.Node)
-			fmt.Printf("💡 Please choose a different VM ID\n")
+			fmt.Printf("Error: VM ID %d is already in use on node %s\n", id, resource.Node)
+			fmt.Printf("Tip: Please choose a different VM ID\n")
 			return fmt.Errorf("VM ID %d is already in use on node %s", id, resource.Node)
 		}
 	}
 
-	fmt.Printf("✅ VM ID %d is available\n", id)
+	fmt.Printf("VM ID %d is available\n", id)
 	return nil
 }
 
@@ -54,17 +54,17 @@ func ShutdownVm(id int, node string) {
 
 	// If no node specified, auto-discover it
 	if node == "" {
-		fmt.Printf("🔍 Finding node for VM %d...\n", id)
+		fmt.Printf("Finding node for VM %d...\n", id)
 		discoveredNode, err := client.GetVMNode(context.Background(), id)
 		if err != nil {
-			fmt.Printf("❌ Failed to find VM %d: %v\n", id, err)
+			fmt.Printf("Error: Failed to find VM %d: %v\n", id, err)
 			return
 		}
 		node = discoveredNode
-		fmt.Printf("📍 Found VM %d on node %s\n", id, node)
+		fmt.Printf("Found VM %d on node %s\n", id, node)
 	}
 
-	fmt.Printf("🛑 Shutting down VM %d on node %s...\n", id, node)
+	fmt.Printf("Shutting down VM %d on node %s...\n", id, node)
 
 	vm := &VirtualMachine{
 		ID:     id,
@@ -74,13 +74,13 @@ func ShutdownVm(id int, node string) {
 
 	task, err := vm.Shutdown(context.Background())
 	if err != nil {
-		fmt.Printf("❌ Failed to shutdown VM %d: %v\n", id, err)
+		fmt.Printf("Error: Failed to shutdown VM %d: %v\n", id, err)
 		return
 	}
 
-	fmt.Printf("✅ VM %d shutdown command issued successfully\n", id)
-	fmt.Printf("📋 Task ID: %s\n", task.ID)
-	fmt.Println("💡 Use 'prox vms list' to check the current status")
+	fmt.Printf("VM %d shutdown command issued successfully\n", id)
+	fmt.Printf("Task ID: %s\n", task.ID)
+	fmt.Println("Tip: Use 'prox vms list' to check the current status")
 }
 
 // Start starts a virtual machine
@@ -104,17 +104,17 @@ func StartVm(id int, node string) {
 
 	// If no node specified, auto-discover it
 	if node == "" {
-		fmt.Printf("🔍 Finding node for VM %d...\n", id)
+		fmt.Printf("Finding node for VM %d...\n", id)
 		discoveredNode, err := client.GetVMNode(context.Background(), id)
 		if err != nil {
-			fmt.Printf("❌ Failed to find VM %d: %v\n", id, err)
+			fmt.Printf("Error: Failed to find VM %d: %v\n", id, err)
 			return
 		}
 		node = discoveredNode
-		fmt.Printf("📍 Found VM %d on node %s\n", id, node)
+		fmt.Printf("Found VM %d on node %s\n", id, node)
 	}
 
-	fmt.Printf("🚀 Starting VM %d on node %s...\n", id, node)
+	fmt.Printf("Starting VM %d on node %s...\n", id, node)
 
 	vm := &VirtualMachine{
 		ID:     id,
@@ -124,13 +124,13 @@ func StartVm(id int, node string) {
 
 	task, err := vm.Start(context.Background())
 	if err != nil {
-		fmt.Printf("❌ Failed to start VM %d: %v\n", id, err)
+		fmt.Printf("Error: Failed to start VM %d: %v\n", id, err)
 		return
 	}
 
-	fmt.Printf("✅ VM %d start command issued successfully\n", id)
-	fmt.Printf("📋 Task ID: %s\n", task.ID)
-	fmt.Println("💡 Use 'prox vms list' to check the current status")
+	fmt.Printf("VM %d start command issued successfully\n", id)
+	fmt.Printf("Task ID: %s\n", task.ID)
+	fmt.Println("Tip: Use 'prox vms list' to check the current status")
 }
 
 // Clone clones a virtual machine
@@ -154,14 +154,14 @@ func CloneVm(id int, node string, name string, newId int, full bool) error {
 
 	// If no node specified, auto-discover it
 	if node == "" {
-		fmt.Printf("🔍 Finding node for source VM %d...\n", id)
+		fmt.Printf("Finding node for source VM %d...\n", id)
 		discoveredNode, err := client.GetVMNode(context.Background(), id)
 		if err != nil {
-			fmt.Printf("❌ Failed to find source VM %d: %v\n", id, err)
+			fmt.Printf("Error: Failed to find source VM %d: %v\n", id, err)
 			return fmt.Errorf("failed to find source VM %d: %w", id, err)
 		}
 		node = discoveredNode
-		fmt.Printf("📍 Found source VM %d on node %s\n", id, node)
+		fmt.Printf("Found source VM %d on node %s\n", id, node)
 	}
 
 	vm := &VirtualMachine{
@@ -170,7 +170,7 @@ func CloneVm(id int, node string, name string, newId int, full bool) error {
 		Client: client,
 	}
 
-	fmt.Printf("🔄 Checking if VM ID %d is available...\n", newId)
+	fmt.Printf("Checking if VM ID %d is available...\n", newId)
 	// check to see if the new id is already in use if so the program will exit
 	if err := GetID(newId); err != nil {
 		return err
@@ -180,18 +180,18 @@ func CloneVm(id int, node string, name string, newId int, full bool) error {
 	if full {
 		cloneType = "full"
 	}
-	fmt.Printf("📋 Cloning VM %d to new VM %d (%s) on node %s using %s clone...\n", id, newId, name, node, cloneType)
+	fmt.Printf("Cloning VM %d to new VM %d (%s) on node %s using %s clone...\n", id, newId, name, node, cloneType)
 
 	task, err := vm.Clone(context.Background(), name, newId, full)
 	if err != nil {
-		fmt.Printf("❌ Failed to clone VM %d: %v\n", id, err)
+		fmt.Printf("Error: Failed to clone VM %d: %v\n", id, err)
 		return fmt.Errorf("failed to clone VM %d: %w", id, err)
 	}
 
-	fmt.Printf("✅ VM %d clone command issued successfully\n", id)
-	fmt.Printf("🆕 New VM: %s (ID: %d)\n", name, newId)
-	fmt.Printf("📋 Task ID: %s\n", task.ID)
-	fmt.Println("💡 Use 'prox vm list' to check the cloning progress")
+	fmt.Printf("VM %d clone command issued successfully\n", id)
+	fmt.Printf("New VM: %s (ID: %d)\n", name, newId)
+	fmt.Printf("Task ID: %s\n", task.ID)
+	fmt.Println("Tip: Use 'prox vm list' to check the cloning progress")
 	return nil
 }
 
@@ -216,18 +216,18 @@ func DeleteVm(id int, node string) {
 
 	// If no node specified, auto-discover it
 	if node == "" {
-		fmt.Printf("🔍 Finding node for VM %d...\n", id)
+		fmt.Printf("Finding node for VM %d...\n", id)
 		discoveredNode, err := client.GetVMNode(context.Background(), id)
 		if err != nil {
-			fmt.Printf("❌ Failed to find VM %d: %v\n", id, err)
+			fmt.Printf("Error: Failed to find VM %d: %v\n", id, err)
 			return
 		}
 		node = discoveredNode
-		fmt.Printf("📍 Found VM %d on node %s\n", id, node)
+		fmt.Printf("Found VM %d on node %s\n", id, node)
 	}
 
-	fmt.Printf("🗑️  Deleting VM %d on node %s...\n", id, node)
-	fmt.Println("⚠️  This action cannot be undone!")
+	fmt.Printf("Deleting VM %d on node %s...\n", id, node)
+	fmt.Println("WARNING: This action cannot be undone!")
 
 	vm := &VirtualMachine{
 		ID:     id,
@@ -237,33 +237,33 @@ func DeleteVm(id int, node string) {
 
 	task, err := vm.Delete(context.Background())
 	if err != nil {
-		fmt.Printf("❌ Failed to delete VM %d: %v\n", id, err)
+		fmt.Printf("Error: Failed to delete VM %d: %v\n", id, err)
 		return
 	}
 
-	fmt.Printf("✅ VM %d deletion command issued successfully\n", id)
-	fmt.Printf("📋 Task ID: %s\n", task.ID)
-	fmt.Println("💡 Use 'prox vms list' to verify the VM has been removed")
+	fmt.Printf("VM %d deletion command issued successfully\n", id)
+	fmt.Printf("Task ID: %s\n", task.ID)
+	fmt.Println("Tip: Use 'prox vms list' to verify the VM has been removed")
 }
 
 // MigrateVm migrates a VM from one node to another
 func MigrateVm(id int, sourceNode, targetNode string, online bool, withLocalDisks bool) error {
 	client, err := c.CreateClient()
 	if err != nil {
-		fmt.Printf("❌ Error creating client: %v\n", err)
+		fmt.Printf("Error: Error creating client: %v\n", err)
 		return fmt.Errorf("failed to create client: %w", err)
 	}
 
 	// Auto-discover source node if not specified
 	if sourceNode == "" {
-		fmt.Printf("🔍 Discovering source node for VM %d...\n", id)
+		fmt.Printf("Discovering source node for VM %d...\n", id)
 		discoveredNode, err := client.GetVMNode(context.Background(), id)
 		if err != nil {
-			fmt.Printf("❌ Failed to find VM %d: %v\n", id, err)
+			fmt.Printf("Error: Failed to find VM %d: %v\n", id, err)
 			return fmt.Errorf("failed to find VM %d: %w", id, err)
 		}
 		sourceNode = discoveredNode
-		fmt.Printf("📍 Found VM %d on node: %s\n", id, sourceNode)
+		fmt.Printf("Found VM %d on node: %s\n", id, sourceNode)
 	}
 
 	// Prepare migration options
@@ -272,43 +272,43 @@ func MigrateVm(id int, sourceNode, targetNode string, online bool, withLocalDisk
 	// Set migration type (online/offline)
 	if online {
 		options["online"] = 1
-		fmt.Printf("🔄 Performing online migration (VM will continue running)\n")
+		fmt.Printf("Performing online migration (VM will continue running)\n")
 	} else {
-		fmt.Printf("⏹️  Performing offline migration (VM will be stopped)\n")
+		fmt.Printf("Performing offline migration (VM will be stopped)\n")
 	}
 
 	// Handle local disks
 	if withLocalDisks {
 		options["with-local-disks"] = 1
-		fmt.Printf("💾 Including local disks in migration\n")
+		fmt.Printf("Including local disks in migration\n")
 	}
 
-	fmt.Printf("🚀 Migrating VM %d from %s to %s...\n", id, sourceNode, targetNode)
+	fmt.Printf("Migrating VM %d from %s to %s...\n", id, sourceNode, targetNode)
 
 	// Start the migration
 	taskID, err := client.MigrateVM(context.Background(), sourceNode, id, targetNode, options)
 	if err != nil {
-		fmt.Printf("❌ Failed to start migration: %v\n", err)
+		fmt.Printf("Error: Failed to start migration: %v\n", err)
 		return fmt.Errorf("failed to start migration: %w", err)
 	}
 
-	fmt.Printf("⏳ Migration task started: %s\n", taskID)
-	fmt.Println("🔄 Waiting for migration to complete...")
+	fmt.Printf("Migration task started: %s\n", taskID)
+	fmt.Println("Waiting for migration to complete...")
 
 	// Wait for the migration task to complete
 	err = waitForTask(client, sourceNode, taskID)
 	if err != nil {
-		fmt.Printf("❌ Migration failed: %v\n", err)
+		fmt.Printf("Error: Migration failed: %v\n", err)
 		return fmt.Errorf("migration failed: %w", err)
 	}
 
-	fmt.Printf("✅ VM %d migration completed successfully!\n", id)
-	fmt.Printf("📍 VM %d is now running on node: %s\n", id, targetNode)
+	fmt.Printf("VM %d migration completed successfully!\n", id)
+	fmt.Printf("VM %d is now running on node: %s\n", id, targetNode)
 
 	if online {
-		fmt.Println("🟢 VM remained online during migration")
+		fmt.Println("VM remained online during migration")
 	} else {
-		fmt.Printf("💡 Use 'prox vm start %d' to start the VM on the new node\n", id)
+		fmt.Printf("Tip: Use 'prox vm start %d' to start the VM on the new node\n", id)
 	}
 	return nil
 }

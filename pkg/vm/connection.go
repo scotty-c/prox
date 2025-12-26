@@ -41,13 +41,13 @@ func TestConnection() {
 	fmt.Println("Testing nodes endpoint...")
 	nodes, err := client.GetNodes(context.Background())
 	if err != nil {
-		fmt.Printf("❌ Error getting nodes: %v\n", err)
+		fmt.Printf("Error: Error getting nodes: %v\n", err)
 
 		// Try version endpoint as fallback
 		fmt.Println("Trying version endpoint...")
 		version, err2 := client.GetVersion(context.Background())
 		if err2 != nil {
-			fmt.Printf("❌ Error getting version: %v\n", err2)
+			fmt.Printf("Error: Error getting version: %v\n", err2)
 			fmt.Println("\nBoth nodes and version endpoints failed.")
 			fmt.Println("This suggests an authentication issue or API incompatibility.")
 			fmt.Println("\nTroubleshooting tips:")
@@ -57,7 +57,7 @@ func TestConnection() {
 			return
 		}
 		fmt.Printf("✓ Connected to Proxmox version: %s\n", version.Version)
-		fmt.Println("⚠️  Nodes endpoint not available, but version endpoint works")
+		fmt.Println("WARNING: Nodes endpoint not available, but version endpoint works")
 		return
 	}
 
@@ -70,7 +70,7 @@ func TestConnection() {
 	fmt.Println("Testing version endpoint...")
 	version, err := client.GetVersion(context.Background())
 	if err != nil {
-		fmt.Printf("⚠️  Version endpoint not available: %v\n", err)
+		fmt.Printf("WARNING: Version endpoint not available: %v\n", err)
 		fmt.Println("This is common with older Proxmox versions")
 	} else {
 		fmt.Printf("✓ Proxmox version: %s\n", version.Version)
@@ -80,7 +80,7 @@ func TestConnection() {
 	fmt.Println("Testing cluster resources...")
 	resources, err := client.GetClusterResources(context.Background())
 	if err != nil {
-		fmt.Printf("❌ Error getting cluster resources: %v\n", err)
+		fmt.Printf("Error: Error getting cluster resources: %v\n", err)
 		return
 	}
 	fmt.Printf("✓ Found %d resources\n", len(resources))

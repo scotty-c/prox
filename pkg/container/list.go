@@ -23,7 +23,7 @@ func ListContainers(node string, runningOnly bool, jsonOutput bool) error {
 	}
 
 	if !jsonOutput {
-		fmt.Println("📋 Retrieving LXC containers...")
+		fmt.Println("Retrieving LXC containers...")
 	}
 
 	// Get cluster resources
@@ -32,7 +32,7 @@ func ListContainers(node string, runningOnly bool, jsonOutput bool) error {
 		if jsonOutput {
 			fmt.Fprintf(os.Stderr, "Error getting cluster resources: %v\n", err)
 		} else {
-			fmt.Printf("❌ Error getting cluster resources: %v\n", err)
+			fmt.Printf("Error: Error getting cluster resources: %v\n", err)
 		}
 		return fmt.Errorf("failed to get cluster resources: %w", err)
 	}
@@ -109,9 +109,9 @@ func ListContainers(node string, runningOnly bool, jsonOutput bool) error {
 
 	if len(containers) == 0 {
 		if runningOnly {
-			fmt.Println("❌ No running containers found")
+			fmt.Println("Error: No running containers found")
 		} else {
-			fmt.Println("❌ No containers found")
+			fmt.Println("Error: No containers found")
 		}
 		return nil
 	}

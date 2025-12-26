@@ -40,11 +40,11 @@ func DescribeNode(name string) error {
 	}
 
 	// Start sectioned output similar to VM describe
-	fmt.Printf("\n🖥️  Node Details\n")
+	fmt.Printf("\nNode Details\n")
 	fmt.Printf("════════════════════════════════════════════════════════════════════════\n")
 
 	// Basic Information
-	fmt.Printf("🏷️  Basic Information:\n")
+	fmt.Printf("Basic Information:\n")
 	fmt.Printf("   Name: %s\n", found.Node)
 	fmt.Printf("   ID: %s\n", found.ID)
 	fmt.Printf("   Status: %s\n", found.Status)
@@ -55,7 +55,7 @@ func DescribeNode(name string) error {
 	fmt.Printf("\n")
 
 	// Resource Summary
-	fmt.Printf("💾 Resource Summary:\n")
+	fmt.Printf("Resource Summary:\n")
 	// Default placeholders
 	var cpuStr string
 	var memUsed, memTotal uint64

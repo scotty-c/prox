@@ -15,7 +15,7 @@ func DescribeVM(nameOrID string, node string) error {
 		return fmt.Errorf("error creating client: %w", err)
 	}
 
-	fmt.Printf("🔍 Getting VM details for %s...\n", nameOrID)
+	fmt.Printf("Getting VM details for %s...\n", nameOrID)
 
 	// Find the VM by name or ID
 	vm, err := findVM(client, nameOrID)
@@ -51,11 +51,11 @@ func DescribeVM(nameOrID string, node string) error {
 
 // displayVMDetails displays detailed VM information
 func displayVMDetails(id int, name, node string, config, status map[string]interface{}) {
-	fmt.Printf("\n🖥️  Virtual Machine Details\n")
+	fmt.Printf("\nVirtual Machine Details\n")
 	fmt.Printf("═══════════════════════════════════════════════════════════════════════════════════════\n")
 
 	// Basic Information
-	fmt.Printf("🏷️  Basic Information:\n")
+	fmt.Printf("Basic Information:\n")
 	fmt.Printf("   Name: %s\n", name)
 	fmt.Printf("   ID: %d\n", id)
 	fmt.Printf("   Node: %s\n", node)
@@ -75,7 +75,7 @@ func displayVMDetails(id int, name, node string, config, status map[string]inter
 	fmt.Printf("\n")
 
 	// Resource Configuration
-	fmt.Printf("💾 Resource Configuration:\n")
+	fmt.Printf("Resource Configuration:\n")
 
 	// Memory
 	if memory, ok := config["memory"].(float64); ok {
@@ -197,7 +197,7 @@ func displayVMDetails(id int, name, node string, config, status map[string]inter
 	}
 
 	// Boot Configuration
-	fmt.Printf("🚀 Boot Configuration:\n")
+	fmt.Printf("Boot Configuration:\n")
 
 	if bootOrder, ok := config["boot"].(string); ok {
 		fmt.Printf("   Boot Order: %s (%s)\n", bootOrder, decodeBootOrder(bootOrder))
@@ -239,7 +239,7 @@ func displayVMDetails(id int, name, node string, config, status map[string]inter
 	fmt.Printf("\n")
 
 	// Additional Configuration
-	fmt.Printf("⚙️  Additional Configuration:\n")
+	fmt.Printf("Additional Configuration:\n")
 
 	if description, ok := config["description"].(string); ok {
 		fmt.Printf("   Description: %s\n", description)

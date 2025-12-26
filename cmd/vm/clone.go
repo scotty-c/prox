@@ -48,7 +48,7 @@ Use the --full flag to create a full clone instead, which copies all disk data a
 		if name == "" {
 			name = flagName
 		} else if flagName != "" && name != flagName {
-			fmt.Printf("⚠️  --name \"%s\" ignored; using positional name \"%s\"\n", flagName, name)
+			fmt.Printf("WARNING: --name \"%s\" ignored; using positional name \"%s\"\n", flagName, name)
 		}
 
 		if name == "" {

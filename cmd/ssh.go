@@ -105,7 +105,7 @@ func setupSSHConfig(nameOrID, username string, port int, keyPath string, dryRun 
 		resourceID = vm.ID
 		node = vm.Node
 
-		fmt.Printf("🔍 Found %s: %s (ID: %d) on node %s\n", resourceType, resourceName, resourceID, node)
+		fmt.Printf("Found %s: %s (ID: %d) on node %s\n", resourceType, resourceName, resourceID, node)
 
 		// Get VM IP
 		ip, err = client.GetVMIP(context.Background(), node, resourceID)
@@ -124,7 +124,7 @@ func setupSSHConfig(nameOrID, username string, port int, keyPath string, dryRun 
 		resourceID = container.ID
 		node = container.Node
 
-		fmt.Printf("🔍 Found %s: %s (ID: %d) on node %s\n", resourceType, resourceName, resourceID, node)
+		fmt.Printf("Found %s: %s (ID: %d) on node %s\n", resourceType, resourceName, resourceID, node)
 
 		// Get Container IP
 		ip, err = client.GetContainerIP(context.Background(), node, resourceID)
@@ -163,7 +163,7 @@ func setupSSHConfig(nameOrID, username string, port int, keyPath string, dryRun 
 	hostAlias := resourceName
 	sshConfigEntry := generateSSHConfigEntry(hostAlias, ip, username, port, keyPath)
 
-	fmt.Printf("📍 IP Address: %s\n", ip)
+	fmt.Printf("IP Address: %s\n", ip)
 	fmt.Printf("👤 SSH Username: %s\n", username)
 	fmt.Printf("🚪 SSH Port: %d\n", port)
 	if keyPath != "" {
@@ -171,8 +171,8 @@ func setupSSHConfig(nameOrID, username string, port int, keyPath string, dryRun 
 	}
 
 	if dryRun {
-		fmt.Printf("\n📋 SSH config entry that would be added:\n\n%s\n", sshConfigEntry)
-		fmt.Printf("💡 To apply these changes, run the command without --dry-run\n")
+		fmt.Printf("\nSSH config entry that would be added:\n\n%s\n", sshConfigEntry)
+		fmt.Printf("Tip: To apply these changes, run the command without --dry-run\n")
 		return nil
 	}
 
@@ -182,8 +182,8 @@ func setupSSHConfig(nameOrID, username string, port int, keyPath string, dryRun 
 		return fmt.Errorf("failed to update SSH config: %w", err)
 	}
 
-	fmt.Printf("\n✅ SSH configuration updated successfully!\n")
-	fmt.Printf("💡 You can now connect with: ssh %s\n", hostAlias)
+	fmt.Printf("\nSSH configuration updated successfully!\n")
+	fmt.Printf("Tip: You can now connect with: ssh %s\n", hostAlias)
 
 	return nil
 }
@@ -375,9 +375,9 @@ func deleteSSHConfigEntry(nameOrID string, dryRun bool) error {
 	}
 
 	if resolved {
-		fmt.Printf("🔍 Resolved resource to host alias '%s'\n", alias)
+		fmt.Printf("Resolved resource to host alias '%s'\n", alias)
 	} else {
-		fmt.Printf("ℹ️  Treating '%s' as host alias (resource not resolved)\n", alias)
+		fmt.Printf("Note: Treating '%s' as host alias (resource not resolved)\n", alias)
 	}
 
 	removed, block, err := removeFromSSHConfig(alias, dryRun)
@@ -395,9 +395,9 @@ func deleteSSHConfigEntry(nameOrID string, dryRun bool) error {
 	}
 
 	if removed {
-		fmt.Printf("✅ Removed SSH config entry for host '%s'\n", alias)
+		fmt.Printf("Removed SSH config entry for host '%s'\n", alias)
 	} else {
-		fmt.Printf("⚠️  No SSH config entry found for host '%s'\n", alias)
+		fmt.Printf("WARNING: No SSH config entry found for host '%s'\n", alias)
 	}
 	return nil
 }
@@ -489,7 +489,7 @@ func listSSHConfigEntries() error {
 	configPath := filepath.Join(sshDir, "config")
 
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
-		fmt.Println("ℹ️  No SSH config file found (~/.ssh/config)")
+		fmt.Println("Note: No SSH config file found (~/.ssh/config)")
 		return nil
 	}
 
@@ -546,7 +546,7 @@ func listSSHConfigEntries() error {
 	flush()
 
 	if len(entries) == 0 {
-		fmt.Println("ℹ️  No host entries found in SSH config")
+		fmt.Println("Note: No host entries found in SSH config")
 		return nil
 	}
 

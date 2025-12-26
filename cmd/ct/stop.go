@@ -32,7 +32,7 @@ Examples:
 		// Stop the container
 		err := container.StopContainer(nameOrID)
 		if err != nil {
-			fmt.Printf("❌ Error stopping container: %v\n", err)
+			fmt.Printf("Error: Error stopping container: %v\n", err)
 			os.Exit(1)
 		}
 	},

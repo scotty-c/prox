@@ -31,7 +31,7 @@ Examples:
 		// Convert VM ID string to int
 		id := 0
 		if _, err := fmt.Sscanf(vmID, "%d", &id); err != nil {
-			fmt.Printf("❌ Invalid VM ID '%s'. Must be a number.\n", vmID)
+			fmt.Printf("Error: Invalid VM ID '%s'. Must be a number.\n", vmID)
 			os.Exit(1)
 		}
 
@@ -42,7 +42,7 @@ Examples:
 
 		// Validate target node is not empty
 		if targetNode == "" {
-			fmt.Println("❌ Target node cannot be empty")
+			fmt.Println("Error: Target node cannot be empty")
 			os.Exit(1)
 		}
 

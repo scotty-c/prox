@@ -19,12 +19,12 @@ func GetVm() {
 		return
 	}
 
-	fmt.Println("📋 Retrieving virtual machines...")
+	fmt.Println("Retrieving virtual machines...")
 
 	// Get cluster resources
 	resources, err := client.GetClusterResources(context.Background())
 	if err != nil {
-		fmt.Printf("❌ Error getting cluster resources: %v\n", err)
+		fmt.Printf("Error: Error getting cluster resources: %v\n", err)
 		return
 	}
 
@@ -79,7 +79,7 @@ func GetVm() {
 	}
 
 	if len(vms) == 0 {
-		fmt.Println("❌ No virtual machines found")
+		fmt.Println("Error: No virtual machines found")
 		return
 	}
 
@@ -101,7 +101,7 @@ func ListVMs(node string, runningOnly bool, showIPs bool, detailed bool, jsonOut
 	}
 
 	if !jsonOutput {
-		fmt.Println("📋 Retrieving virtual machines...")
+		fmt.Println("Retrieving virtual machines...")
 	}
 
 	// Get cluster resources
@@ -110,7 +110,7 @@ func ListVMs(node string, runningOnly bool, showIPs bool, detailed bool, jsonOut
 		if jsonOutput {
 			fmt.Fprintf(os.Stderr, "Error getting cluster resources: %v\n", err)
 		} else {
-			fmt.Printf("❌ Error getting cluster resources: %v\n", err)
+			fmt.Printf("Error: Error getting cluster resources: %v\n", err)
 		}
 		return fmt.Errorf("failed to get cluster resources: %w", err)
 	}
@@ -225,9 +225,9 @@ func ListVMs(node string, runningOnly bool, showIPs bool, detailed bool, jsonOut
 
 	if len(vms) == 0 {
 		if runningOnly {
-			fmt.Println("❌ No running virtual machines found")
+			fmt.Println("Error: No running virtual machines found")
 		} else {
-			fmt.Println("❌ No virtual machines found")
+			fmt.Println("Error: No virtual machines found")
 		}
 		return nil
 	}

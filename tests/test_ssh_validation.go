@@ -33,13 +33,13 @@ ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQC7vbqajDhA+example+key+data user@example.c
 	if err != nil {
 		log.Printf("Valid keys test failed: %v", err)
 	} else {
-		fmt.Printf("✅ Valid keys test passed: found %d keys\n", count)
+		fmt.Printf("Valid keys test passed: found %d keys\n", count)
 	}
 
 	// Test invalid keys
 	count, err = container.ValidateSSHKeys(invalidKeys)
 	if err != nil {
-		fmt.Printf("✅ Invalid keys test passed: %v\n", err)
+		fmt.Printf("Invalid keys test passed: %v\n", err)
 	} else {
 		log.Printf("Invalid keys test failed: should have returned error but got %d keys", count)
 	}
@@ -49,7 +49,7 @@ ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQC7vbqajDhA+example+key+data user@example.c
 	if err != nil {
 		log.Printf("Empty keys test failed: %v", err)
 	} else {
-		fmt.Printf("✅ Empty keys test passed: found %d keys\n", count)
+		fmt.Printf("Empty keys test passed: found %d keys\n", count)
 	}
 
 	fmt.Println("\nSSH key validation tests completed.")

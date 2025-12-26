@@ -17,7 +17,7 @@ func ListTemplates(node string) {
 		return
 	}
 
-	fmt.Println("📋 Retrieving container templates...")
+	fmt.Println("Retrieving container templates...")
 
 	// Get all nodes if no specific node is provided
 	nodes := []string{}
@@ -27,7 +27,7 @@ func ListTemplates(node string) {
 		// Get all nodes in the cluster
 		clusterNodes, err := getClusterNodes(client)
 		if err != nil {
-			fmt.Printf("❌ Error getting cluster nodes: %v\n", err)
+			fmt.Printf("Error: Error getting cluster nodes: %v\n", err)
 			return
 		}
 		nodes = clusterNodes
@@ -37,14 +37,14 @@ func ListTemplates(node string) {
 	for _, nodeName := range nodes {
 		templates, err := getNodeTemplates(client, nodeName)
 		if err != nil {
-			fmt.Printf("⚠️  Warning: Could not get templates from node %s: %v\n", nodeName, err)
+			fmt.Printf("WARNING: Warning: Could not get templates from node %s: %v\n", nodeName, err)
 			continue
 		}
 		allTemplates = append(allTemplates, templates...)
 	}
 
 	if len(allTemplates) == 0 {
-		fmt.Println("❌ No container templates found")
+		fmt.Println("Error: No container templates found")
 		return
 	}
 
@@ -196,10 +196,10 @@ func ResolveTemplate(shortName string) (*ResolvedTemplate, error) {
 				break
 			}
 		}
-		fmt.Printf("💡 Multiple templates found for %s, using: %s on node %s\n", shortName, bestMatch.Name, bestMatch.Node)
+		fmt.Printf("Tip: Multiple templates found for %s, using: %s on node %s\n", shortName, bestMatch.Name, bestMatch.Node)
 	} else {
 		bestMatch = matches[0]
-		fmt.Printf("💡 Resolved %s to: %s on node %s\n", shortName, bestMatch.Name, bestMatch.Node)
+		fmt.Printf("Tip: Resolved %s to: %s on node %s\n", shortName, bestMatch.Name, bestMatch.Node)
 	}
 
 	return &ResolvedTemplate{
@@ -219,5 +219,5 @@ func ListTemplateShortcuts() {
 	fmt.Println("  centos:8        - CentOS 8")
 	fmt.Println("  fedora:38       - Fedora 38")
 	fmt.Println()
-	fmt.Println("💡 Use 'prox ct templates' to see all available templates")
+	fmt.Println("Tip: Use 'prox ct templates' to see all available templates")
 }

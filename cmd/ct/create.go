@@ -66,14 +66,14 @@ Examples:
 		if name == "" {
 			name = strings.TrimSpace(nameFlag)
 		} else if strings.TrimSpace(nameFlag) != "" && name != strings.TrimSpace(nameFlag) {
-			fmt.Printf("⚠️  --name \"%s\" ignored; using positional name \"%s\"\n", strings.TrimSpace(nameFlag), name)
+			fmt.Printf("WARNING: --name \"%s\" ignored; using positional name \"%s\"\n", strings.TrimSpace(nameFlag), name)
 		}
 
 		template := posTemplate
 		if template == "" {
 			template = strings.TrimSpace(tmplFlag)
 		} else if strings.TrimSpace(tmplFlag) != "" && template != strings.TrimSpace(tmplFlag) {
-			fmt.Printf("⚠️  --template \"%s\" ignored; using positional template \"%s\"\n", strings.TrimSpace(tmplFlag), template)
+			fmt.Printf("WARNING: --template \"%s\" ignored; using positional template \"%s\"\n", strings.TrimSpace(tmplFlag), template)
 		}
 
 		// Get flags
@@ -92,7 +92,7 @@ Examples:
 			var err error
 			vmid, err = strconv.Atoi(vmidStr)
 			if err != nil {
-				fmt.Printf("❌ Invalid VMID: %s\n", vmidStr)
+				fmt.Printf("Error: Invalid VMID: %s\n", vmidStr)
 				os.Exit(1)
 			}
 		}
@@ -102,7 +102,7 @@ Examples:
 			fmt.Print("Enter password for container: ")
 			passwordBytes, err := term.ReadPassword(int(syscall.Stdin))
 			if err != nil {
-				fmt.Printf("❌ Error reading password: %v\n", err)
+				fmt.Printf("Error: Error reading password: %v\n", err)
 				os.Exit(1)
 			}
 			password = string(passwordBytes)
@@ -133,13 +133,13 @@ Examples:
 				fmt.Printf("🔑 Reading SSH keys from: %s\n", sshKeysFile)
 				keyBytes, err := os.ReadFile(sshKeysFile)
 				if err != nil {
-					fmt.Printf("❌ Error reading SSH keys file '%s': %v\n", sshKeysFile, err)
-					fmt.Println("💡 Make sure the file exists and is readable")
+					fmt.Printf("Error: Error reading SSH keys file '%s': %v\n", sshKeysFile, err)
+					fmt.Println("Tip: Make sure the file exists and is readable")
 					os.Exit(1)
 				}
 				sshKeys = strings.TrimSpace(string(keyBytes))
 				if sshKeys == "" {
-					fmt.Printf("⚠️  SSH keys file '%s' is empty\n", sshKeysFile)
+					fmt.Printf("WARNING: SSH keys file '%s' is empty\n", sshKeysFile)
 				} else {
 					keyLines := strings.Split(sshKeys, "\n")
 					nonEmptyLines := 0
@@ -156,14 +156,14 @@ Examples:
 			if sshKeys != "" {
 				validKeys, err := container.ValidateSSHKeys(sshKeys)
 				if err != nil {
-					fmt.Printf("❌ SSH key validation failed: %v\n", err)
-					fmt.Println("💡 Make sure your SSH keys are in the correct format (ssh-rsa, ssh-ed25519, etc.)")
+					fmt.Printf("Error: SSH key validation failed: %v\n", err)
+					fmt.Println("Tip: Make sure your SSH keys are in the correct format (ssh-rsa, ssh-ed25519, etc.)")
 					os.Exit(1)
 				}
 				if validKeys == 0 {
-					fmt.Println("⚠️  No valid SSH keys found")
+					fmt.Println("WARNING: No valid SSH keys found")
 				} else {
-					fmt.Printf("✅ Validated %d SSH key(s)\n", validKeys)
+					fmt.Printf("Validated %d SSH key(s)\n", validKeys)
 				}
 			}
 		}
@@ -171,7 +171,7 @@ Examples:
 		// Create the container
 		err := container.CreateContainer(node, name, template, vmid, memory, disk, cores, password, sshKeys)
 		if err != nil {
-			fmt.Printf("❌ Error creating container: %v\n", err)
+			fmt.Printf("Error: Error creating container: %v\n", err)
 			os.Exit(1)
 		}
 	},

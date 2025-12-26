@@ -15,7 +15,7 @@ func DescribeContainer(nameOrID string) error {
 		return fmt.Errorf("error creating client: %w", err)
 	}
 
-	fmt.Printf("🔍 Getting container details for %s...\n", nameOrID)
+	fmt.Printf("Getting container details for %s...\n", nameOrID)
 
 	// Find the container
 	container, err := findContainer(client, nameOrID)
@@ -47,7 +47,7 @@ func displayContainerDetails(container *Container, config map[string]interface{}
 	fmt.Printf("═══════════════════════════════════════════════════════════════════════════════════════\n")
 
 	// Basic Information
-	fmt.Printf("🏷️  Basic Information:\n")
+	fmt.Printf("Basic Information:\n")
 	fmt.Printf("   Name: %s\n", container.Name)
 	fmt.Printf("   ID: %d\n", container.ID)
 	fmt.Printf("   Node: %s\n", container.Node)
@@ -66,7 +66,7 @@ func displayContainerDetails(container *Container, config map[string]interface{}
 	fmt.Printf("\n")
 
 	// Resource Configuration
-	fmt.Printf("💾 Resource Configuration:\n")
+	fmt.Printf("Resource Configuration:\n")
 	if memory, ok := config["memory"].(float64); ok {
 		fmt.Printf("   Memory: %.0f MB\n", memory)
 	}
@@ -183,7 +183,7 @@ func displayContainerDetails(container *Container, config map[string]interface{}
 	fmt.Printf("\n")
 
 	// Additional Configuration
-	fmt.Printf("⚙️  Additional Configuration:\n")
+	fmt.Printf("Additional Configuration:\n")
 	if description, ok := config["description"].(string); ok {
 		fmt.Printf("   Description: %s\n", description)
 	}

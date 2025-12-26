@@ -33,7 +33,7 @@ Examples:
 		// Describe the container
 		err := container.DescribeContainer(nameOrID)
 		if err != nil {
-			fmt.Printf("❌ Error describing container: %v\n", err)
+			fmt.Printf("Error: Error describing container: %v\n", err)
 			os.Exit(1)
 		}
 	},

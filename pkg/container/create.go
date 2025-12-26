@@ -14,7 +14,7 @@ func CreateContainer(node, name, template string, vmid int, memory, disk int, co
 		return fmt.Errorf("error creating client: %w", err)
 	}
 
-	fmt.Printf("🚀 Creating container %s...\n", name)
+	fmt.Printf("Creating container %s...\n", name)
 
 	// Resolve template if it's in short format
 	resolvedTemplate, err := ResolveTemplate(template)
@@ -26,15 +26,15 @@ func CreateContainer(node, name, template string, vmid int, memory, disk int, co
 	// Use the node where the template is located, unless a specific node is provided
 	if node == "" {
 		node = resolvedTemplate.Node
-		fmt.Printf("📍 Using node: %s (where template is located)\n", node)
+		fmt.Printf("Using node: %s (where template is located)\n", node)
 	} else {
 		// If user specified a node, verify the template exists on that node
 		if node != resolvedTemplate.Node {
-			fmt.Printf("⚠️  Template is on node %s, but you specified node %s. Using template's node %s\n",
+			fmt.Printf("WARNING: Template is on node %s, but you specified node %s. Using template's node %s\n",
 				resolvedTemplate.Node, node, resolvedTemplate.Node)
 			node = resolvedTemplate.Node
 		}
-		fmt.Printf("📍 Using node: %s\n", node)
+		fmt.Printf("Using node: %s\n", node)
 	}
 
 	// Get next available VMID if not provided
@@ -82,8 +82,8 @@ func CreateContainer(node, name, template string, vmid int, memory, disk int, co
 		return fmt.Errorf("failed to create container: %w", err)
 	}
 
-	fmt.Printf("⏳ Task started: %s\n", taskID)
-	fmt.Println("🔄 Waiting for container creation to complete...")
+	fmt.Printf("Task started: %s\n", taskID)
+	fmt.Println("Waiting for container creation to complete...")
 
 	// Wait for task completion
 	err = waitForTask(client, node, taskID)
@@ -91,8 +91,8 @@ func CreateContainer(node, name, template string, vmid int, memory, disk int, co
 		return fmt.Errorf("container creation failed: %w", err)
 	}
 
-	fmt.Printf("✅ Container %s (ID: %d) created successfully on node %s\n", name, vmid, node)
-	fmt.Printf("💡 Use 'prox ct start %s' to start the container\n", name)
+	fmt.Printf("Container %s (ID: %d) created successfully on node %s\n", name, vmid, node)
+	fmt.Printf("Tip: Use 'prox ct start %s' to start the container\n", name)
 
 	return nil
 }

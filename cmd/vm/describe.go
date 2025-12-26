@@ -42,7 +42,7 @@ Examples:
 		// Describe the VM
 		err := vm.DescribeVM(nameOrID, node)
 		if err != nil {
-			fmt.Printf("❌ Error describing VM: %v\n", err)
+			fmt.Printf("Error: Error describing VM: %v\n", err)
 			os.Exit(1)
 		}
 	},
