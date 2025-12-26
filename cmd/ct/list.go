@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	"os"
+
 	"github.com/scotty-c/prox/pkg/container"
 	"github.com/spf13/cobra"
 )
@@ -15,7 +17,9 @@ var listCmd = &cobra.Command{
 		node, _ := cmd.Flags().GetString("node")
 		running, _ := cmd.Flags().GetBool("running")
 		jsonOutput, _ := cmd.Flags().GetBool("json")
-		container.ListContainers(node, running, jsonOutput)
+		if err := container.ListContainers(node, running, jsonOutput); err != nil {
+			os.Exit(1)
+		}
 	},
 }
 

@@ -47,7 +47,9 @@ Examples:
 		}
 
 		// Perform the migration
-		vm.MigrateVm(id, sourceNode, targetNode, online, withLocalDisks)
+		if err := vm.MigrateVm(id, sourceNode, targetNode, online, withLocalDisks); err != nil {
+			os.Exit(1)
+		}
 	},
 }
 

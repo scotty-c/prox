@@ -88,16 +88,16 @@ func GetVm() {
 }
 
 // ListVMs lists virtual machines with optional node and running filters
-func ListVMs(node string, runningOnly bool, showIPs bool, detailed bool, jsonOutput bool) {
+func ListVMs(node string, runningOnly bool, showIPs bool, detailed bool, jsonOutput bool) error {
 	client, err := c.CreateClient()
 	if err != nil {
 		if jsonOutput {
 			// output error as json? or just stderr. CLI tools usually output error to stderr.
 			fmt.Fprintf(os.Stderr, "Error creating client: %v\n", err)
-			os.Exit(1)
+		} else {
+			fmt.Printf("Error creating client: %v\n", err)
 		}
-		fmt.Printf("Error creating client: %v\n", err)
-		return
+		return fmt.Errorf("failed to create client: %w", err)
 	}
 
 	if !jsonOutput {
@@ -109,10 +109,10 @@ func ListVMs(node string, runningOnly bool, showIPs bool, detailed bool, jsonOut
 	if err != nil {
 		if jsonOutput {
 			fmt.Fprintf(os.Stderr, "Error getting cluster resources: %v\n", err)
-			os.Exit(1)
+		} else {
+			fmt.Printf("❌ Error getting cluster resources: %v\n", err)
 		}
-		fmt.Printf("❌ Error getting cluster resources: %v\n", err)
-		return
+		return fmt.Errorf("failed to get cluster resources: %w", err)
 	}
 
 	var vms []VM
@@ -218,9 +218,9 @@ func ListVMs(node string, runningOnly bool, showIPs bool, detailed bool, jsonOut
 		enc.SetIndent("", "  ")
 		if err := enc.Encode(vms); err != nil {
 			fmt.Fprintf(os.Stderr, "Error encoding JSON: %v\n", err)
-			os.Exit(1)
+			return fmt.Errorf("failed to encode JSON: %w", err)
 		}
-		return
+		return nil
 	}
 
 	if len(vms) == 0 {
@@ -229,11 +229,12 @@ func ListVMs(node string, runningOnly bool, showIPs bool, detailed bool, jsonOut
 		} else {
 			fmt.Println("❌ No virtual machines found")
 		}
-		return
+		return nil
 	}
 
 	// Display VMs in a table
 	displayVMsTable(vms, runningOnly, showIPs, detailed)
+	return nil
 }
 
 // displayVMsTable displays VMs in a formatted table

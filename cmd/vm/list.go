@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	"os"
+
 	v "github.com/scotty-c/prox/pkg/vm"
 	"github.com/spf13/cobra"
 )
@@ -21,7 +23,9 @@ and --detailed to get accurate disk usage information (both options are slower).
 		showIPs, _ := cmd.Flags().GetBool("ip")
 		detailed, _ := cmd.Flags().GetBool("detailed")
 		jsonOutput, _ := cmd.Flags().GetBool("json")
-		v.ListVMs(node, running, showIPs, detailed, jsonOutput)
+		if err := v.ListVMs(node, running, showIPs, detailed, jsonOutput); err != nil {
+			os.Exit(1)
+		}
 	},
 }
 

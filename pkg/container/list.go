@@ -11,15 +11,15 @@ import (
 )
 
 // ListContainers lists all LXC containers
-func ListContainers(node string, runningOnly bool, jsonOutput bool) {
+func ListContainers(node string, runningOnly bool, jsonOutput bool) error {
 	client, err := c.CreateClient()
 	if err != nil {
 		if jsonOutput {
 			fmt.Fprintf(os.Stderr, "Error creating client: %v\n", err)
-			os.Exit(1)
+		} else {
+			fmt.Printf("Error creating client: %v\n", err)
 		}
-		fmt.Printf("Error creating client: %v\n", err)
-		return
+		return fmt.Errorf("failed to create client: %w", err)
 	}
 
 	if !jsonOutput {
@@ -31,10 +31,10 @@ func ListContainers(node string, runningOnly bool, jsonOutput bool) {
 	if err != nil {
 		if jsonOutput {
 			fmt.Fprintf(os.Stderr, "Error getting cluster resources: %v\n", err)
-			os.Exit(1)
+		} else {
+			fmt.Printf("❌ Error getting cluster resources: %v\n", err)
 		}
-		fmt.Printf("❌ Error getting cluster resources: %v\n", err)
-		return
+		return fmt.Errorf("failed to get cluster resources: %w", err)
 	}
 
 	var containers []Container
@@ -102,9 +102,9 @@ func ListContainers(node string, runningOnly bool, jsonOutput bool) {
 		enc.SetIndent("", "  ")
 		if err := enc.Encode(containers); err != nil {
 			fmt.Fprintf(os.Stderr, "Error encoding JSON: %v\n", err)
-			os.Exit(1)
+			return fmt.Errorf("failed to encode JSON: %w", err)
 		}
-		return
+		return nil
 	}
 
 	if len(containers) == 0 {
@@ -113,11 +113,12 @@ func ListContainers(node string, runningOnly bool, jsonOutput bool) {
 		} else {
 			fmt.Println("❌ No containers found")
 		}
-		return
+		return nil
 	}
 
 	// Display containers in a table
 	displayContainersTable(containers, runningOnly)
+	return nil
 }
 
 // displayContainersTable displays containers in a formatted table

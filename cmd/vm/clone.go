@@ -57,7 +57,9 @@ Use the --full flag to create a full clone instead, which copies all disk data a
 			os.Exit(1)
 		}
 
-		vm.CloneVm(sourceID, node, name, newID, full)
+		if err := vm.CloneVm(sourceID, node, name, newID, full); err != nil {
+			os.Exit(1)
+		}
 	},
 }
 

@@ -3,34 +3,34 @@ package vm
 import (
 	"context"
 	"fmt"
-	"os"
 
 	c "github.com/scotty-c/prox/pkg/client"
 )
 
 // GetID checks if a VM ID is available
-func GetID(id int) {
+func GetID(id int) error {
 	client, err := c.CreateClient()
 	if err != nil {
 		fmt.Printf("Error creating client: %v\n", err)
-		return
+		return fmt.Errorf("failed to create client: %w", err)
 	}
 
 	resources, err := client.GetClusterResources(context.Background())
 	if err != nil {
 		fmt.Printf("Error getting cluster resources: %v\n", err)
-		return
+		return fmt.Errorf("failed to get cluster resources: %w", err)
 	}
 
 	for _, resource := range resources {
 		if resource.Type == "qemu" && resource.VMID != nil && *resource.VMID == id {
 			fmt.Printf("❌ VM ID %d is already in use on node %s\n", id, resource.Node)
 			fmt.Printf("💡 Please choose a different VM ID\n")
-			os.Exit(1)
+			return fmt.Errorf("VM ID %d is already in use on node %s", id, resource.Node)
 		}
 	}
 
 	fmt.Printf("✅ VM ID %d is available\n", id)
+	return nil
 }
 
 // Shutdown shuts down a virtual machine
@@ -145,11 +145,11 @@ func (v *VirtualMachine) Clone(ctx context.Context, name string, newId int, full
 }
 
 // CloneVm clones a VM by ID and node
-func CloneVm(id int, node string, name string, newId int, full bool) {
+func CloneVm(id int, node string, name string, newId int, full bool) error {
 	client, err := c.CreateClient()
 	if err != nil {
 		fmt.Printf("Error creating client: %v\n", err)
-		return
+		return fmt.Errorf("failed to create client: %w", err)
 	}
 
 	// If no node specified, auto-discover it
@@ -158,7 +158,7 @@ func CloneVm(id int, node string, name string, newId int, full bool) {
 		discoveredNode, err := client.GetVMNode(context.Background(), id)
 		if err != nil {
 			fmt.Printf("❌ Failed to find source VM %d: %v\n", id, err)
-			return
+			return fmt.Errorf("failed to find source VM %d: %w", id, err)
 		}
 		node = discoveredNode
 		fmt.Printf("📍 Found source VM %d on node %s\n", id, node)
@@ -172,7 +172,9 @@ func CloneVm(id int, node string, name string, newId int, full bool) {
 
 	fmt.Printf("🔄 Checking if VM ID %d is available...\n", newId)
 	// check to see if the new id is already in use if so the program will exit
-	GetID(newId)
+	if err := GetID(newId); err != nil {
+		return err
+	}
 
 	cloneType := "linked"
 	if full {
@@ -183,13 +185,14 @@ func CloneVm(id int, node string, name string, newId int, full bool) {
 	task, err := vm.Clone(context.Background(), name, newId, full)
 	if err != nil {
 		fmt.Printf("❌ Failed to clone VM %d: %v\n", id, err)
-		return
+		return fmt.Errorf("failed to clone VM %d: %w", id, err)
 	}
 
 	fmt.Printf("✅ VM %d clone command issued successfully\n", id)
 	fmt.Printf("🆕 New VM: %s (ID: %d)\n", name, newId)
 	fmt.Printf("📋 Task ID: %s\n", task.ID)
 	fmt.Println("💡 Use 'prox vm list' to check the cloning progress")
+	return nil
 }
 
 // Delete deletes a virtual machine
@@ -244,11 +247,11 @@ func DeleteVm(id int, node string) {
 }
 
 // MigrateVm migrates a VM from one node to another
-func MigrateVm(id int, sourceNode, targetNode string, online bool, withLocalDisks bool) {
+func MigrateVm(id int, sourceNode, targetNode string, online bool, withLocalDisks bool) error {
 	client, err := c.CreateClient()
 	if err != nil {
 		fmt.Printf("❌ Error creating client: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("failed to create client: %w", err)
 	}
 
 	// Auto-discover source node if not specified
@@ -257,7 +260,7 @@ func MigrateVm(id int, sourceNode, targetNode string, online bool, withLocalDisk
 		discoveredNode, err := client.GetVMNode(context.Background(), id)
 		if err != nil {
 			fmt.Printf("❌ Failed to find VM %d: %v\n", id, err)
-			os.Exit(1)
+			return fmt.Errorf("failed to find VM %d: %w", id, err)
 		}
 		sourceNode = discoveredNode
 		fmt.Printf("📍 Found VM %d on node: %s\n", id, sourceNode)
@@ -286,7 +289,7 @@ func MigrateVm(id int, sourceNode, targetNode string, online bool, withLocalDisk
 	taskID, err := client.MigrateVM(context.Background(), sourceNode, id, targetNode, options)
 	if err != nil {
 		fmt.Printf("❌ Failed to start migration: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("failed to start migration: %w", err)
 	}
 
 	fmt.Printf("⏳ Migration task started: %s\n", taskID)
@@ -296,7 +299,7 @@ func MigrateVm(id int, sourceNode, targetNode string, online bool, withLocalDisk
 	err = waitForTask(client, sourceNode, taskID)
 	if err != nil {
 		fmt.Printf("❌ Migration failed: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("migration failed: %w", err)
 	}
 
 	fmt.Printf("✅ VM %d migration completed successfully!\n", id)
@@ -307,4 +310,5 @@ func MigrateVm(id int, sourceNode, targetNode string, online bool, withLocalDisk
 	} else {
 		fmt.Printf("💡 Use 'prox vm start %d' to start the VM on the new node\n", id)
 	}
+	return nil
 }
