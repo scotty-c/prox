@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/scotty-c/prox/pkg/config"
@@ -90,6 +91,13 @@ type ContainerTemplate struct {
 	Size  uint64 `json:"size"`
 	Used  uint64 `json:"used,omitempty"`
 }
+
+// Client cache for reuse across operations
+var (
+	cachedClient     *ProxmoxClient
+	cachedClientKey  string
+	clientCacheMutex sync.RWMutex
+)
 
 // NewClient creates a new Proxmox client
 func NewClient(baseURL, username, password string) *ProxmoxClient {
@@ -650,15 +658,48 @@ func ReadConfig() (string, string, string, error) {
 	return config.Read()
 }
 
-// CreateClient creates a new authenticated Proxmox client
+// CreateClient creates a new authenticated Proxmox client with caching
 func CreateClient() (*ProxmoxClient, error) {
 	user, pass, url, err := ReadConfig()
 	if err != nil {
 		return nil, fmt.Errorf("failed to read config: %w", err)
 	}
 
+	// Create a cache key based on user and URL
+	cacheKey := fmt.Sprintf("%s@%s", user, url)
+
+	// Try to get cached client first (read lock)
+	clientCacheMutex.RLock()
+	if cachedClient != nil && cachedClientKey == cacheKey {
+		client := cachedClient
+		clientCacheMutex.RUnlock()
+		return client, nil
+	}
+	clientCacheMutex.RUnlock()
+
+	// Need to create new client (write lock)
+	clientCacheMutex.Lock()
+	defer clientCacheMutex.Unlock()
+
+	// Double-check after acquiring write lock
+	if cachedClient != nil && cachedClientKey == cacheKey {
+		return cachedClient, nil
+	}
+
+	// Create new client and cache it
 	client := NewClient(url, user, pass)
+	cachedClient = client
+	cachedClientKey = cacheKey
+
 	return client, nil
+}
+
+// ClearClientCache clears the cached client (useful for testing or config changes)
+func ClearClientCache() {
+	clientCacheMutex.Lock()
+	defer clientCacheMutex.Unlock()
+	cachedClient = nil
+	cachedClientKey = ""
 }
 
 // GetVMNode finds which node a VM is running on
