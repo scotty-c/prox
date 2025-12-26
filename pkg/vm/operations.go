@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	c "github.com/scotty-c/prox/pkg/client"
+	"github.com/scotty-c/prox/pkg/output"
 )
 
 // GetID checks if a VM ID is available
@@ -23,13 +24,13 @@ func GetID(id int) error {
 
 	for _, resource := range resources {
 		if resource.Type == "qemu" && resource.VMID != nil && *resource.VMID == id {
-			fmt.Printf("Error: VM ID %d is already in use on node %s\n", id, resource.Node)
-			fmt.Printf("Tip: Please choose a different VM ID\n")
+			output.Error("Error: VM ID %d is already in use on node %s\n", id, resource.Node)
+			output.Info("Tip: Please choose a different VM ID\n")
 			return fmt.Errorf("VM ID %d is already in use on node %s", id, resource.Node)
 		}
 	}
 
-	fmt.Printf("VM ID %d is available\n", id)
+	output.Result("VM ID %d is available\n", id)
 	return nil
 }
 

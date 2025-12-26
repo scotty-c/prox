@@ -7,6 +7,7 @@ import (
 	"os"
 
 	"github.com/scotty-c/prox/cmd/node"
+	"github.com/scotty-c/prox/pkg/output"
 	"github.com/spf13/cobra"
 )
 
@@ -41,6 +42,11 @@ Examples:
   prox ssh myvm                       # Setup SSH config for VM/container access
 
 Use "prox [command] --help" for more information about a command.`,
+	PersistentPreRun: func(cmd *cobra.Command, args []string) {
+		// Set quiet mode based on flag
+		quiet, _ := cmd.Flags().GetBool("quiet")
+		output.SetQuiet(quiet)
+	},
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.
@@ -53,6 +59,9 @@ func Execute() {
 }
 
 func init() {
+	// Add persistent flags available to all commands
+	RootCmd.PersistentFlags().BoolP("quiet", "q", false, "Suppress non-essential output (for scripting)")
+
 	// Register node command group
 	RootCmd.AddCommand(node.NodeCmd)
 	// ...existing code...
