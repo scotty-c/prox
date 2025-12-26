@@ -9,10 +9,13 @@ import (
 	"github.com/scotty-c/prox/pkg/crypto"
 )
 
-// Comfig writes a local file to $HOME/.prox/config to hold sensitive information
+// Config writes a local file to $HOME/.prox/config to hold sensitive information
 
 func Check() bool {
-	home, _ := os.UserHomeDir()
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return false
+	}
 	configFile := home + "/.prox/config"
 	if _, err := os.Stat(configFile); os.IsNotExist(err) {
 		return false
@@ -23,7 +26,10 @@ func Check() bool {
 
 // Create writes a local file to $HOME/.prox/config with encrypted credentials
 func Create(username string, password string, url string) error {
-	home, _ := os.UserHomeDir()
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return fmt.Errorf("failed to get user home directory: %w", err)
+	}
 	configDir := home + "/.prox"
 	configFile := configDir + "/config"
 
@@ -73,7 +79,10 @@ func Read() (string, string, string, error) {
 		return "", "", "", fmt.Errorf("config file does not exist")
 	}
 
-	home, _ := os.UserHomeDir()
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", "", "", fmt.Errorf("failed to get user home directory: %w", err)
+	}
 	configFile := home + "/.prox/config"
 
 	file, err := os.Open(configFile)
@@ -130,7 +139,10 @@ func Read() (string, string, string, error) {
 
 // Delete deletes the local config file
 func Delete() error {
-	home, _ := os.UserHomeDir()
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return fmt.Errorf("failed to get user home directory: %w", err)
+	}
 	configFile := home + "/.prox/config"
 
 	if err := os.Remove(configFile); err != nil {
@@ -235,7 +247,10 @@ func MigrateConfig() error {
 
 // readLegacy reads config in the old plain text format
 func readLegacy() (string, string, string) {
-	home, _ := os.UserHomeDir()
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", "", ""
+	}
 	configFile := home + "/.prox/config"
 
 	file, err := os.Open(configFile)
