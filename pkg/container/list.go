@@ -2,25 +2,37 @@ package container
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"os"
 
 	"github.com/jedib0t/go-pretty/v6/table"
 	c "github.com/scotty-c/prox/pkg/client"
 )
 
 // ListContainers lists all LXC containers
-func ListContainers(node string, runningOnly bool) {
+func ListContainers(node string, runningOnly bool, jsonOutput bool) {
 	client, err := c.CreateClient()
 	if err != nil {
+		if jsonOutput {
+			fmt.Fprintf(os.Stderr, "Error creating client: %v\n", err)
+			os.Exit(1)
+		}
 		fmt.Printf("Error creating client: %v\n", err)
 		return
 	}
 
-	fmt.Println("📋 Retrieving LXC containers...")
+	if !jsonOutput {
+		fmt.Println("📋 Retrieving LXC containers...")
+	}
 
 	// Get cluster resources
 	resources, err := client.GetClusterResources(context.Background())
 	if err != nil {
+		if jsonOutput {
+			fmt.Fprintf(os.Stderr, "Error getting cluster resources: %v\n", err)
+			os.Exit(1)
+		}
 		fmt.Printf("❌ Error getting cluster resources: %v\n", err)
 		return
 	}
@@ -83,6 +95,16 @@ func ListContainers(node string, runningOnly bool) {
 		}
 
 		containers = append(containers, container)
+	}
+
+	if jsonOutput {
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		if err := enc.Encode(containers); err != nil {
+			fmt.Fprintf(os.Stderr, "Error encoding JSON: %v\n", err)
+			os.Exit(1)
+		}
+		return
 	}
 
 	if len(containers) == 0 {

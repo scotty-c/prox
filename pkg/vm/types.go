@@ -25,17 +25,17 @@ type VirtualMachineOption struct {
 
 // VM represents a virtual machine for display purposes
 type VM struct {
-	ID        int
-	Name      string
-	Status    string
-	Node      string
-	CPUs      int
-	Memory    uint64
-	MaxMemory uint64
-	Disk      uint64
-	MaxDisk   uint64
-	Uptime    string
-	IP        string
+	ID        int    `json:"id"`
+	Name      string `json:"name"`
+	Status    string `json:"status"`
+	Node      string `json:"node"`
+	CPUs      int    `json:"cpus"`
+	Memory    uint64 `json:"memory"`
+	MaxMemory uint64 `json:"max_memory"`
+	Disk      uint64 `json:"disk"`
+	MaxDisk   uint64 `json:"max_disk"`
+	Uptime    string `json:"uptime"`
+	IP        string `json:"ip"`
 }
 
 // NewTask creates a new Task instance

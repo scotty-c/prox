@@ -2,7 +2,9 @@ package vm
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/jedib0t/go-pretty/v6/table"
@@ -86,18 +88,29 @@ func GetVm() {
 }
 
 // ListVMs lists virtual machines with optional node and running filters
-func ListVMs(node string, runningOnly bool, showIPs bool, detailed bool) {
+func ListVMs(node string, runningOnly bool, showIPs bool, detailed bool, jsonOutput bool) {
 	client, err := c.CreateClient()
 	if err != nil {
+		if jsonOutput {
+			// output error as json? or just stderr. CLI tools usually output error to stderr.
+			fmt.Fprintf(os.Stderr, "Error creating client: %v\n", err)
+			os.Exit(1)
+		}
 		fmt.Printf("Error creating client: %v\n", err)
 		return
 	}
 
-	fmt.Println("📋 Retrieving virtual machines...")
+	if !jsonOutput {
+		fmt.Println("📋 Retrieving virtual machines...")
+	}
 
 	// Get cluster resources
 	resources, err := client.GetClusterResources(context.Background())
 	if err != nil {
+		if jsonOutput {
+			fmt.Fprintf(os.Stderr, "Error getting cluster resources: %v\n", err)
+			os.Exit(1)
+		}
 		fmt.Printf("❌ Error getting cluster resources: %v\n", err)
 		return
 	}
@@ -198,6 +211,16 @@ func ListVMs(node string, runningOnly bool, showIPs bool, detailed bool) {
 		}
 
 		vms = append(vms, vm)
+	}
+
+	if jsonOutput {
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		if err := enc.Encode(vms); err != nil {
+			fmt.Fprintf(os.Stderr, "Error encoding JSON: %v\n", err)
+			os.Exit(1)
+		}
+		return
 	}
 
 	if len(vms) == 0 {

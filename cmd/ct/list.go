@@ -14,12 +14,14 @@ var listCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		node, _ := cmd.Flags().GetString("node")
 		running, _ := cmd.Flags().GetBool("running")
-		container.ListContainers(node, running)
+		jsonOutput, _ := cmd.Flags().GetBool("json")
+		container.ListContainers(node, running, jsonOutput)
 	},
 }
 
 func init() {
 	listCmd.Flags().StringP("node", "n", "", "Proxmox node name (optional - will show containers from all nodes if not specified)")
 	listCmd.Flags().BoolP("running", "r", false, "Show only running containers")
+	listCmd.Flags().Bool("json", false, "Output as JSON")
 	ctCmd.AddCommand(listCmd)
 }
