@@ -5,6 +5,7 @@ Simple CLI for Proxmox VE. Focus on: zero required --node flags (auto discovery)
 ## Contents
 - [Why Prox?](#why-prox)
 - [Install](#install)
+- [Shell Completion](#shell-completion)
 - [Quick Start](#quick-start)
 - [Core Commands](#core-commands)
 - [Flags Cheat Sheet](#flags-cheat-sheet)
@@ -40,6 +41,45 @@ go install github.com/scotty-c/prox@latest
 prox --help
 ```
 Docker / compose usage: see DOCKER.md.
+
+## Shell Completion
+Enable tab completion for your shell (bash, zsh, fish, or powershell):
+
+**Bash:**
+```bash
+# Linux:
+prox completion bash | sudo tee /etc/bash_completion.d/prox
+
+# macOS:
+prox completion bash > /usr/local/etc/bash_completion.d/prox
+```
+
+**Zsh:**
+```bash
+# Add to ~/.zshrc:
+source <(prox completion zsh)
+
+# Or generate to completion directory:
+prox completion zsh > "${fpath[1]}/_prox"
+```
+
+**Fish:**
+```bash
+prox completion fish | source
+
+# Or persist it:
+prox completion fish > ~/.config/fish/completions/prox.fish
+```
+
+**PowerShell:**
+```powershell
+prox completion powershell | Out-String | Invoke-Expression
+
+# Or add to your profile:
+prox completion powershell >> $PROFILE
+```
+
+After setup, restart your shell or source the completion file. You'll then have tab completion for all commands, flags, and arguments.
 
 ## Quick Start
 Configure (stored encrypted):
