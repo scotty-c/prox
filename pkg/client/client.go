@@ -630,6 +630,55 @@ func (c *ProxmoxClient) GetTaskStatus(ctx context.Context, node, upid string) (*
 	return task, nil
 }
 
+// GetTaskLog retrieves the log for a Proxmox task
+func (c *ProxmoxClient) GetTaskLog(ctx context.Context, node, upid string, start int, limit int) ([]string, error) {
+	path := fmt.Sprintf("/nodes/%s/tasks/%s/log", node, upid)
+
+	// Add query parameters for pagination
+	params := url.Values{}
+	if start > 0 {
+		params.Add("start", strconv.Itoa(start))
+	}
+	if limit > 0 {
+		params.Add("limit", strconv.Itoa(limit))
+	}
+
+	if len(params) > 0 {
+		path = path + "?" + params.Encode()
+	}
+
+	body, err := c.makeRequest(ctx, "GET", path, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	var resp APIResponse
+	if err := json.Unmarshal(body, &resp); err != nil {
+		return nil, fmt.Errorf("failed to parse task log response: %w", err)
+	}
+
+	// The log response is an array of log line objects
+	logData, ok := resp.Data.([]interface{})
+	if !ok {
+		return nil, fmt.Errorf("unexpected task log response format")
+	}
+
+	var lines []string
+	for _, item := range logData {
+		logLine, ok := item.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		// Each log entry has "n" (line number) and "t" (text)
+		if text, ok := logLine["t"].(string); ok {
+			lines = append(lines, text)
+		}
+	}
+
+	return lines, nil
+}
+
 // ReadConfig reads configuration from file
 func ReadConfig() (string, string, string, error) {
 	return config.Read()
