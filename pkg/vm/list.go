@@ -11,6 +11,15 @@ import (
 	c "github.com/scotty-c/prox/pkg/client"
 )
 
+// ListVMsOptions contains options for listing virtual machines
+type ListVMsOptions struct {
+	Node        string // Filter by specific node (empty for all nodes)
+	RunningOnly bool   // Show only running VMs
+	ShowIPs     bool   // Fetch and display IP addresses (slower)
+	Detailed    bool   // Show detailed disk information (slower)
+	JSONOutput  bool   // Output as JSON instead of table
+}
+
 // GetVm retrieves and displays all virtual machines
 func GetVm() {
 	client, err := c.CreateClient()
@@ -87,11 +96,11 @@ func GetVm() {
 	displayVMsTable(vms, false, false, false) // Default: no IP, no disk
 }
 
-// ListVMs lists virtual machines with optional node and running filters
-func ListVMs(node string, runningOnly bool, showIPs bool, detailed bool, jsonOutput bool) error {
+// ListVMs lists virtual machines with the provided options
+func ListVMs(opts ListVMsOptions) error {
 	client, err := c.CreateClient()
 	if err != nil {
-		if jsonOutput {
+		if opts.JSONOutput {
 			// output error as json? or just stderr. CLI tools usually output error to stderr.
 			fmt.Fprintf(os.Stderr, "Error creating client: %v\n", err)
 		} else {
@@ -100,14 +109,14 @@ func ListVMs(node string, runningOnly bool, showIPs bool, detailed bool, jsonOut
 		return fmt.Errorf("failed to create client: %w", err)
 	}
 
-	if !jsonOutput {
+	if !opts.JSONOutput {
 		fmt.Println("Retrieving virtual machines...")
 	}
 
 	// Get cluster resources
 	resources, err := client.GetClusterResources(context.Background())
 	if err != nil {
-		if jsonOutput {
+		if opts.JSONOutput {
 			fmt.Fprintf(os.Stderr, "Error getting cluster resources: %v\n", err)
 		} else {
 			fmt.Printf("Error: Error getting cluster resources: %v\n", err)
@@ -123,12 +132,12 @@ func ListVMs(node string, runningOnly bool, showIPs bool, detailed bool, jsonOut
 		}
 
 		// Filter by node if specified
-		if node != "" && resource.Node != node {
+		if opts.Node != "" && resource.Node != opts.Node {
 			continue
 		}
 
 		// Filter by running status if specified
-		if runningOnly && resource.Status != "running" {
+		if opts.RunningOnly && resource.Status != "running" {
 			continue
 		}
 
@@ -179,7 +188,7 @@ func ListVMs(node string, runningOnly bool, showIPs bool, detailed bool, jsonOut
 		}
 
 		// Use detailed disk info if requested (slower but more accurate)
-		if detailed && (vm.MaxDisk == 0 || vm.Disk == 0) {
+		if opts.Detailed && (vm.MaxDisk == 0 || vm.Disk == 0) {
 			if maxDisk, usedDisk, err := client.GetVMDiskInfo(context.Background(), resource.Node, int(*resource.VMID)); err == nil {
 				if maxDisk > 0 {
 					vm.MaxDisk = maxDisk
@@ -191,7 +200,7 @@ func ListVMs(node string, runningOnly bool, showIPs bool, detailed bool, jsonOut
 		}
 
 		// Only make expensive calls if we have no disk info at all and not using detailed mode
-		if !detailed && vm.MaxDisk == 0 && vm.Disk == 0 {
+		if !opts.Detailed && vm.MaxDisk == 0 && vm.Disk == 0 {
 			// Quick fallback: assume VM has disks if it's a normal VM (not a template)
 			if !strings.Contains(strings.ToLower(resource.Name), "template") && !strings.Contains(strings.ToLower(resource.Name), "tpl") {
 				vm.MaxDisk = 1 // Set to 1 to indicate disk presence
@@ -199,7 +208,7 @@ func ListVMs(node string, runningOnly bool, showIPs bool, detailed bool, jsonOut
 		}
 
 		// Get IP address for running VMs only if requested (for performance)
-		if showIPs && resource.Status == "running" {
+		if opts.ShowIPs && resource.Status == "running" {
 			ip, err := client.GetVMIP(context.Background(), resource.Node, int(*resource.VMID))
 			if err != nil {
 				vm.IP = "N/A"
@@ -213,7 +222,7 @@ func ListVMs(node string, runningOnly bool, showIPs bool, detailed bool, jsonOut
 		vms = append(vms, vm)
 	}
 
-	if jsonOutput {
+	if opts.JSONOutput {
 		enc := json.NewEncoder(os.Stdout)
 		enc.SetIndent("", "  ")
 		if err := enc.Encode(vms); err != nil {
@@ -224,7 +233,7 @@ func ListVMs(node string, runningOnly bool, showIPs bool, detailed bool, jsonOut
 	}
 
 	if len(vms) == 0 {
-		if runningOnly {
+		if opts.RunningOnly {
 			fmt.Println("Error: No running virtual machines found")
 		} else {
 			fmt.Println("Error: No virtual machines found")
@@ -233,7 +242,7 @@ func ListVMs(node string, runningOnly bool, showIPs bool, detailed bool, jsonOut
 	}
 
 	// Display VMs in a table
-	displayVMsTable(vms, runningOnly, showIPs, detailed)
+	displayVMsTable(vms, opts.RunningOnly, opts.ShowIPs, opts.Detailed)
 	return nil
 }
 

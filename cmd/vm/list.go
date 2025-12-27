@@ -23,7 +23,13 @@ and --detailed to get accurate disk usage information (both options are slower).
 		showIPs, _ := cmd.Flags().GetBool("ip")
 		detailed, _ := cmd.Flags().GetBool("detailed")
 		jsonOutput, _ := cmd.Flags().GetBool("json")
-		if err := v.ListVMs(node, running, showIPs, detailed, jsonOutput); err != nil {
+		if err := v.ListVMs(v.ListVMsOptions{
+			Node:        node,
+			RunningOnly: running,
+			ShowIPs:     showIPs,
+			Detailed:    detailed,
+			JSONOutput:  jsonOutput,
+		}); err != nil {
 			os.Exit(1)
 		}
 	},
