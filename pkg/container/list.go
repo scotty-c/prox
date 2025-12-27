@@ -8,16 +8,18 @@ import (
 
 	"github.com/jedib0t/go-pretty/v6/table"
 	c "github.com/scotty-c/prox/pkg/client"
+	"github.com/scotty-c/prox/pkg/output"
 )
 
 // ListContainers lists all LXC containers
 func ListContainers(node string, runningOnly bool, jsonOutput bool) error {
 	client, err := c.CreateClient()
 	if err != nil {
-		if jsonOutput {
-			fmt.Fprintf(os.Stderr, "Error creating client: %v\n", err)
+		if !jsonOutput {
+			output.ClientError(err)
 		} else {
-			fmt.Printf("Error creating client: %v\n", err)
+			// In JSON mode, only output the error to stderr without extra formatting
+			fmt.Fprintf(os.Stderr, "Error: Failed to connect to Proxmox VE: %v\n", err)
 		}
 		return fmt.Errorf("failed to create client: %w", err)
 	}

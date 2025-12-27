@@ -10,6 +10,7 @@ import (
 
 	"github.com/jedib0t/go-pretty/v6/table"
 	c "github.com/scotty-c/prox/pkg/client"
+	"github.com/scotty-c/prox/pkg/output"
 )
 
 // ListVMsOptions contains options for listing virtual machines
@@ -187,11 +188,11 @@ func fetchIPsConcurrently(client *c.ProxmoxClient, vms []VM) {
 func ListVMs(opts ListVMsOptions) error {
 	client, err := c.CreateClient()
 	if err != nil {
-		if opts.JSONOutput {
-			// output error as json? or just stderr. CLI tools usually output error to stderr.
-			fmt.Fprintf(os.Stderr, "Error creating client: %v\n", err)
+		if !opts.JSONOutput {
+			output.ClientError(err)
 		} else {
-			fmt.Printf("Error creating client: %v\n", err)
+			// In JSON mode, only output the error to stderr without extra formatting
+			fmt.Fprintf(os.Stderr, "Error: Failed to connect to Proxmox VE: %v\n", err)
 		}
 		return fmt.Errorf("failed to create client: %w", err)
 	}

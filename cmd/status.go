@@ -7,6 +7,7 @@ import (
 	"github.com/jedib0t/go-pretty/v6/table"
 	"github.com/scotty-c/prox/pkg/client"
 	"github.com/scotty-c/prox/pkg/config"
+	"github.com/scotty-c/prox/pkg/output"
 	"github.com/spf13/cobra"
 )
 
@@ -50,6 +51,7 @@ func showStatus() error {
 	// Create client
 	cl, err := client.CreateClient()
 	if err != nil {
+		output.ClientError(err)
 		return fmt.Errorf("failed to connect to Proxmox VE: %w", err)
 	}
 
