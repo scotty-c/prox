@@ -148,17 +148,30 @@ func ResolveTemplate(shortName string) (*ResolvedTemplate, error) {
 	requestedOS := strings.ToLower(parts[0])
 	requestedVersion := parts[1]
 
-	// Find matching templates
-	var matches []Template
+	// Build index map for O(1) exact lookups
+	indexMap := make(map[string][]Template)
 	for _, template := range allTemplates {
-		templateOS := strings.ToLower(template.OS)
-		templateVersion := template.Version
+		key := strings.ToLower(template.OS) + ":" + template.Version
+		indexMap[key] = append(indexMap[key], template)
+	}
 
-		// Match OS (case-insensitive)
-		if templateOS == requestedOS || strings.Contains(templateOS, requestedOS) {
-			// Match version (exact or contains)
-			if templateVersion == requestedVersion || strings.Contains(templateVersion, requestedVersion) {
-				matches = append(matches, template)
+	// Try exact match first (O(1))
+	var matches []Template
+	exactKey := requestedOS + ":" + requestedVersion
+	if exactMatches, found := indexMap[exactKey]; found {
+		matches = exactMatches
+	} else {
+		// Fall back to flexible matching with contains (O(n))
+		for _, template := range allTemplates {
+			templateOS := strings.ToLower(template.OS)
+			templateVersion := template.Version
+
+			// Match OS (case-insensitive)
+			if templateOS == requestedOS || strings.Contains(templateOS, requestedOS) {
+				// Match version (exact or contains)
+				if templateVersion == requestedVersion || strings.Contains(templateVersion, requestedVersion) {
+					matches = append(matches, template)
+				}
 			}
 		}
 	}
