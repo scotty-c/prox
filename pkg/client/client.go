@@ -25,6 +25,11 @@ type ProxmoxClient struct {
 	HTTPClient *http.Client
 	ticket     string
 	csrfToken  string
+
+	// Cluster resources cache
+	cachedResources      []Resource
+	cachedResourcesTime  time.Time
+	cachedResourcesMutex sync.RWMutex
 }
 
 // AuthResponse represents the response from Proxmox authentication
@@ -302,8 +307,27 @@ func (c *ProxmoxClient) GetNodes(ctx context.Context) ([]Node, error) {
 	return nodes, nil
 }
 
-// GetClusterResources gets cluster resources
+// GetClusterResources gets cluster resources with short-lived caching
 func (c *ProxmoxClient) GetClusterResources(ctx context.Context) ([]Resource, error) {
+	// Try to use cached data (read lock)
+	c.cachedResourcesMutex.RLock()
+	if time.Since(c.cachedResourcesTime) < time.Duration(ClusterResourcesCacheTTL)*time.Second {
+		cached := c.cachedResources
+		c.cachedResourcesMutex.RUnlock()
+		return cached, nil
+	}
+	c.cachedResourcesMutex.RUnlock()
+
+	// Cache miss or expired, fetch from API (write lock)
+	c.cachedResourcesMutex.Lock()
+	defer c.cachedResourcesMutex.Unlock()
+
+	// Double-check after acquiring write lock (another goroutine might have refreshed)
+	if time.Since(c.cachedResourcesTime) < time.Duration(ClusterResourcesCacheTTL)*time.Second {
+		return c.cachedResources, nil
+	}
+
+	// Fetch from API
 	body, err := c.makeRequest(ctx, "GET", "/cluster/resources", nil)
 	if err != nil {
 		return nil, err
@@ -313,6 +337,10 @@ func (c *ProxmoxClient) GetClusterResources(ctx context.Context) ([]Resource, er
 	if err := json.Unmarshal(body, &resp); err != nil {
 		return nil, fmt.Errorf("failed to parse cluster resources response: %w", err)
 	}
+
+	// Update cache
+	c.cachedResources = resp.Data
+	c.cachedResourcesTime = time.Now()
 
 	return resp.Data, nil
 }
@@ -649,6 +677,14 @@ func ClearClientCache() {
 	defer clientCacheMutex.Unlock()
 	cachedClient = nil
 	cachedClientKey = ""
+}
+
+// ClearClusterResourcesCache clears the cluster resources cache for this client
+func (c *ProxmoxClient) ClearClusterResourcesCache() {
+	c.cachedResourcesMutex.Lock()
+	defer c.cachedResourcesMutex.Unlock()
+	c.cachedResources = nil
+	c.cachedResourcesTime = time.Time{}
 }
 
 // GetVMNode finds which node a VM is running on

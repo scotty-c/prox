@@ -31,6 +31,9 @@ const (
 	// Worker pool
 	MaxConcurrentIPLookups = 10 // Maximum concurrent IP lookup workers
 
+	// Caching
+	ClusterResourcesCacheTTL = 10 // Time-to-live for cluster resources cache (seconds)
+
 	// VM name constraints
 	MaxVMNameLength = 15
 
