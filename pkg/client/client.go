@@ -748,30 +748,9 @@ func (c *ProxmoxClient) GetVMIP(ctx context.Context, node string, vmid int) (str
 	return "N/A", nil
 }
 
-// getVMIPFromGuestAgent tries to get IP from QEMU guest agent
-func (c *ProxmoxClient) getVMIPFromGuestAgent(ctx context.Context, node string, vmid int) string {
-	path := fmt.Sprintf("/nodes/%s/qemu/%d/agent/network-get-interfaces", node, vmid)
-	body, err := c.makeRequest(ctx, "GET", path, nil)
-	if err != nil {
-		return "N/A"
-	}
-
-	var resp APIResponse
-	if err := json.Unmarshal(body, &resp); err != nil {
-		return "N/A"
-	}
-
-	result, ok := resp.Data.(map[string]interface{})
-	if !ok {
-		return "N/A"
-	}
-
-	interfaces, ok := result["result"].([]interface{})
-	if !ok {
-		return "N/A"
-	}
-
-	// Prioritize interfaces - look for eth0, ens3, etc. first
+// extractIPFromInterfaces extracts IP address from guest agent network interfaces
+// Prioritizes primary network interfaces (eth0, ens3, ens18, enp0s3) and filters loopback
+func extractIPFromInterfaces(interfaces []interface{}) string {
 	var primaryIP, anyIP string
 
 	for _, iface := range interfaces {
@@ -832,6 +811,32 @@ func (c *ProxmoxClient) getVMIPFromGuestAgent(ctx context.Context, node string, 
 	}
 
 	return "N/A"
+}
+
+// getVMIPFromGuestAgent tries to get IP from QEMU guest agent
+func (c *ProxmoxClient) getVMIPFromGuestAgent(ctx context.Context, node string, vmid int) string {
+	path := fmt.Sprintf("/nodes/%s/qemu/%d/agent/network-get-interfaces", node, vmid)
+	body, err := c.makeRequest(ctx, "GET", path, nil)
+	if err != nil {
+		return "N/A"
+	}
+
+	var resp APIResponse
+	if err := json.Unmarshal(body, &resp); err != nil {
+		return "N/A"
+	}
+
+	result, ok := resp.Data.(map[string]interface{})
+	if !ok {
+		return "N/A"
+	}
+
+	interfaces, ok := result["result"].([]interface{})
+	if !ok {
+		return "N/A"
+	}
+
+	return extractIPFromInterfaces(interfaces)
 }
 
 // getVMIPFromStatus tries to get IP from VM status
@@ -960,67 +965,7 @@ func (c *ProxmoxClient) getContainerIPFromGuestAgent(ctx context.Context, node s
 		return "N/A"
 	}
 
-	// Prioritize interfaces - look for eth0, ens3, etc. first
-	var primaryIP, anyIP string
-
-	for _, iface := range interfaces {
-		ifaceMap, ok := iface.(map[string]interface{})
-		if !ok {
-			continue
-		}
-
-		ifaceName, _ := ifaceMap["name"].(string)
-		ipAddresses, ok := ifaceMap["ip-addresses"].([]interface{})
-		if !ok {
-			continue
-		}
-
-		for _, ipData := range ipAddresses {
-			ipMap, ok := ipData.(map[string]interface{})
-			if !ok {
-				continue
-			}
-
-			ip, ok := ipMap["ip-address"].(string)
-			if !ok {
-				continue
-			}
-
-			ipType, ok := ipMap["ip-address-type"].(string)
-			if !ok || ipType != "ipv4" {
-				continue
-			}
-
-			// Skip loopback addresses
-			if ip == "127.0.0.1" || ip == "::1" {
-				continue
-			}
-
-			// Prioritize primary network interfaces
-			if ifaceName == "eth0" || ifaceName == "ens3" || ifaceName == "ens18" || ifaceName == "enp0s3" {
-				primaryIP = ip
-				break
-			}
-
-			// Keep any valid IP as fallback
-			if anyIP == "" {
-				anyIP = ip
-			}
-		}
-
-		if primaryIP != "" {
-			break
-		}
-	}
-
-	if primaryIP != "" {
-		return primaryIP
-	}
-	if anyIP != "" {
-		return anyIP
-	}
-
-	return "N/A"
+	return extractIPFromInterfaces(interfaces)
 }
 
 // GetContainerIPAlternative tries to get container IP from various sources
