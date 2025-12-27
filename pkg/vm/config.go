@@ -31,8 +31,8 @@ func (v *VirtualMachine) Update(ctx context.Context, config map[string]interface
 	return task, nil
 }
 
-// EditVm edits a VM configuration by ID and node
-func EditVm(ctx context.Context, id int, node string, name string, cores int, mem int, diskSize int, options ...VirtualMachineOption) {
+// EditVM edits a VM configuration by ID and node
+func EditVM(ctx context.Context, id int, node string, name string, cores int, mem int, diskSize int, options ...VirtualMachineOption) {
 	client, err := c.CreateClient()
 	if err != nil {
 		fmt.Printf("Error creating client: %v\n", err)
@@ -229,6 +229,6 @@ func EditVMByNameOrID(nameOrID string, name string, cores int, mem int, diskSize
 	}
 
 	// Edit the VM
-	EditVm(ctx, vm.ID, vm.Node, name, cores, mem, diskSize)
+	EditVM(ctx, vm.ID, vm.Node, name, cores, mem, diskSize)
 	return nil
 }

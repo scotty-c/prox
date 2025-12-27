@@ -22,8 +22,8 @@ type ListVMsOptions struct {
 	JSONOutput  bool   // Output as JSON instead of table
 }
 
-// GetVm retrieves and displays all virtual machines
-func GetVm() {
+// GetVM retrieves and displays all virtual machines
+func GetVM() {
 	client, err := c.CreateClient()
 	if err != nil {
 		output.Error("Error creating client: %v\n", err)

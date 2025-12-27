@@ -45,8 +45,8 @@ func (v *VirtualMachine) Shutdown(ctx context.Context) (*Task, error) {
 	return task, nil
 }
 
-// ShutdownVm shuts down a VM by ID and node
-func ShutdownVm(ctx context.Context, id int, node string) {
+// ShutdownVM shuts down a VM by ID and node
+func ShutdownVM(ctx context.Context, id int, node string) {
 	client, err := c.CreateClient()
 	if err != nil {
 		output.Error("Error creating client: %v\n", err)
@@ -95,8 +95,8 @@ func (v *VirtualMachine) Start(ctx context.Context) (*Task, error) {
 	return task, nil
 }
 
-// StartVm starts a VM by ID and node
-func StartVm(ctx context.Context, id int, node string) {
+// StartVM starts a VM by ID and node
+func StartVM(ctx context.Context, id int, node string) {
 	client, err := c.CreateClient()
 	if err != nil {
 		output.Error("Error creating client: %v\n", err)
@@ -145,8 +145,8 @@ func (v *VirtualMachine) Clone(ctx context.Context, name string, newId int, full
 	return task, nil
 }
 
-// CloneVm clones a VM by ID and node
-func CloneVm(ctx context.Context, id int, node string, name string, newId int, full bool) error {
+// CloneVM clones a VM by ID and node
+func CloneVM(ctx context.Context, id int, node string, name string, newId int, full bool) error {
 	client, err := c.CreateClient()
 	if err != nil {
 		output.Error("Error creating client: %v\n", err)
@@ -217,8 +217,8 @@ func (v *VirtualMachine) Delete(ctx context.Context) (*Task, error) {
 	return task, nil
 }
 
-// DeleteVm deletes a VM by ID and node
-func DeleteVm(ctx context.Context, id int, node string) {
+// DeleteVM deletes a VM by ID and node
+func DeleteVM(ctx context.Context, id int, node string) {
 	client, err := c.CreateClient()
 	if err != nil {
 		output.Error("Error creating client: %v\n", err)
@@ -257,8 +257,8 @@ func DeleteVm(ctx context.Context, id int, node string) {
 	output.Info("Tip: Use 'prox vms list' to verify the VM has been removed\n")
 }
 
-// MigrateVm migrates a VM from one node to another
-func MigrateVm(ctx context.Context, id int, sourceNode, targetNode string, online bool, withLocalDisks bool) error {
+// MigrateVM migrates a VM from one node to another
+func MigrateVM(ctx context.Context, id int, sourceNode, targetNode string, online bool, withLocalDisks bool) error {
 	client, err := c.CreateClient()
 	if err != nil {
 		output.Error("Error: Error creating client: %v\n", err)
@@ -340,7 +340,7 @@ func StartVMByNameOrID(nameOrID string) error {
 	}
 
 	// Start the VM
-	StartVm(ctx, vm.ID, vm.Node)
+	StartVM(ctx, vm.ID, vm.Node)
 	return nil
 }
 
@@ -360,7 +360,7 @@ func ShutdownVMByNameOrID(nameOrID string) error {
 	}
 
 	// Shutdown the VM
-	ShutdownVm(ctx, vm.ID, vm.Node)
+	ShutdownVM(ctx, vm.ID, vm.Node)
 	return nil
 }
 
@@ -380,7 +380,7 @@ func DeleteVMByNameOrID(nameOrID string) error {
 	}
 
 	// Delete the VM
-	DeleteVm(ctx, vm.ID, vm.Node)
+	DeleteVM(ctx, vm.ID, vm.Node)
 	return nil
 }
 
@@ -400,7 +400,7 @@ func CloneVMByNameOrID(sourceNameOrID string, name string, newID int, full bool)
 	}
 
 	// Clone the VM
-	return CloneVm(ctx, vm.ID, vm.Node, name, newID, full)
+	return CloneVM(ctx, vm.ID, vm.Node, name, newID, full)
 }
 
 // MigrateVMByNameOrID migrates a VM by name or ID
@@ -424,5 +424,5 @@ func MigrateVMByNameOrID(nameOrID string, sourceNode, targetNode string, online 
 	}
 
 	// Migrate the VM
-	return MigrateVm(ctx, vm.ID, sourceNode, targetNode, online, withLocalDisks)
+	return MigrateVM(ctx, vm.ID, sourceNode, targetNode, online, withLocalDisks)
 }
