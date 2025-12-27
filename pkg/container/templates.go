@@ -99,55 +99,24 @@ func displayTemplatesTable(templates []Template) {
 
 // ResolveTemplate resolves a short template name (e.g., "ubuntu:22.04") to a full template path and node
 func ResolveTemplate(shortName string) (*ResolvedTemplate, error) {
-	// If the template is already in full format, we need to find which node has it
-	if strings.Contains(shortName, ":vztmpl/") {
-		client, err := c.CreateClient()
-		if err != nil {
-			return nil, fmt.Errorf("error creating client: %w", err)
-		}
-
-		// Get all templates from all nodes to find which node has this template
-		nodes, err := getClusterNodes(client)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get cluster nodes: %w", err)
-		}
-
-		for _, node := range nodes {
-			templates, err := getNodeTemplates(client, node)
-			if err != nil {
-				continue // Skip nodes that are not accessible
-			}
-
-			// Check if this node has the template
-			for _, template := range templates {
-				if template.Name == shortName {
-					return &ResolvedTemplate{
-						Template: shortName,
-						Node:     node,
-					}, nil
-				}
-			}
-		}
-
-		return nil, fmt.Errorf("template %s not found on any node", shortName)
-	}
-
-	// Check if it's a short format (os:version)
+	// Check if it's a short format (os:version) without full path
 	if !strings.Contains(shortName, ":") {
 		return nil, fmt.Errorf("template must be in format 'os:version' (e.g., 'ubuntu:22.04') or full format 'storage:vztmpl/template-name'")
 	}
 
+	// Create client once
 	client, err := c.CreateClient()
 	if err != nil {
 		return nil, fmt.Errorf("error creating client: %w", err)
 	}
 
-	// Get all templates from all nodes
+	// Get all nodes once
 	nodes, err := getClusterNodes(client)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get cluster nodes: %w", err)
 	}
 
+	// Get all templates from all nodes once
 	var allTemplates []Template
 	for _, node := range nodes {
 		templates, err := getNodeTemplates(client, node)
@@ -155,6 +124,19 @@ func ResolveTemplate(shortName string) (*ResolvedTemplate, error) {
 			continue // Skip nodes that are not accessible
 		}
 		allTemplates = append(allTemplates, templates...)
+	}
+
+	// If the template is already in full format, find which node has it
+	if strings.Contains(shortName, ":vztmpl/") {
+		for _, template := range allTemplates {
+			if template.Name == shortName {
+				return &ResolvedTemplate{
+					Template: shortName,
+					Node:     template.Node,
+				}, nil
+			}
+		}
+		return nil, fmt.Errorf("template %s not found on any node", shortName)
 	}
 
 	// Parse the short name
