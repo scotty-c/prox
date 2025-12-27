@@ -190,9 +190,19 @@ func CloneVm(id int, node string, name string, newId int, full bool) error {
 	}
 
 	output.Result("VM %d clone command issued successfully\n", id)
-	output.Result("New VM: %s (ID: %d)\n", name, newId)
 	output.Result("Task ID: %s\n", task.ID)
-	output.Info("Tip: Use 'prox vm list' to check the cloning progress\n")
+	output.Infoln("Waiting for clone operation to complete...")
+
+	// Wait for the clone task to complete
+	err = waitForTask(client, node, task.ID)
+	if err != nil {
+		output.Error("Error: Clone failed: %v\n", err)
+		return fmt.Errorf("clone failed: %w", err)
+	}
+
+	output.Result("VM clone completed successfully!\n")
+	output.Result("New VM: %s (ID: %d)\n", name, newId)
+	output.Info("Tip: Use 'prox vm list' to check the new VM\n")
 	return nil
 }
 

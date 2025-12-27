@@ -11,14 +11,14 @@ import (
 
 // NodeDetails holds all information about a node for JSON output
 type NodeDetails struct {
-	Node     *client.Node `json:"node"`
-	CPU      string       `json:"cpu,omitempty"`
-	MemUsed  uint64       `json:"mem_used,omitempty"`
-	MemTotal uint64       `json:"mem_total,omitempty"`
-	DiskUsed uint64       `json:"disk_used,omitempty"`
-	DiskTotal uint64      `json:"disk_total,omitempty"`
-	Uptime   string       `json:"uptime,omitempty"`
-	IP       string       `json:"ip,omitempty"`
+	Node      *client.Node `json:"node"`
+	CPU       string       `json:"cpu,omitempty"`
+	MemUsed   uint64       `json:"mem_used,omitempty"`
+	MemTotal  uint64       `json:"mem_total,omitempty"`
+	DiskUsed  uint64       `json:"disk_used,omitempty"`
+	DiskTotal uint64       `json:"disk_total,omitempty"`
+	Uptime    string       `json:"uptime,omitempty"`
+	IP        string       `json:"ip,omitempty"`
 }
 
 // GetNodeDetails fetches detailed node information

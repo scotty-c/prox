@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/briandowns/spinner"
 	c "github.com/scotty-c/prox/pkg/client"
 )
 
@@ -125,6 +126,11 @@ func FindByNameOrID(client *c.ProxmoxClient, nameOrID string) (*VM, error) {
 
 // waitForTask waits for a Proxmox task to complete
 func waitForTask(client *c.ProxmoxClient, node, taskID string) error {
+	s := spinner.New(spinner.CharSets[14], 100*time.Millisecond)
+	s.Suffix = " Processing..."
+	s.Start()
+	defer s.Stop()
+
 	for {
 		task, err := client.GetTaskStatus(context.Background(), node, taskID)
 		if err != nil {
