@@ -19,22 +19,22 @@ func ListContainers(node string, runningOnly bool, jsonOutput bool) error {
 			output.ClientError(err)
 		} else {
 			// In JSON mode, only output the error to stderr without extra formatting
-			fmt.Fprintf(os.Stderr, "Error: Failed to connect to Proxmox VE: %v\n", err)
+			output.Error("Error: Failed to connect to Proxmox VE: %v\n", err)
 		}
 		return fmt.Errorf("failed to create client: %w", err)
 	}
 
 	if !jsonOutput {
-		fmt.Println("Retrieving LXC containers...")
+		output.Infoln("Retrieving LXC containers...")
 	}
 
 	// Get cluster resources
 	resources, err := client.GetClusterResources(context.Background())
 	if err != nil {
 		if jsonOutput {
-			fmt.Fprintf(os.Stderr, "Error getting cluster resources: %v\n", err)
+			output.Error("Error getting cluster resources: %v\n", err)
 		} else {
-			fmt.Printf("Error: Error getting cluster resources: %v\n", err)
+			output.Error("Error: Error getting cluster resources: %v\n", err)
 		}
 		return fmt.Errorf("failed to get cluster resources: %w", err)
 	}
@@ -108,7 +108,7 @@ func ListContainers(node string, runningOnly bool, jsonOutput bool) error {
 		enc := json.NewEncoder(os.Stdout)
 		enc.SetIndent("", "  ")
 		if err := enc.Encode(containers); err != nil {
-			fmt.Fprintf(os.Stderr, "Error encoding JSON: %v\n", err)
+			output.Error("Error encoding JSON: %v\n", err)
 			return fmt.Errorf("failed to encode JSON: %w", err)
 		}
 		return nil
@@ -116,9 +116,9 @@ func ListContainers(node string, runningOnly bool, jsonOutput bool) error {
 
 	if len(containers) == 0 {
 		if runningOnly {
-			fmt.Println("Error: No running containers found")
+			output.Errorln("Error: No running containers found")
 		} else {
-			fmt.Println("Error: No containers found")
+			output.Errorln("Error: No containers found")
 		}
 		return nil
 	}
@@ -187,10 +187,10 @@ func displayContainersTable(containers []Container, runningOnly bool) {
 	}
 
 	t.SetStyle(table.StyleRounded)
-	fmt.Printf("\n%s\n", t.Render())
+	output.Result("\n%s\n", t.Render())
 	if runningOnly {
-		fmt.Printf("Found %d running container(s)\n", len(containers))
+		output.Result("Found %d running container(s)\n", len(containers))
 	} else {
-		fmt.Printf("Found %d container(s)\n", len(containers))
+		output.Result("Found %d container(s)\n", len(containers))
 	}
 }

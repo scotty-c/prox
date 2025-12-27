@@ -7,17 +7,18 @@ import (
 
 	"github.com/jedib0t/go-pretty/v6/table"
 	c "github.com/scotty-c/prox/pkg/client"
+	"github.com/scotty-c/prox/pkg/output"
 )
 
 // ListTemplates lists all available container templates
 func ListTemplates(node string) {
 	client, err := c.CreateClient()
 	if err != nil {
-		fmt.Printf("Error creating client: %v\n", err)
+		output.Error("Error creating client: %v\n", err)
 		return
 	}
 
-	fmt.Println("Retrieving container templates...")
+	output.Infoln("Retrieving container templates...")
 
 	// Get all nodes if no specific node is provided
 	nodes := []string{}
@@ -27,7 +28,7 @@ func ListTemplates(node string) {
 		// Get all nodes in the cluster
 		clusterNodes, err := getClusterNodes(client)
 		if err != nil {
-			fmt.Printf("Error: Error getting cluster nodes: %v\n", err)
+			output.Error("Error: Error getting cluster nodes: %v\n", err)
 			return
 		}
 		nodes = clusterNodes
@@ -37,14 +38,14 @@ func ListTemplates(node string) {
 	for _, nodeName := range nodes {
 		templates, err := getNodeTemplates(client, nodeName)
 		if err != nil {
-			fmt.Printf("WARNING: Warning: Could not get templates from node %s: %v\n", nodeName, err)
+			output.Error("WARNING: Warning: Could not get templates from node %s: %v\n", nodeName, err)
 			continue
 		}
 		allTemplates = append(allTemplates, templates...)
 	}
 
 	if len(allTemplates) == 0 {
-		fmt.Println("Error: No container templates found")
+		output.Errorln("Error: No container templates found")
 		return
 	}
 
@@ -93,8 +94,8 @@ func displayTemplatesTable(templates []Template) {
 	}
 
 	t.SetStyle(table.StyleRounded)
-	fmt.Printf("\n%s\n", t.Render())
-	fmt.Printf("Found %d container template(s)\n", len(templates))
+	output.Result("\n%s\n", t.Render())
+	output.Result("Found %d container template(s)\n", len(templates))
 }
 
 // ResolveTemplate resolves a short template name (e.g., "ubuntu:22.04") to a full template path and node
@@ -191,10 +192,10 @@ func ResolveTemplate(shortName string) (*ResolvedTemplate, error) {
 				break
 			}
 		}
-		fmt.Printf("Tip: Multiple templates found for %s, using: %s on node %s\n", shortName, bestMatch.Name, bestMatch.Node)
+		output.Info("Tip: Multiple templates found for %s, using: %s on node %s\n", shortName, bestMatch.Name, bestMatch.Node)
 	} else {
 		bestMatch = matches[0]
-		fmt.Printf("Tip: Resolved %s to: %s on node %s\n", shortName, bestMatch.Name, bestMatch.Node)
+		output.Info("Tip: Resolved %s to: %s on node %s\n", shortName, bestMatch.Name, bestMatch.Node)
 	}
 
 	return &ResolvedTemplate{
@@ -205,14 +206,14 @@ func ResolveTemplate(shortName string) (*ResolvedTemplate, error) {
 
 // ListTemplateShortcuts lists common template shortcuts for user reference
 func ListTemplateShortcuts() {
-	fmt.Println("🔧 Common template shortcuts:")
-	fmt.Println("  ubuntu:22.04    - Ubuntu 22.04 LTS")
-	fmt.Println("  ubuntu:20.04    - Ubuntu 20.04 LTS")
-	fmt.Println("  debian:12       - Debian 12 (Bookworm)")
-	fmt.Println("  debian:11       - Debian 11 (Bullseye)")
-	fmt.Println("  alpine:3.18     - Alpine Linux 3.18")
-	fmt.Println("  centos:8        - CentOS 8")
-	fmt.Println("  fedora:38       - Fedora 38")
-	fmt.Println()
-	fmt.Println("Tip: Use 'prox ct templates' to see all available templates")
+	output.Resultln("🔧 Common template shortcuts:")
+	output.Resultln("  ubuntu:22.04    - Ubuntu 22.04 LTS")
+	output.Resultln("  ubuntu:20.04    - Ubuntu 20.04 LTS")
+	output.Resultln("  debian:12       - Debian 12 (Bookworm)")
+	output.Resultln("  debian:11       - Debian 11 (Bullseye)")
+	output.Resultln("  alpine:3.18     - Alpine Linux 3.18")
+	output.Resultln("  centos:8        - CentOS 8")
+	output.Resultln("  fedora:38       - Fedora 38")
+	output.Resultln("")
+	output.Info("Tip: Use 'prox ct templates' to see all available templates\n")
 }

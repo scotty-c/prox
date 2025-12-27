@@ -26,16 +26,16 @@ type ListVMsOptions struct {
 func GetVm() {
 	client, err := c.CreateClient()
 	if err != nil {
-		fmt.Printf("Error creating client: %v\n", err)
+		output.Error("Error creating client: %v\n", err)
 		return
 	}
 
-	fmt.Println("Retrieving virtual machines...")
+	output.Infoln("Retrieving virtual machines...")
 
 	// Get cluster resources
 	resources, err := client.GetClusterResources(context.Background())
 	if err != nil {
-		fmt.Printf("Error: Error getting cluster resources: %v\n", err)
+		output.Error("Error: Error getting cluster resources: %v\n", err)
 		return
 	}
 
@@ -95,7 +95,7 @@ func GetVm() {
 	}
 
 	if len(vms) == 0 {
-		fmt.Println("Error: No virtual machines found")
+		output.Errorln("Error: No virtual machines found")
 		return
 	}
 
@@ -192,22 +192,22 @@ func ListVMs(opts ListVMsOptions) error {
 			output.ClientError(err)
 		} else {
 			// In JSON mode, only output the error to stderr without extra formatting
-			fmt.Fprintf(os.Stderr, "Error: Failed to connect to Proxmox VE: %v\n", err)
+			output.Error("Error: Failed to connect to Proxmox VE: %v\n", err)
 		}
 		return fmt.Errorf("failed to create client: %w", err)
 	}
 
 	if !opts.JSONOutput {
-		fmt.Println("Retrieving virtual machines...")
+		output.Infoln("Retrieving virtual machines...")
 	}
 
 	// Get cluster resources
 	resources, err := client.GetClusterResources(context.Background())
 	if err != nil {
 		if opts.JSONOutput {
-			fmt.Fprintf(os.Stderr, "Error getting cluster resources: %v\n", err)
+			output.Error("Error getting cluster resources: %v\n", err)
 		} else {
-			fmt.Printf("Error: Error getting cluster resources: %v\n", err)
+			output.Error("Error: Error getting cluster resources: %v\n", err)
 		}
 		return fmt.Errorf("failed to get cluster resources: %w", err)
 	}
@@ -315,7 +315,7 @@ func ListVMs(opts ListVMsOptions) error {
 		enc := json.NewEncoder(os.Stdout)
 		enc.SetIndent("", "  ")
 		if err := enc.Encode(vms); err != nil {
-			fmt.Fprintf(os.Stderr, "Error encoding JSON: %v\n", err)
+			output.Error("Error encoding JSON: %v\n", err)
 			return fmt.Errorf("failed to encode JSON: %w", err)
 		}
 		return nil
@@ -323,9 +323,9 @@ func ListVMs(opts ListVMsOptions) error {
 
 	if len(vms) == 0 {
 		if opts.RunningOnly {
-			fmt.Println("Error: No running virtual machines found")
+			output.Errorln("Error: No running virtual machines found")
 		} else {
-			fmt.Println("Error: No virtual machines found")
+			output.Errorln("Error: No virtual machines found")
 		}
 		return nil
 	}
@@ -411,10 +411,10 @@ func displayVMsTable(vms []VM, runningOnly bool, showIPs bool, showDisk bool) {
 	}
 
 	t.SetStyle(table.StyleRounded)
-	fmt.Printf("\n%s\n", t.Render())
+	output.Result("\n%s\n", t.Render())
 	if runningOnly {
-		fmt.Printf("Found %d running virtual machine(s)\n", len(vms))
+		output.Result("Found %d running virtual machine(s)\n", len(vms))
 	} else {
-		fmt.Printf("Found %d virtual machine(s)\n", len(vms))
+		output.Result("Found %d virtual machine(s)\n", len(vms))
 	}
 }

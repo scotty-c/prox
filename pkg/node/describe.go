@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/scotty-c/prox/pkg/client"
+	"github.com/scotty-c/prox/pkg/output"
 )
 
 // NodeDetails holds all information about a node for JSON output
@@ -96,69 +97,69 @@ func DescribeNode(name string) error {
 	}
 
 	// Start sectioned output similar to VM describe
-	fmt.Printf("\nNode Details\n")
-	fmt.Printf("════════════════════════════════════════════════════════════════════════\n")
+	output.Result("\nNode Details\n")
+	output.Result("════════════════════════════════════════════════════════════════════════\n")
 
 	// Basic Information
-	fmt.Printf("Basic Information:\n")
-	fmt.Printf("   Name: %s\n", details.Node.Node)
-	fmt.Printf("   ID: %s\n", details.Node.ID)
-	fmt.Printf("   Status: %s\n", details.Node.Status)
+	output.Result("Basic Information:\n")
+	output.Result("   Name: %s\n", details.Node.Node)
+	output.Result("   ID: %s\n", details.Node.ID)
+	output.Result("   Status: %s\n", details.Node.Status)
 	if details.Node.Type != "" {
-		fmt.Printf("   Type: %s\n", details.Node.Type)
+		output.Result("   Type: %s\n", details.Node.Type)
 	}
 
-	fmt.Printf("\n")
+	output.Result("\n")
 
 	// Resource Summary
-	fmt.Printf("Resource Summary:\n")
+	output.Result("Resource Summary:\n")
 
 	if details.CPU != "" {
-		fmt.Printf("   CPU: %s\n", details.CPU)
+		output.Result("   CPU: %s\n", details.CPU)
 	}
 	if details.MemTotal > 0 {
-		fmt.Printf("   Memory: %s / %s (%.1f%%)\n", formatSize(details.MemUsed), formatSize(details.MemTotal), (float64(details.MemUsed)/float64(details.MemTotal))*100)
+		output.Result("   Memory: %s / %s (%.1f%%)\n", formatSize(details.MemUsed), formatSize(details.MemTotal), (float64(details.MemUsed)/float64(details.MemTotal))*100)
 	}
 	if details.DiskTotal > 0 {
-		fmt.Printf("   Disk: %s / %s (%.1f%%)\n", formatSize(details.DiskUsed), formatSize(details.DiskTotal), (float64(details.DiskUsed)/float64(details.DiskTotal))*100)
+		output.Result("   Disk: %s / %s (%.1f%%)\n", formatSize(details.DiskUsed), formatSize(details.DiskTotal), (float64(details.DiskUsed)/float64(details.DiskTotal))*100)
 	}
 	if details.Uptime != "" {
-		fmt.Printf("   Uptime: %s\n", details.Uptime)
+		output.Result("   Uptime: %s\n", details.Uptime)
 	}
 
-	fmt.Printf("\n")
+	output.Result("\n")
 
 	// Storage and Network sections are less applicable for nodes, but show what we can
 	// Network: try to get a primary IP for the node
-	fmt.Printf("🌐 Network:\n")
+	output.Result("🌐 Network:\n")
 	if details.IP != "" {
-		fmt.Printf("   IP: %s\n", details.IP)
+		output.Result("   IP: %s\n", details.IP)
 	} else {
-		fmt.Printf("   IP: N/A (use the Proxmox UI or node network APIs)\n")
+		output.Result("   IP: N/A (use the Proxmox UI or node network APIs)\n")
 	}
 
-	fmt.Printf("\n")
+	output.Result("\n")
 
 	// Runtime Status
-	fmt.Printf("📊 Runtime Status:\n")
+	output.Result("📊 Runtime Status:\n")
 	if details.CPU != "" {
-		fmt.Printf("   CPU Usage: %s\n", details.CPU)
+		output.Result("   CPU Usage: %s\n", details.CPU)
 	}
 	if details.MemTotal > 0 {
-		fmt.Printf("   Memory Usage: %s / %s (%.1f%%)\n", formatSize(details.MemUsed), formatSize(details.MemTotal), (float64(details.MemUsed)/float64(details.MemTotal))*100)
+		output.Result("   Memory Usage: %s / %s (%.1f%%)\n", formatSize(details.MemUsed), formatSize(details.MemTotal), (float64(details.MemUsed)/float64(details.MemTotal))*100)
 	}
 	if details.DiskTotal > 0 {
-		fmt.Printf("   Disk Usage: %s / %s (%.1f%%)\n", formatSize(details.DiskUsed), formatSize(details.DiskTotal), (float64(details.DiskUsed)/float64(details.DiskTotal))*100)
+		output.Result("   Disk Usage: %s / %s (%.1f%%)\n", formatSize(details.DiskUsed), formatSize(details.DiskTotal), (float64(details.DiskUsed)/float64(details.DiskTotal))*100)
 	}
 	if details.Uptime != "" {
-		fmt.Printf("   Uptime: %s\n", details.Uptime)
+		output.Result("   Uptime: %s\n", details.Uptime)
 	}
 
-	fmt.Printf("\n")
+	output.Result("\n")
 
 	// End of node details
 	// (removed stray CLI suggestion line per user request)
-	fmt.Printf("\n")
+	output.Result("\n")
 
 	return nil
 }

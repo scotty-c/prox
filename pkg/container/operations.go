@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	c "github.com/scotty-c/prox/pkg/client"
+	"github.com/scotty-c/prox/pkg/output"
 )
 
 // StartContainer starts a container by name or ID
@@ -14,7 +15,7 @@ func StartContainer(nameOrID string) error {
 		return fmt.Errorf("error creating client: %w", err)
 	}
 
-	fmt.Printf("Starting container %s...\n", nameOrID)
+	output.Info("Starting container %s...\n", nameOrID)
 
 	// Find the container
 	container, err := FindByNameOrID(client, nameOrID)
@@ -24,7 +25,7 @@ func StartContainer(nameOrID string) error {
 
 	// Check if container is already running
 	if container.Status == "running" {
-		fmt.Printf("Container %s is already running\n", nameOrID)
+		output.Info("Container %s is already running\n", nameOrID)
 		return nil
 	}
 
@@ -34,8 +35,8 @@ func StartContainer(nameOrID string) error {
 		return fmt.Errorf("failed to start container: %w", err)
 	}
 
-	fmt.Printf("Task started: %s\n", taskID)
-	fmt.Println("Waiting for container to start...")
+	output.Result("Task started: %s\n", taskID)
+	output.Infoln("Waiting for container to start...")
 
 	// Wait for task completion
 	err = waitForTask(client, container.Node, taskID)
@@ -43,7 +44,7 @@ func StartContainer(nameOrID string) error {
 		return fmt.Errorf("container start failed: %w", err)
 	}
 
-	fmt.Printf("Container %s started successfully\n", nameOrID)
+	output.Result("Container %s started successfully\n", nameOrID)
 	return nil
 }
 
@@ -54,7 +55,7 @@ func StopContainer(nameOrID string) error {
 		return fmt.Errorf("error creating client: %w", err)
 	}
 
-	fmt.Printf("Stopping container %s...\n", nameOrID)
+	output.Info("Stopping container %s...\n", nameOrID)
 
 	// Find the container
 	container, err := FindByNameOrID(client, nameOrID)
@@ -64,7 +65,7 @@ func StopContainer(nameOrID string) error {
 
 	// Check if container is already stopped
 	if container.Status == "stopped" {
-		fmt.Printf("Container %s is already stopped\n", nameOrID)
+		output.Info("Container %s is already stopped\n", nameOrID)
 		return nil
 	}
 
@@ -74,8 +75,8 @@ func StopContainer(nameOrID string) error {
 		return fmt.Errorf("failed to stop container: %w", err)
 	}
 
-	fmt.Printf("Task started: %s\n", taskID)
-	fmt.Println("Waiting for container to stop...")
+	output.Result("Task started: %s\n", taskID)
+	output.Infoln("Waiting for container to stop...")
 
 	// Wait for task completion
 	err = waitForTask(client, container.Node, taskID)
@@ -83,7 +84,7 @@ func StopContainer(nameOrID string) error {
 		return fmt.Errorf("container stop failed: %w", err)
 	}
 
-	fmt.Printf("Container %s stopped successfully\n", nameOrID)
+	output.Result("Container %s stopped successfully\n", nameOrID)
 	return nil
 }
 
@@ -94,8 +95,8 @@ func DeleteContainer(nameOrID string) error {
 		return fmt.Errorf("error creating client: %w", err)
 	}
 
-	fmt.Printf("Deleting container %s...\n", nameOrID)
-	fmt.Println("WARNING: This action cannot be undone!")
+	output.Info("Deleting container %s...\n", nameOrID)
+	output.Infoln("WARNING: This action cannot be undone!")
 
 	// Find the container
 	container, err := FindByNameOrID(client, nameOrID)
@@ -109,8 +110,8 @@ func DeleteContainer(nameOrID string) error {
 		return fmt.Errorf("failed to delete container: %w", err)
 	}
 
-	fmt.Printf("Task started: %s\n", taskID)
-	fmt.Println("Waiting for container deletion...")
+	output.Result("Task started: %s\n", taskID)
+	output.Infoln("Waiting for container deletion...")
 
 	// Wait for task completion
 	err = waitForTask(client, container.Node, taskID)
@@ -118,6 +119,6 @@ func DeleteContainer(nameOrID string) error {
 		return fmt.Errorf("container deletion failed: %w", err)
 	}
 
-	fmt.Printf("Container %s deleted successfully\n", nameOrID)
+	output.Result("Container %s deleted successfully\n", nameOrID)
 	return nil
 }

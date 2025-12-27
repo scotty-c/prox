@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/scotty-c/prox/pkg/crypto"
+	"github.com/scotty-c/prox/pkg/output"
 )
 
 // Config writes a local file to $HOME/.prox/config to hold sensitive information
@@ -149,7 +150,7 @@ func Delete() error {
 		return fmt.Errorf("failed to delete config file: %w", err)
 	}
 
-	fmt.Println("Config deleted successfully")
+	output.Resultln("Config deleted successfully")
 	return nil
 }
 
@@ -185,7 +186,7 @@ func Update(username string, password string, url string) error {
 		return fmt.Errorf("failed to update config: %w", err)
 	}
 
-	fmt.Println("Config updated successfully")
+	output.Resultln("Config updated successfully")
 	return nil
 }
 
@@ -195,7 +196,7 @@ func FirstRun(username string, password string, url string) error {
 		return Create(username, password, url)
 	}
 
-	fmt.Println("Config already exists")
+	output.Resultln("Config already exists")
 	return nil
 }
 
@@ -219,7 +220,7 @@ func MigrateConfig() error {
 			return fmt.Errorf("failed to migrate config: %w", err)
 		}
 
-		fmt.Println("Config migrated to encrypted format")
+		output.Resultln("Config migrated to encrypted format")
 		return nil
 	}
 
@@ -239,7 +240,7 @@ func MigrateConfig() error {
 		if err := Create(username, password, url); err != nil {
 			return fmt.Errorf("failed to update config with encryption: %w", err)
 		}
-		fmt.Println("Config updated with encryption")
+		output.Resultln("Config updated with encryption")
 	}
 
 	return nil
