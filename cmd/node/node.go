@@ -1,3 +1,6 @@
+// Package node implements CLI commands for managing Proxmox VE nodes.
+// It provides commands for listing nodes, describing node details, and performing
+// node-level operations in the Proxmox datacenter.
 package node
 
 import (
