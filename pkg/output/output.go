@@ -1,8 +1,10 @@
 package output
 
 import (
+	"bufio"
 	"fmt"
 	"os"
+	"strings"
 )
 
 // QuietMode indicates whether to suppress non-essential output
@@ -50,4 +52,20 @@ func SetQuiet(quiet bool) {
 // IsQuiet returns whether quiet mode is enabled
 func IsQuiet() bool {
 	return QuietMode
+}
+
+// Confirm prompts the user for confirmation before a destructive action
+// Returns true if the user confirms (y/yes), false otherwise
+// The prompt should be phrased as a yes/no question
+func Confirm(prompt string) bool {
+	fmt.Fprintf(os.Stderr, "%s [y/N]: ", prompt)
+
+	reader := bufio.NewReader(os.Stdin)
+	response, err := reader.ReadString('\n')
+	if err != nil {
+		return false
+	}
+
+	response = strings.ToLower(strings.TrimSpace(response))
+	return response == "y" || response == "yes"
 }

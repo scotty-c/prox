@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/scotty-c/prox/pkg/container"
+	"github.com/scotty-c/prox/pkg/output"
 	"github.com/spf13/cobra"
 )
 
@@ -17,6 +18,15 @@ var deleteCmd = &cobra.Command{
 	Args:    cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		nameOrID := args[0]
+		force, _ := cmd.Flags().GetBool("force")
+
+		// Confirm deletion unless --force is used
+		if !force {
+			if !output.Confirm(fmt.Sprintf("Are you sure you want to delete container '%s'? This action cannot be undone", nameOrID)) {
+				fmt.Println("Deletion cancelled")
+				return
+			}
+		}
 
 		err := container.DeleteContainer(nameOrID)
 		if err != nil {
@@ -27,5 +37,6 @@ var deleteCmd = &cobra.Command{
 }
 
 func init() {
+	deleteCmd.Flags().BoolP("force", "f", false, "Skip confirmation prompt (use with caution)")
 	ctCmd.AddCommand(deleteCmd)
 }

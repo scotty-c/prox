@@ -5,6 +5,7 @@ import (
 	"os"
 	"strconv"
 
+	"github.com/scotty-c/prox/pkg/output"
 	"github.com/scotty-c/prox/pkg/vm"
 	"github.com/spf13/cobra"
 )
@@ -25,8 +26,17 @@ var delCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		// Get node from flag (optional)
+		// Get flags
 		node, _ := cmd.Flags().GetString("node")
+		force, _ := cmd.Flags().GetBool("force")
+
+		// Confirm deletion unless --force is used
+		if !force {
+			if !output.Confirm(fmt.Sprintf("Are you sure you want to delete VM %d? This action cannot be undone", id)) {
+				fmt.Println("Deletion cancelled")
+				return
+			}
+		}
 
 		vm.DeleteVm(id, node)
 	},
@@ -34,5 +44,6 @@ var delCmd = &cobra.Command{
 
 func init() {
 	delCmd.Flags().StringP("node", "n", "", "Proxmox node name (optional - will be auto-discovered if not specified)")
+	delCmd.Flags().BoolP("force", "f", false, "Skip confirmation prompt (use with caution)")
 	vmCmd.AddCommand(delCmd)
 }
