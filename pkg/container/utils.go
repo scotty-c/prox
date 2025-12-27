@@ -128,9 +128,9 @@ func autoDetectNode(client *c.ProxmoxClient) (string, error) {
 }
 
 // waitForTask waits for a Proxmox task to complete
-func waitForTask(client *c.ProxmoxClient, node, taskID string) error {
+func waitForTask(ctx context.Context, client *c.ProxmoxClient, node, taskID string) error {
 	for {
-		task, err := client.GetTaskStatus(context.Background(), node, taskID)
+		task, err := client.GetTaskStatus(ctx, node, taskID)
 		if err != nil {
 			return fmt.Errorf("failed to get task status: %w", err)
 		}
@@ -143,14 +143,18 @@ func waitForTask(client *c.ProxmoxClient, node, taskID string) error {
 		}
 
 		// Wait a bit before checking again
-		time.Sleep(c.TaskPollIntervalSeconds * time.Second)
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(c.TaskPollIntervalSeconds * time.Second):
+		}
 	}
 }
 
 // FindByNameOrID finds a container by name or ID
-func FindByNameOrID(client *c.ProxmoxClient, nameOrID string) (*Container, error) {
+func FindByNameOrID(ctx context.Context, client *c.ProxmoxClient, nameOrID string) (*Container, error) {
 	// Get cluster resources
-	resources, err := client.GetClusterResources(context.Background())
+	resources, err := client.GetClusterResources(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get cluster resources: %w", err)
 	}

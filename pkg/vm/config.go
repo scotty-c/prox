@@ -32,7 +32,7 @@ func (v *VirtualMachine) Update(ctx context.Context, config map[string]interface
 }
 
 // EditVm edits a VM configuration by ID and node
-func EditVm(id int, node string, name string, cores int, mem int, diskSize int, options ...VirtualMachineOption) {
+func EditVm(ctx context.Context, id int, node string, name string, cores int, mem int, diskSize int, options ...VirtualMachineOption) {
 	client, err := c.CreateClient()
 	if err != nil {
 		fmt.Printf("Error creating client: %v\n", err)
@@ -42,7 +42,7 @@ func EditVm(id int, node string, name string, cores int, mem int, diskSize int, 
 	// If no node specified, auto-discovery it
 	if node == "" {
 		fmt.Printf("Finding node for VM %d...\n", id)
-		discoveredNode, err := client.GetVMNode(context.Background(), id)
+		discoveredNode, err := client.GetVMNode(ctx, id)
 		if err != nil {
 			fmt.Printf("Error: Failed to find VM %d: %v\n", id, err)
 			return
@@ -79,7 +79,7 @@ func EditVm(id int, node string, name string, cores int, mem int, diskSize int, 
 		fmt.Printf("🔧 Detecting disk type for VM %d on node %s...\n", id, node)
 
 		// Auto-detect the primary disk type
-		primaryDisk, err := vm.GetPrimaryDisk(context.Background())
+		primaryDisk, err := vm.GetPrimaryDisk(ctx)
 		if err != nil {
 			fmt.Printf("Error: Failed to detect disk type for VM %d: %v\n", id, err)
 			return
@@ -90,7 +90,7 @@ func EditVm(id int, node string, name string, cores int, mem int, diskSize int, 
 		fmt.Printf("📝 Increasing disk size by: %d GB\n", diskSize)
 
 		// Call disk resize function with auto-detected disk type
-		err = vm.ResizeDisk(context.Background(), primaryDisk, fmt.Sprintf("+%dG", diskSize))
+		err = vm.ResizeDisk(ctx, primaryDisk, fmt.Sprintf("+%dG", diskSize))
 		if err != nil {
 			fmt.Printf("Error: Failed to resize VM %d disk: %v\n", id, err)
 			return
@@ -131,7 +131,7 @@ func EditVm(id int, node string, name string, cores int, mem int, diskSize int, 
 	}
 
 	// Apply the changes
-	task, err := vm.Update(context.Background(), config)
+	task, err := vm.Update(ctx, config)
 	if err != nil {
 		fmt.Printf("Error: Failed to update VM %d: %v\n", id, err)
 		return
@@ -215,6 +215,7 @@ func (v *VirtualMachine) GetPrimaryDisk(ctx context.Context) (string, error) {
 
 // EditVMByNameOrID edits a VM by name or ID
 func EditVMByNameOrID(nameOrID string, name string, cores int, mem int, diskSize int) error {
+	ctx := context.Background()
 	client, err := c.CreateClient()
 	if err != nil {
 		output.ClientError(err)
@@ -222,12 +223,12 @@ func EditVMByNameOrID(nameOrID string, name string, cores int, mem int, diskSize
 	}
 
 	// Find the VM by name or ID
-	vm, err := FindByNameOrID(client, nameOrID)
+	vm, err := FindByNameOrID(ctx, client, nameOrID)
 	if err != nil {
 		return fmt.Errorf("failed to find VM: %w", err)
 	}
 
 	// Edit the VM
-	EditVm(vm.ID, vm.Node, name, cores, mem, diskSize)
+	EditVm(ctx, vm.ID, vm.Node, name, cores, mem, diskSize)
 	return nil
 }

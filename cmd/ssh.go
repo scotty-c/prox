@@ -78,6 +78,8 @@ func init() {
 }
 
 func setupSSHConfig(nameOrID, username string, port int, keyPath string, dryRun bool) error {
+	ctx := context.Background()
+
 	// Validate input
 	if nameOrID == "" {
 		return fmt.Errorf("VM or container name/ID cannot be empty")
@@ -97,7 +99,7 @@ func setupSSHConfig(nameOrID, username string, port int, keyPath string, dryRun 
 	var ip, resourceName, resourceType, node string
 	var resourceID int
 
-	vm, vmErr := vm.FindByNameOrID(client, nameOrID)
+	vm, vmErr := vm.FindByNameOrID(ctx, client, nameOrID)
 	if vmErr == nil {
 		// Found as VM
 		resourceType = "VM"
@@ -108,13 +110,13 @@ func setupSSHConfig(nameOrID, username string, port int, keyPath string, dryRun 
 		fmt.Printf("Found %s: %s (ID: %d) on node %s\n", resourceType, resourceName, resourceID, node)
 
 		// Get VM IP
-		ip, err = client.GetVMIP(context.Background(), node, resourceID)
+		ip, err = client.GetVMIP(ctx, node, resourceID)
 		if err != nil {
 			return fmt.Errorf("failed to get VM IP: %w", err)
 		}
 	} else {
 		// Try as container
-		container, ctErr := container.FindByNameOrID(client, nameOrID)
+		container, ctErr := container.FindByNameOrID(ctx, client, nameOrID)
 		if ctErr != nil {
 			return fmt.Errorf("resource '%s' not found as VM or container. VM error: %v, Container error: %v", nameOrID, vmErr, ctErr)
 		}
@@ -127,7 +129,7 @@ func setupSSHConfig(nameOrID, username string, port int, keyPath string, dryRun 
 		fmt.Printf("Found %s: %s (ID: %d) on node %s\n", resourceType, resourceName, resourceID, node)
 
 		// Get Container IP
-		ip, err = client.GetContainerIP(context.Background(), node, resourceID)
+		ip, err = client.GetContainerIP(ctx, node, resourceID)
 		if err != nil {
 			return fmt.Errorf("failed to get container IP: %w", err)
 		}
@@ -283,6 +285,8 @@ func addToSSHConfig(hostAlias, configEntry string) error {
 }
 
 func deleteSSHConfigEntry(nameOrID string, dryRun bool) error {
+	ctx := context.Background()
+
 	if nameOrID == "" {
 		return fmt.Errorf("VM or container name/ID cannot be empty")
 	}
@@ -291,10 +295,10 @@ func deleteSSHConfigEntry(nameOrID string, dryRun bool) error {
 	alias := nameOrID
 	var resolved bool
 	if cl, err := client.CreateClient(); err == nil {
-		if vmObj, vmErr := vm.FindByNameOrID(cl, nameOrID); vmErr == nil {
+		if vmObj, vmErr := vm.FindByNameOrID(ctx, cl, nameOrID); vmErr == nil {
 			alias = vmObj.Name
 			resolved = true
-		} else if ctObj, ctErr := container.FindByNameOrID(cl, nameOrID); ctErr == nil {
+		} else if ctObj, ctErr := container.FindByNameOrID(ctx, cl, nameOrID); ctErr == nil {
 			alias = ctObj.Name
 			resolved = true
 		}

@@ -21,13 +21,14 @@ type VMDetails struct {
 
 // GetVMDetails fetches detailed VM information
 func GetVMDetails(nameOrID string, node string) (*VMDetails, error) {
+	ctx := context.Background()
 	client, err := c.CreateClient()
 	if err != nil {
 		return nil, fmt.Errorf("error creating client: %w", err)
 	}
 
 	// Find the VM by name or ID
-	vm, err := FindByNameOrID(client, nameOrID)
+	vm, err := FindByNameOrID(ctx, client, nameOrID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to find VM: %w", err)
 	}
@@ -38,19 +39,19 @@ func GetVMDetails(nameOrID string, node string) (*VMDetails, error) {
 	}
 
 	// Get VM configuration
-	config, err := client.GetVMConfig(context.Background(), node, vm.ID)
+	config, err := client.GetVMConfig(ctx, node, vm.ID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get VM config: %w", err)
 	}
 
 	// Get VM status
-	status, err := client.GetVMStatus(context.Background(), node, vm.ID)
+	status, err := client.GetVMStatus(ctx, node, vm.ID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get VM status: %w", err)
 	}
 
 	// Get VM IP if available
-	vmIP := GetIp(vm.ID, node)
+	vmIP := GetIp(ctx, vm.ID, node)
 	if vmIP == "Error getting IP" {
 		vmIP = ""
 	}

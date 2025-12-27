@@ -13,13 +13,13 @@ func (v *VirtualMachine) Status(ctx context.Context, id int, targetNode string) 
 }
 
 // GetIp gets the IP address of a VM by ID and node
-func GetIp(id int, node string) string {
+func GetIp(ctx context.Context, id int, node string) string {
 	client, err := c.CreateClient()
 	if err != nil {
 		return "Error getting IP"
 	}
 
-	ip, err := client.GetVMIP(context.Background(), node, id)
+	ip, err := client.GetVMIP(ctx, node, id)
 	if err != nil {
 		return "Error getting IP"
 	}
@@ -29,6 +29,7 @@ func GetIp(id int, node string) string {
 
 // TestConnection tests the basic connection to Proxmox
 func TestConnection() {
+	ctx := context.Background()
 	client, err := c.CreateClient()
 	if err != nil {
 		output.Error("Error creating client: %v\n", err)
@@ -39,13 +40,13 @@ func TestConnection() {
 
 	// Try nodes first (more compatible with older versions)
 	output.Infoln("Testing nodes endpoint...")
-	nodes, err := client.GetNodes(context.Background())
+	nodes, err := client.GetNodes(ctx)
 	if err != nil {
 		output.Error("Error: Error getting nodes: %v\n", err)
 
 		// Try version endpoint as fallback
 		output.Infoln("Trying version endpoint...")
-		version, err2 := client.GetVersion(context.Background())
+		version, err2 := client.GetVersion(ctx)
 		if err2 != nil {
 			output.Error("Error: Error getting version: %v\n", err2)
 			output.Errorln("\nBoth nodes and version endpoints failed.")
@@ -68,7 +69,7 @@ func TestConnection() {
 
 	// Try version endpoint
 	output.Infoln("Testing version endpoint...")
-	version, err := client.GetVersion(context.Background())
+	version, err := client.GetVersion(ctx)
 	if err != nil {
 		output.Error("WARNING: Version endpoint not available: %v\n", err)
 		output.Infoln("This is common with older Proxmox versions")
@@ -78,7 +79,7 @@ func TestConnection() {
 
 	// Test cluster resources
 	output.Infoln("Testing cluster resources...")
-	resources, err := client.GetClusterResources(context.Background())
+	resources, err := client.GetClusterResources(ctx)
 	if err != nil {
 		output.Error("Error: Error getting cluster resources: %v\n", err)
 		return

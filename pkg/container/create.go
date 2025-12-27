@@ -10,6 +10,7 @@ import (
 
 // CreateContainer creates a new LXC container
 func CreateContainer(node, name, template string, vmid int, memory, disk int, cores int, password, sshKeys string) error {
+	ctx := context.Background()
 	client, err := c.CreateClient()
 	if err != nil {
 		return fmt.Errorf("error creating client: %w", err)
@@ -40,7 +41,7 @@ func CreateContainer(node, name, template string, vmid int, memory, disk int, co
 
 	// Get next available VMID if not provided
 	if vmid == 0 {
-		nextID, err := client.GetNextVMID(context.Background())
+		nextID, err := client.GetNextVMID(ctx)
 		if err != nil {
 			return fmt.Errorf("failed to get next VM ID: %w", err)
 		}
@@ -78,7 +79,7 @@ func CreateContainer(node, name, template string, vmid int, memory, disk int, co
 	}
 
 	// Create the container
-	taskID, err := client.CreateContainer(context.Background(), node, vmid, params)
+	taskID, err := client.CreateContainer(ctx, node, vmid, params)
 	if err != nil {
 		return fmt.Errorf("failed to create container: %w", err)
 	}
@@ -87,7 +88,7 @@ func CreateContainer(node, name, template string, vmid int, memory, disk int, co
 	output.Infoln("Waiting for container creation to complete...")
 
 	// Wait for task completion
-	err = waitForTask(client, node, taskID)
+	err = waitForTask(ctx, client, node, taskID)
 	if err != nil {
 		return fmt.Errorf("container creation failed: %w", err)
 	}

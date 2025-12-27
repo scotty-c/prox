@@ -47,9 +47,9 @@ func formatUptime(uptimeSeconds int64) string {
 }
 
 // FindByNameOrID finds a VM by either name or ID
-func FindByNameOrID(client *c.ProxmoxClient, nameOrID string) (*VM, error) {
+func FindByNameOrID(ctx context.Context, client *c.ProxmoxClient, nameOrID string) (*VM, error) {
 	// Get cluster resources
-	resources, err := client.GetClusterResources(context.Background())
+	resources, err := client.GetClusterResources(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get cluster resources: %w", err)
 	}
@@ -125,14 +125,14 @@ func FindByNameOrID(client *c.ProxmoxClient, nameOrID string) (*VM, error) {
 }
 
 // waitForTask waits for a Proxmox task to complete
-func waitForTask(client *c.ProxmoxClient, node, taskID string) error {
+func waitForTask(ctx context.Context, client *c.ProxmoxClient, node, taskID string) error {
 	s := spinner.New(spinner.CharSets[14], 100*time.Millisecond)
 	s.Suffix = " Processing..."
 	s.Start()
 	defer s.Stop()
 
 	for {
-		task, err := client.GetTaskStatus(context.Background(), node, taskID)
+		task, err := client.GetTaskStatus(ctx, node, taskID)
 		if err != nil {
 			return fmt.Errorf("failed to get task status: %w", err)
 		}
@@ -145,6 +145,10 @@ func waitForTask(client *c.ProxmoxClient, node, taskID string) error {
 		}
 
 		// Wait a bit before checking again
-		time.Sleep(c.TaskPollIntervalSeconds * time.Second)
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(c.TaskPollIntervalSeconds * time.Second):
+		}
 	}
 }

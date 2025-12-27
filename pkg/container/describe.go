@@ -18,25 +18,26 @@ type ContainerDetails struct {
 
 // GetContainerDetails fetches detailed container information
 func GetContainerDetails(nameOrID string) (*ContainerDetails, error) {
+	ctx := context.Background()
 	client, err := c.CreateClient()
 	if err != nil {
 		return nil, fmt.Errorf("error creating client: %w", err)
 	}
 
 	// Find the container
-	container, err := FindByNameOrID(client, nameOrID)
+	container, err := FindByNameOrID(ctx, client, nameOrID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to find container: %w", err)
 	}
 
 	// Get container configuration
-	config, err := client.GetContainerConfig(context.Background(), container.Node, container.ID)
+	config, err := client.GetContainerConfig(ctx, container.Node, container.ID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get container config: %w", err)
 	}
 
 	// Get container status
-	status, err := client.GetContainerStatus(context.Background(), container.Node, container.ID)
+	status, err := client.GetContainerStatus(ctx, container.Node, container.ID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get container status: %w", err)
 	}

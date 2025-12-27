@@ -10,6 +10,7 @@ import (
 
 // StartContainer starts a container by name or ID
 func StartContainer(nameOrID string) error {
+	ctx := context.Background()
 	client, err := c.CreateClient()
 	if err != nil {
 		return fmt.Errorf("error creating client: %w", err)
@@ -18,7 +19,7 @@ func StartContainer(nameOrID string) error {
 	output.Info("Starting container %s...\n", nameOrID)
 
 	// Find the container
-	container, err := FindByNameOrID(client, nameOrID)
+	container, err := FindByNameOrID(ctx, client, nameOrID)
 	if err != nil {
 		return fmt.Errorf("failed to find container: %w", err)
 	}
@@ -30,7 +31,7 @@ func StartContainer(nameOrID string) error {
 	}
 
 	// Start the container
-	taskID, err := client.StartContainer(context.Background(), container.Node, container.ID)
+	taskID, err := client.StartContainer(ctx, container.Node, container.ID)
 	if err != nil {
 		return fmt.Errorf("failed to start container: %w", err)
 	}
@@ -39,7 +40,7 @@ func StartContainer(nameOrID string) error {
 	output.Infoln("Waiting for container to start...")
 
 	// Wait for task completion
-	err = waitForTask(client, container.Node, taskID)
+	err = waitForTask(ctx, client, container.Node, taskID)
 	if err != nil {
 		return fmt.Errorf("container start failed: %w", err)
 	}
@@ -50,6 +51,7 @@ func StartContainer(nameOrID string) error {
 
 // StopContainer stops a container by name or ID
 func StopContainer(nameOrID string) error {
+	ctx := context.Background()
 	client, err := c.CreateClient()
 	if err != nil {
 		return fmt.Errorf("error creating client: %w", err)
@@ -58,7 +60,7 @@ func StopContainer(nameOrID string) error {
 	output.Info("Stopping container %s...\n", nameOrID)
 
 	// Find the container
-	container, err := FindByNameOrID(client, nameOrID)
+	container, err := FindByNameOrID(ctx, client, nameOrID)
 	if err != nil {
 		return fmt.Errorf("failed to find container: %w", err)
 	}
@@ -70,7 +72,7 @@ func StopContainer(nameOrID string) error {
 	}
 
 	// Stop the container
-	taskID, err := client.StopContainer(context.Background(), container.Node, container.ID)
+	taskID, err := client.StopContainer(ctx, container.Node, container.ID)
 	if err != nil {
 		return fmt.Errorf("failed to stop container: %w", err)
 	}
@@ -79,7 +81,7 @@ func StopContainer(nameOrID string) error {
 	output.Infoln("Waiting for container to stop...")
 
 	// Wait for task completion
-	err = waitForTask(client, container.Node, taskID)
+	err = waitForTask(ctx, client, container.Node, taskID)
 	if err != nil {
 		return fmt.Errorf("container stop failed: %w", err)
 	}
@@ -90,6 +92,7 @@ func StopContainer(nameOrID string) error {
 
 // DeleteContainer deletes a container by name or ID
 func DeleteContainer(nameOrID string) error {
+	ctx := context.Background()
 	client, err := c.CreateClient()
 	if err != nil {
 		return fmt.Errorf("error creating client: %w", err)
@@ -99,13 +102,13 @@ func DeleteContainer(nameOrID string) error {
 	output.Infoln("WARNING: This action cannot be undone!")
 
 	// Find the container
-	container, err := FindByNameOrID(client, nameOrID)
+	container, err := FindByNameOrID(ctx, client, nameOrID)
 	if err != nil {
 		return fmt.Errorf("failed to find container: %w", err)
 	}
 
 	// Delete the container
-	taskID, err := client.DeleteContainer(context.Background(), container.Node, container.ID)
+	taskID, err := client.DeleteContainer(ctx, container.Node, container.ID)
 	if err != nil {
 		return fmt.Errorf("failed to delete container: %w", err)
 	}
@@ -114,7 +117,7 @@ func DeleteContainer(nameOrID string) error {
 	output.Infoln("Waiting for container deletion...")
 
 	// Wait for task completion
-	err = waitForTask(client, container.Node, taskID)
+	err = waitForTask(ctx, client, container.Node, taskID)
 	if err != nil {
 		return fmt.Errorf("container deletion failed: %w", err)
 	}

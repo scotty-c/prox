@@ -9,14 +9,14 @@ import (
 )
 
 // GetID checks if a VM ID is available
-func GetID(id int) error {
+func GetID(ctx context.Context, id int) error {
 	client, err := c.CreateClient()
 	if err != nil {
 		output.Error("Error creating client: %v\n", err)
 		return fmt.Errorf("failed to create client: %w", err)
 	}
 
-	resources, err := client.GetClusterResources(context.Background())
+	resources, err := client.GetClusterResources(ctx)
 	if err != nil {
 		output.Error("Error getting cluster resources: %v\n", err)
 		return fmt.Errorf("failed to get cluster resources: %w", err)
@@ -46,7 +46,7 @@ func (v *VirtualMachine) Shutdown(ctx context.Context) (*Task, error) {
 }
 
 // ShutdownVm shuts down a VM by ID and node
-func ShutdownVm(id int, node string) {
+func ShutdownVm(ctx context.Context, id int, node string) {
 	client, err := c.CreateClient()
 	if err != nil {
 		output.Error("Error creating client: %v\n", err)
@@ -56,7 +56,7 @@ func ShutdownVm(id int, node string) {
 	// If no node specified, auto-discover it
 	if node == "" {
 		output.Info("Finding node for VM %d...\n", id)
-		discoveredNode, err := client.GetVMNode(context.Background(), id)
+		discoveredNode, err := client.GetVMNode(ctx, id)
 		if err != nil {
 			output.Error("Error: Failed to find VM %d: %v\n", id, err)
 			return
@@ -73,7 +73,7 @@ func ShutdownVm(id int, node string) {
 		Client: client,
 	}
 
-	task, err := vm.Shutdown(context.Background())
+	task, err := vm.Shutdown(ctx)
 	if err != nil {
 		output.Error("Error: Failed to shutdown VM %d: %v\n", id, err)
 		return
@@ -96,7 +96,7 @@ func (v *VirtualMachine) Start(ctx context.Context) (*Task, error) {
 }
 
 // StartVm starts a VM by ID and node
-func StartVm(id int, node string) {
+func StartVm(ctx context.Context, id int, node string) {
 	client, err := c.CreateClient()
 	if err != nil {
 		output.Error("Error creating client: %v\n", err)
@@ -106,7 +106,7 @@ func StartVm(id int, node string) {
 	// If no node specified, auto-discover it
 	if node == "" {
 		output.Info("Finding node for VM %d...\n", id)
-		discoveredNode, err := client.GetVMNode(context.Background(), id)
+		discoveredNode, err := client.GetVMNode(ctx, id)
 		if err != nil {
 			output.Error("Error: Failed to find VM %d: %v\n", id, err)
 			return
@@ -123,7 +123,7 @@ func StartVm(id int, node string) {
 		Client: client,
 	}
 
-	task, err := vm.Start(context.Background())
+	task, err := vm.Start(ctx)
 	if err != nil {
 		output.Error("Error: Failed to start VM %d: %v\n", id, err)
 		return
@@ -146,7 +146,7 @@ func (v *VirtualMachine) Clone(ctx context.Context, name string, newId int, full
 }
 
 // CloneVm clones a VM by ID and node
-func CloneVm(id int, node string, name string, newId int, full bool) error {
+func CloneVm(ctx context.Context, id int, node string, name string, newId int, full bool) error {
 	client, err := c.CreateClient()
 	if err != nil {
 		output.Error("Error creating client: %v\n", err)
@@ -156,7 +156,7 @@ func CloneVm(id int, node string, name string, newId int, full bool) error {
 	// If no node specified, auto-discover it
 	if node == "" {
 		output.Info("Finding node for source VM %d...\n", id)
-		discoveredNode, err := client.GetVMNode(context.Background(), id)
+		discoveredNode, err := client.GetVMNode(ctx, id)
 		if err != nil {
 			output.Error("Error: Failed to find source VM %d: %v\n", id, err)
 			return fmt.Errorf("failed to find source VM %d: %w", id, err)
@@ -173,7 +173,7 @@ func CloneVm(id int, node string, name string, newId int, full bool) error {
 
 	output.Info("Checking if VM ID %d is available...\n", newId)
 	// check to see if the new id is already in use if so the program will exit
-	if err := GetID(newId); err != nil {
+	if err := GetID(ctx, newId); err != nil {
 		return err
 	}
 
@@ -183,7 +183,7 @@ func CloneVm(id int, node string, name string, newId int, full bool) error {
 	}
 	output.Info("Cloning VM %d to new VM %d (%s) on node %s using %s clone...\n", id, newId, name, node, cloneType)
 
-	task, err := vm.Clone(context.Background(), name, newId, full)
+	task, err := vm.Clone(ctx, name, newId, full)
 	if err != nil {
 		output.Error("Error: Failed to clone VM %d: %v\n", id, err)
 		return fmt.Errorf("failed to clone VM %d: %w", id, err)
@@ -194,7 +194,7 @@ func CloneVm(id int, node string, name string, newId int, full bool) error {
 	output.Infoln("Waiting for clone operation to complete...")
 
 	// Wait for the clone task to complete
-	err = waitForTask(client, node, task.ID)
+	err = waitForTask(ctx, client, node, task.ID)
 	if err != nil {
 		output.Error("Error: Clone failed: %v\n", err)
 		return fmt.Errorf("clone failed: %w", err)
@@ -218,7 +218,7 @@ func (v *VirtualMachine) Delete(ctx context.Context) (*Task, error) {
 }
 
 // DeleteVm deletes a VM by ID and node
-func DeleteVm(id int, node string) {
+func DeleteVm(ctx context.Context, id int, node string) {
 	client, err := c.CreateClient()
 	if err != nil {
 		output.Error("Error creating client: %v\n", err)
@@ -228,7 +228,7 @@ func DeleteVm(id int, node string) {
 	// If no node specified, auto-discover it
 	if node == "" {
 		output.Info("Finding node for VM %d...\n", id)
-		discoveredNode, err := client.GetVMNode(context.Background(), id)
+		discoveredNode, err := client.GetVMNode(ctx, id)
 		if err != nil {
 			output.Error("Error: Failed to find VM %d: %v\n", id, err)
 			return
@@ -246,7 +246,7 @@ func DeleteVm(id int, node string) {
 		Client: client,
 	}
 
-	task, err := vm.Delete(context.Background())
+	task, err := vm.Delete(ctx)
 	if err != nil {
 		output.Error("Error: Failed to delete VM %d: %v\n", id, err)
 		return
@@ -258,7 +258,7 @@ func DeleteVm(id int, node string) {
 }
 
 // MigrateVm migrates a VM from one node to another
-func MigrateVm(id int, sourceNode, targetNode string, online bool, withLocalDisks bool) error {
+func MigrateVm(ctx context.Context, id int, sourceNode, targetNode string, online bool, withLocalDisks bool) error {
 	client, err := c.CreateClient()
 	if err != nil {
 		output.Error("Error: Error creating client: %v\n", err)
@@ -268,7 +268,7 @@ func MigrateVm(id int, sourceNode, targetNode string, online bool, withLocalDisk
 	// Auto-discover source node if not specified
 	if sourceNode == "" {
 		output.Info("Discovering source node for VM %d...\n", id)
-		discoveredNode, err := client.GetVMNode(context.Background(), id)
+		discoveredNode, err := client.GetVMNode(ctx, id)
 		if err != nil {
 			output.Error("Error: Failed to find VM %d: %v\n", id, err)
 			return fmt.Errorf("failed to find VM %d: %w", id, err)
@@ -297,7 +297,7 @@ func MigrateVm(id int, sourceNode, targetNode string, online bool, withLocalDisk
 	output.Info("Migrating VM %d from %s to %s...\n", id, sourceNode, targetNode)
 
 	// Start the migration
-	taskID, err := client.MigrateVM(context.Background(), sourceNode, id, targetNode, options)
+	taskID, err := client.MigrateVM(ctx, sourceNode, id, targetNode, options)
 	if err != nil {
 		output.Error("Error: Failed to start migration: %v\n", err)
 		return fmt.Errorf("failed to start migration: %w", err)
@@ -307,7 +307,7 @@ func MigrateVm(id int, sourceNode, targetNode string, online bool, withLocalDisk
 	output.Infoln("Waiting for migration to complete...")
 
 	// Wait for the migration task to complete
-	err = waitForTask(client, sourceNode, taskID)
+	err = waitForTask(ctx, client, sourceNode, taskID)
 	if err != nil {
 		output.Error("Error: Migration failed: %v\n", err)
 		return fmt.Errorf("migration failed: %w", err)
@@ -326,6 +326,7 @@ func MigrateVm(id int, sourceNode, targetNode string, online bool, withLocalDisk
 
 // StartVMByNameOrID starts a VM by name or ID
 func StartVMByNameOrID(nameOrID string) error {
+	ctx := context.Background()
 	client, err := c.CreateClient()
 	if err != nil {
 		output.ClientError(err)
@@ -333,18 +334,19 @@ func StartVMByNameOrID(nameOrID string) error {
 	}
 
 	// Find the VM by name or ID
-	vm, err := FindByNameOrID(client, nameOrID)
+	vm, err := FindByNameOrID(ctx, client, nameOrID)
 	if err != nil {
 		return fmt.Errorf("failed to find VM: %w", err)
 	}
 
 	// Start the VM
-	StartVm(vm.ID, vm.Node)
+	StartVm(ctx, vm.ID, vm.Node)
 	return nil
 }
 
 // ShutdownVMByNameOrID shuts down a VM by name or ID
 func ShutdownVMByNameOrID(nameOrID string) error {
+	ctx := context.Background()
 	client, err := c.CreateClient()
 	if err != nil {
 		output.ClientError(err)
@@ -352,18 +354,19 @@ func ShutdownVMByNameOrID(nameOrID string) error {
 	}
 
 	// Find the VM by name or ID
-	vm, err := FindByNameOrID(client, nameOrID)
+	vm, err := FindByNameOrID(ctx, client, nameOrID)
 	if err != nil {
 		return fmt.Errorf("failed to find VM: %w", err)
 	}
 
 	// Shutdown the VM
-	ShutdownVm(vm.ID, vm.Node)
+	ShutdownVm(ctx, vm.ID, vm.Node)
 	return nil
 }
 
 // DeleteVMByNameOrID deletes a VM by name or ID
 func DeleteVMByNameOrID(nameOrID string) error {
+	ctx := context.Background()
 	client, err := c.CreateClient()
 	if err != nil {
 		output.ClientError(err)
@@ -371,18 +374,19 @@ func DeleteVMByNameOrID(nameOrID string) error {
 	}
 
 	// Find the VM by name or ID
-	vm, err := FindByNameOrID(client, nameOrID)
+	vm, err := FindByNameOrID(ctx, client, nameOrID)
 	if err != nil {
 		return fmt.Errorf("failed to find VM: %w", err)
 	}
 
 	// Delete the VM
-	DeleteVm(vm.ID, vm.Node)
+	DeleteVm(ctx, vm.ID, vm.Node)
 	return nil
 }
 
 // CloneVMByNameOrID clones a VM by name or ID
 func CloneVMByNameOrID(sourceNameOrID string, name string, newID int, full bool) error {
+	ctx := context.Background()
 	client, err := c.CreateClient()
 	if err != nil {
 		output.ClientError(err)
@@ -390,17 +394,18 @@ func CloneVMByNameOrID(sourceNameOrID string, name string, newID int, full bool)
 	}
 
 	// Find the source VM by name or ID
-	vm, err := FindByNameOrID(client, sourceNameOrID)
+	vm, err := FindByNameOrID(ctx, client, sourceNameOrID)
 	if err != nil {
 		return fmt.Errorf("failed to find source VM: %w", err)
 	}
 
 	// Clone the VM
-	return CloneVm(vm.ID, vm.Node, name, newID, full)
+	return CloneVm(ctx, vm.ID, vm.Node, name, newID, full)
 }
 
 // MigrateVMByNameOrID migrates a VM by name or ID
 func MigrateVMByNameOrID(nameOrID string, sourceNode, targetNode string, online bool, withLocalDisks bool) error {
+	ctx := context.Background()
 	client, err := c.CreateClient()
 	if err != nil {
 		output.ClientError(err)
@@ -408,7 +413,7 @@ func MigrateVMByNameOrID(nameOrID string, sourceNode, targetNode string, online 
 	}
 
 	// Find the VM by name or ID
-	vm, err := FindByNameOrID(client, nameOrID)
+	vm, err := FindByNameOrID(ctx, client, nameOrID)
 	if err != nil {
 		return fmt.Errorf("failed to find VM: %w", err)
 	}
@@ -419,5 +424,5 @@ func MigrateVMByNameOrID(nameOrID string, sourceNode, targetNode string, online 
 	}
 
 	// Migrate the VM
-	return MigrateVm(vm.ID, sourceNode, targetNode, online, withLocalDisks)
+	return MigrateVm(ctx, vm.ID, sourceNode, targetNode, online, withLocalDisks)
 }
