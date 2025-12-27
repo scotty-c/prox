@@ -45,6 +45,11 @@ func GetVm() {
 			continue
 		}
 
+		// Skip if VMID is nil
+		if resource.VMID == nil {
+			continue
+		}
+
 		// Create VM object
 		vm := VM{
 			ID:     int(*resource.VMID),
@@ -220,6 +225,11 @@ func ListVMs(opts ListVMsOptions) error {
 
 		// Filter by running status if specified
 		if opts.RunningOnly && resource.Status != "running" {
+			continue
+		}
+
+		// Skip if VMID is nil
+		if resource.VMID == nil {
 			continue
 		}
 

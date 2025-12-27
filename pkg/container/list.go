@@ -54,6 +54,11 @@ func ListContainers(node string, runningOnly bool, jsonOutput bool) error {
 			continue
 		}
 
+		// Skip if VMID is nil
+		if resource.VMID == nil {
+			continue
+		}
+
 		// Create container object
 		container := Container{
 			ID:     int(*resource.VMID),
