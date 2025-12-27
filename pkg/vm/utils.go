@@ -131,6 +131,10 @@ func waitForTask(ctx context.Context, client *c.ProxmoxClient, node, taskID stri
 	s.Start()
 	defer s.Stop()
 
+	// Exponential backoff configuration
+	backoff := 500 * time.Millisecond // Start at 500ms
+	maxBackoff := 5 * time.Second     // Cap at 5s
+
 	for {
 		task, err := client.GetTaskStatus(ctx, node, taskID)
 		if err != nil {
@@ -144,11 +148,16 @@ func waitForTask(ctx context.Context, client *c.ProxmoxClient, node, taskID stri
 			return fmt.Errorf("task failed with exit code: %s", task.ExitCode)
 		}
 
-		// Wait a bit before checking again
+		// Wait with exponential backoff before checking again
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case <-time.After(c.TaskPollIntervalSeconds * time.Second):
+		case <-time.After(backoff):
+			// Double the backoff for next iteration, cap at maxBackoff
+			backoff = backoff * 2
+			if backoff > maxBackoff {
+				backoff = maxBackoff
+			}
 		}
 	}
 }
