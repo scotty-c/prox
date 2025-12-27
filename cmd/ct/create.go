@@ -24,6 +24,11 @@ The template can be specified in two formats:
 
 The short format will automatically resolve to the full template path.
 
+Storage Configuration:
+- Use --storage to specify where the container rootfs will be stored
+- Defaults to 'local-lvm' if not specified
+- Common storage options: local-lvm, local-zfs, nfs-storage, ceph
+
 SSH Key Options:
 - Use --ssh-keys-file to specify a path to your SSH public key file (e.g., ~/.ssh/id_rsa.pub)
 - Use --ssh-keys-file=- to read SSH keys from stdin
@@ -33,6 +38,7 @@ Examples:
   prox ct create mycontainer ubuntu:22.04
   prox ct create webapp debian:12 --memory 2048 --disk 32
   prox ct create dev-env alpine:3.18 --cores 2 --node node1 --ssh-keys-file ~/.ssh/id_rsa.pub
+  prox ct create mycontainer ubuntu:22.04 --storage local-zfs --disk 16
   prox ct create mycontainer local:vztmpl/ubuntu-22.04-standard_22.04-1_amd64.tar.zst --ssh-keys-file /path/to/keys.pub`,
 	Args: func(cmd *cobra.Command, args []string) error {
 		// Support either positional <name> <template> OR --name/--template flags.
@@ -85,6 +91,7 @@ Examples:
 		password, _ := cmd.Flags().GetString("password")
 		sshKeysFile, _ := cmd.Flags().GetString("ssh-keys-file")
 		promptPassword, _ := cmd.Flags().GetBool("prompt-password")
+		storage, _ := cmd.Flags().GetString("storage")
 
 		// Parse VMID if provided
 		var vmid int
@@ -169,7 +176,7 @@ Examples:
 		}
 
 		// Create the container
-		err := container.CreateContainer(node, name, template, vmid, memory, disk, cores, password, sshKeys)
+		err := container.CreateContainer(node, name, template, vmid, memory, disk, cores, password, sshKeys, storage)
 		if err != nil {
 			fmt.Printf("Error: Error creating container: %v\n", err)
 			os.Exit(1)
@@ -191,4 +198,5 @@ func init() {
 	createCmd.Flags().StringP("password", "p", "", "Root password for container")
 	createCmd.Flags().Bool("prompt-password", false, "Prompt for password interactively")
 	createCmd.Flags().String("ssh-keys-file", "", "Path to SSH public key file (e.g., ~/.ssh/id_rsa.pub) or '-' to read from stdin")
+	createCmd.Flags().StringP("storage", "s", "", "Storage location for container rootfs (defaults to local-lvm)")
 }

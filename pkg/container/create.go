@@ -9,7 +9,7 @@ import (
 )
 
 // CreateContainer creates a new LXC container
-func CreateContainer(node, name, template string, vmid int, memory, disk int, cores int, password, sshKeys string) error {
+func CreateContainer(node, name, template string, vmid int, memory, disk int, cores int, password, sshKeys, storage string) error {
 	ctx := context.Background()
 	client, err := c.CreateClient()
 	if err != nil {
@@ -49,12 +49,20 @@ func CreateContainer(node, name, template string, vmid int, memory, disk int, co
 		output.Info("🔢 Using VM ID: %d\n", vmid)
 	}
 
+	// Use default storage if not specified
+	if storage == "" {
+		storage = "local-lvm"
+		output.Info("📦 Using default storage: %s\n", storage)
+	} else {
+		output.Info("📦 Using storage: %s\n", storage)
+	}
+
 	// Prepare container parameters
 	params := map[string]interface{}{
 		"hostname":     name,
 		"ostemplate":   template,
 		"memory":       memory,
-		"rootfs":       fmt.Sprintf("local-lvm:%d", disk),
+		"rootfs":       fmt.Sprintf("%s:%d", storage, disk),
 		"cores":        cores,
 		"net0":         "name=eth0,bridge=vmbr0,ip=dhcp",
 		"start":        0, // Don't start automatically
