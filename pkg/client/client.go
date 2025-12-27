@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -679,8 +680,19 @@ func (c *ProxmoxClient) GetTaskLog(ctx context.Context, node, upid string, start
 	return lines, nil
 }
 
-// ReadConfig reads configuration from file
+// ReadConfig reads configuration from environment variables or file
 func ReadConfig() (string, string, string, error) {
+	// Check environment variables first (for CI/CD scenarios)
+	envURL := os.Getenv("PROX_URL")
+	envUser := os.Getenv("PROX_USER")
+	envPass := os.Getenv("PROX_PASSWORD")
+
+	// If all environment variables are set, use them
+	if envURL != "" && envUser != "" && envPass != "" {
+		return envUser, envPass, envURL, nil
+	}
+
+	// Fall back to config file
 	return config.Read()
 }
 

@@ -25,6 +25,14 @@ Features:
   • Comprehensive VM lifecycle management
   • LXC container template management
   • Enhanced error handling and user feedback
+  • Environment variable support for CI/CD scenarios
+
+Configuration:
+  prox uses a config file at ~/.prox/config by default. Alternatively, you can use
+  environment variables for CI/CD and automation:
+    PROX_URL      - Proxmox server URL (e.g., https://proxmox.example.com:8006)
+    PROX_USER     - Username (e.g., root@pam)
+    PROX_PASSWORD - Password or API token
 
 Examples:
   prox config setup                    # Configure connection to Proxmox server
@@ -40,6 +48,13 @@ Examples:
   prox ct shortcuts                   # Show common template shortcuts
   prox container templates -n node1   # List templates from specific node
   prox ssh myvm                       # Setup SSH config for VM/container access
+  prox logs <upid>                    # View task logs
+
+CI/CD Usage:
+  export PROX_URL=https://proxmox.example.com:8006
+  export PROX_USER=automation@pve
+  export PROX_PASSWORD=your-token-here
+  prox vm list                        # Works without config file
 
 Use "prox [command] --help" for more information about a command.`,
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
