@@ -2,6 +2,7 @@ package output
 
 import (
 	"bufio"
+	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
@@ -49,9 +50,11 @@ func SetQuiet(quiet bool) {
 	QuietMode = quiet
 }
 
-// IsQuiet returns whether quiet mode is enabled
-func IsQuiet() bool {
-	return QuietMode
+// OutputJSON marshals data to JSON and prints it to stdout
+func OutputJSON(data interface{}) error {
+	encoder := json.NewEncoder(os.Stdout)
+	encoder.SetIndent("", "  ")
+	return encoder.Encode(data)
 }
 
 // Confirm prompts the user for confirmation before a destructive action

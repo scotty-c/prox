@@ -8,19 +8,27 @@ import (
 	c "github.com/scotty-c/prox/pkg/client"
 )
 
-// DescribeVM displays detailed VM information in a modern, sectioned format
-func DescribeVM(nameOrID string, node string) error {
+// VMDetails holds all information about a VM for JSON output
+type VMDetails struct {
+	ID     int                    `json:"id"`
+	Name   string                 `json:"name"`
+	Node   string                 `json:"node"`
+	Config map[string]interface{} `json:"config"`
+	Status map[string]interface{} `json:"status"`
+	IP     string                 `json:"ip,omitempty"`
+}
+
+// GetVMDetails fetches detailed VM information
+func GetVMDetails(nameOrID string, node string) (*VMDetails, error) {
 	client, err := c.CreateClient()
 	if err != nil {
-		return fmt.Errorf("error creating client: %w", err)
+		return nil, fmt.Errorf("error creating client: %w", err)
 	}
-
-	fmt.Printf("Getting VM details for %s...\n", nameOrID)
 
 	// Find the VM by name or ID
 	vm, err := FindByNameOrID(client, nameOrID)
 	if err != nil {
-		return fmt.Errorf("failed to find VM: %w", err)
+		return nil, fmt.Errorf("failed to find VM: %w", err)
 	}
 
 	// Use the discovered node if no node was specified
@@ -31,26 +39,48 @@ func DescribeVM(nameOrID string, node string) error {
 	// Get VM configuration
 	config, err := client.GetVMConfig(context.Background(), node, vm.ID)
 	if err != nil {
-		return fmt.Errorf("failed to get VM config: %w", err)
+		return nil, fmt.Errorf("failed to get VM config: %w", err)
 	}
 
 	// Get VM status
 	status, err := client.GetVMStatus(context.Background(), node, vm.ID)
 	if err != nil {
-		return fmt.Errorf("failed to get VM status: %w", err)
+		return nil, fmt.Errorf("failed to get VM status: %w", err)
 	}
 
-	// Use the VM name from the found VM
-	vmName := vm.Name
+	// Get VM IP if available
+	vmIP := GetIp(vm.ID, node)
+	if vmIP == "Error getting IP" {
+		vmIP = ""
+	}
+
+	return &VMDetails{
+		ID:     vm.ID,
+		Name:   vm.Name,
+		Node:   node,
+		Config: config,
+		Status: status,
+		IP:     vmIP,
+	}, nil
+}
+
+// DescribeVM displays detailed VM information in a modern, sectioned format
+func DescribeVM(nameOrID string, node string) error {
+	details, err := GetVMDetails(nameOrID, node)
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("Getting VM details for %s...\n", nameOrID)
 
 	// Display VM information
-	displayVMDetails(vm.ID, vmName, node, config, status)
+	displayVMDetails(details.ID, details.Name, details.Node, details.Config, details.Status, details.IP)
 
 	return nil
 }
 
 // displayVMDetails displays detailed VM information
-func displayVMDetails(id int, name, node string, config, status map[string]interface{}) {
+func displayVMDetails(id int, name, node string, config, status map[string]interface{}, ip string) {
 	fmt.Printf("\nVirtual Machine Details\n")
 	fmt.Printf("═══════════════════════════════════════════════════════════════════════════════════════\n")
 
@@ -127,9 +157,9 @@ func displayVMDetails(id int, name, node string, config, status map[string]inter
 		}
 	}
 
-	// Get VM IP if available
-	if vmIP := GetIp(id, node); vmIP != "" && vmIP != "Error getting IP" {
-		fmt.Printf("   IP Address: %s\n", vmIP)
+	// Display VM IP if available
+	if ip != "" {
+		fmt.Printf("   IP Address: %s\n", ip)
 	}
 
 	fmt.Printf("\n")

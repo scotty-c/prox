@@ -8,35 +8,56 @@ import (
 	c "github.com/scotty-c/prox/pkg/client"
 )
 
-// DescribeContainer shows detailed information about a container
-func DescribeContainer(nameOrID string) error {
+// ContainerDetails holds all information about a container for JSON output
+type ContainerDetails struct {
+	Container *Container             `json:"container"`
+	Config    map[string]interface{} `json:"config"`
+	Status    map[string]interface{} `json:"status"`
+}
+
+// GetContainerDetails fetches detailed container information
+func GetContainerDetails(nameOrID string) (*ContainerDetails, error) {
 	client, err := c.CreateClient()
 	if err != nil {
-		return fmt.Errorf("error creating client: %w", err)
+		return nil, fmt.Errorf("error creating client: %w", err)
 	}
-
-	fmt.Printf("Getting container details for %s...\n", nameOrID)
 
 	// Find the container
 	container, err := FindByNameOrID(client, nameOrID)
 	if err != nil {
-		return fmt.Errorf("failed to find container: %w", err)
+		return nil, fmt.Errorf("failed to find container: %w", err)
 	}
 
 	// Get container configuration
 	config, err := client.GetContainerConfig(context.Background(), container.Node, container.ID)
 	if err != nil {
-		return fmt.Errorf("failed to get container config: %w", err)
+		return nil, fmt.Errorf("failed to get container config: %w", err)
 	}
 
 	// Get container status
 	status, err := client.GetContainerStatus(context.Background(), container.Node, container.ID)
 	if err != nil {
-		return fmt.Errorf("failed to get container status: %w", err)
+		return nil, fmt.Errorf("failed to get container status: %w", err)
 	}
 
+	return &ContainerDetails{
+		Container: container,
+		Config:    config,
+		Status:    status,
+	}, nil
+}
+
+// DescribeContainer shows detailed information about a container
+func DescribeContainer(nameOrID string) error {
+	details, err := GetContainerDetails(nameOrID)
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("Getting container details for %s...\n", nameOrID)
+
 	// Display container information
-	displayContainerDetails(container, config, status)
+	displayContainerDetails(details.Container, details.Config, details.Status)
 
 	return nil
 }
