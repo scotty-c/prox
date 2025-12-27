@@ -108,10 +108,16 @@ var (
 // NewClient creates a new Proxmox client
 func NewClient(baseURL, username, password string) *ProxmoxClient {
 	// Create HTTP client with custom transport for self-signed certificates
+	// and connection pooling for better performance
 	transport := &http.Transport{
 		TLSClientConfig: &tls.Config{
 			InsecureSkipVerify: true,
 		},
+		// Connection pooling settings for better reuse
+		MaxIdleConns:        100,              // Maximum idle connections across all hosts
+		MaxIdleConnsPerHost: 10,               // Maximum idle connections per host
+		MaxConnsPerHost:     10,               // Maximum total connections per host
+		IdleConnTimeout:     90 * time.Second, // How long idle connections stay alive
 	}
 
 	client := &http.Client{
