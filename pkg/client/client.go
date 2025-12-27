@@ -43,6 +43,12 @@ type APIResponse struct {
 	Errors interface{} `json:"errors"`
 }
 
+// ClusterResourcesResponse represents the response from cluster resources endpoint
+type ClusterResourcesResponse struct {
+	Data   []Resource  `json:"data"`
+	Errors interface{} `json:"errors"`
+}
+
 // Node represents a Proxmox node
 type Node struct {
 	Node   string `json:"node"`
@@ -297,75 +303,12 @@ func (c *ProxmoxClient) GetClusterResources(ctx context.Context) ([]Resource, er
 		return nil, err
 	}
 
-	var resp APIResponse
+	var resp ClusterResourcesResponse
 	if err := json.Unmarshal(body, &resp); err != nil {
 		return nil, fmt.Errorf("failed to parse cluster resources response: %w", err)
 	}
 
-	resourcesData, ok := resp.Data.([]interface{})
-	if !ok {
-		return nil, fmt.Errorf("unexpected cluster resources response format")
-	}
-
-	var resources []Resource
-	for _, resourceData := range resourcesData {
-		resourceMap, ok := resourceData.(map[string]interface{})
-		if !ok {
-			continue
-		}
-
-		resource := Resource{}
-		if v, ok := resourceMap["id"].(string); ok {
-			resource.ID = v
-		}
-		if v, ok := resourceMap["type"].(string); ok {
-			resource.Type = v
-		}
-		if v, ok := resourceMap["node"].(string); ok {
-			resource.Node = v
-		}
-		if v, ok := resourceMap["name"].(string); ok {
-			resource.Name = v
-		}
-		if v, ok := resourceMap["status"].(string); ok {
-			resource.Status = v
-		}
-		if v, ok := resourceMap["vmid"].(float64); ok {
-			vmid := int(v)
-			resource.VMID = &vmid
-		}
-		if v, ok := resourceMap["maxcpu"].(float64); ok {
-			maxcpu := int(v)
-			resource.MaxCPU = &maxcpu
-		}
-		if v, ok := resourceMap["cpu"].(float64); ok {
-			resource.CPU = &v
-		}
-		if v, ok := resourceMap["maxmem"].(float64); ok {
-			maxmem := int64(v)
-			resource.MaxMem = &maxmem
-		}
-		if v, ok := resourceMap["mem"].(float64); ok {
-			mem := int64(v)
-			resource.Mem = &mem
-		}
-		if v, ok := resourceMap["maxdisk"].(float64); ok {
-			maxdisk := int64(v)
-			resource.MaxDisk = &maxdisk
-		}
-		if v, ok := resourceMap["disk"].(float64); ok {
-			disk := int64(v)
-			resource.Disk = &disk
-		}
-		if v, ok := resourceMap["uptime"].(float64); ok {
-			uptime := int64(v)
-			resource.Uptime = &uptime
-		}
-
-		resources = append(resources, resource)
-	}
-
-	return resources, nil
+	return resp.Data, nil
 }
 
 // StartVM starts a virtual machine
