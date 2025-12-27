@@ -12,20 +12,20 @@ import (
 // cloneCmd represents the clone command
 
 var cloneCmd = &cobra.Command{
-	Use:   "clone [SOURCE_VM_ID] [NEW_VM_ID] [NAME] [flags]",
+	Use:   "clone <source_name|id> [NEW_VM_ID] [NAME] [flags]",
 	Short: "Clone a virtual machine",
-	Long: `Clone an existing virtual machine to create a new one with a different ID. The source VM's node will be automatically discovered if not specified.
+	Long: `Clone an existing virtual machine to create a new one with a different ID. The source VM can be specified by name or ID, and its node will be automatically discovered if not specified.
 
-By default, Proxmox attempts to create a linked clone (if supported by the storage backend). 
-Use the --full flag to create a full clone instead, which copies all disk data and is supported by all storage types.`,
+By default, Proxmox attempts to create a linked clone (if supported by the storage backend).
+Use the --full flag to create a full clone instead, which copies all disk data and is supported by all storage types.
+
+Examples:
+  prox vm clone myvm 200 newvm
+  prox vm clone 100 200 newvm --full
+  prox vm clone web-server 300 web-clone`,
 	Args: cobra.MinimumNArgs(2),
 	Run: func(cmd *cobra.Command, args []string) {
-		// Parse source VM ID
-		sourceID, err := strconv.Atoi(args[0])
-		if err != nil {
-			fmt.Printf("Error: Invalid source VM ID '%s'. Must be a number.\n", args[0])
-			os.Exit(1)
-		}
+		sourceNameOrID := args[0]
 
 		// Parse new VM ID
 		newID, err := strconv.Atoi(args[1])
@@ -35,7 +35,6 @@ Use the --full flag to create a full clone instead, which copies all disk data a
 		}
 
 		// Get flags
-		node, _ := cmd.Flags().GetString("node")
 		flagName, _ := cmd.Flags().GetString("name")
 		full, _ := cmd.Flags().GetBool("full")
 
@@ -57,7 +56,8 @@ Use the --full flag to create a full clone instead, which copies all disk data a
 			os.Exit(1)
 		}
 
-		if err := vm.CloneVm(sourceID, node, name, newID, full); err != nil {
+		if err := vm.CloneVMByNameOrID(sourceNameOrID, name, newID, full); err != nil {
+			fmt.Printf("Error: %v\n", err)
 			os.Exit(1)
 		}
 	},

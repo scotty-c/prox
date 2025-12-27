@@ -3,7 +3,6 @@ package cmd
 import (
 	"fmt"
 	"os"
-	"strconv"
 
 	"github.com/scotty-c/prox/pkg/output"
 	"github.com/scotty-c/prox/pkg/vm"
@@ -13,32 +12,35 @@ import (
 // delCmd represents delete command
 
 var delCmd = &cobra.Command{
-	Use:     "delete [VM_ID] [flags]",
+	Use:     "delete <name|id>",
 	Aliases: []string{"del", "rm"},
 	Short:   "Delete a virtual machine",
-	Long:    `Delete a virtual machine from the Proxmox VE server by providing the VM ID. The node will be automatically discovered if not specified.`,
-	Args:    cobra.ExactArgs(1),
+	Long: `Delete a virtual machine from the Proxmox VE server by providing the VM name or ID. The node will be automatically discovered if not specified.
+
+Examples:
+  prox vm delete myvm
+  prox vm rm 100
+  prox vm delete web-server --force`,
+	Args: cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		// Parse VM ID from positional argument
-		id, err := strconv.Atoi(args[0])
-		if err != nil {
-			fmt.Printf("Error: Invalid VM ID '%s'. Must be a number.\n", args[0])
-			os.Exit(1)
-		}
+		nameOrID := args[0]
 
 		// Get flags
-		node, _ := cmd.Flags().GetString("node")
 		force, _ := cmd.Flags().GetBool("force")
 
 		// Confirm deletion unless --force is used
 		if !force {
-			if !output.Confirm(fmt.Sprintf("Are you sure you want to delete VM %d? This action cannot be undone", id)) {
+			if !output.Confirm(fmt.Sprintf("Are you sure you want to delete VM '%s'? This action cannot be undone", nameOrID)) {
 				fmt.Println("Deletion cancelled")
 				return
 			}
 		}
 
-		vm.DeleteVm(id, node)
+		// Delete the VM
+		if err := vm.DeleteVMByNameOrID(nameOrID); err != nil {
+			fmt.Printf("Error: %v\n", err)
+			os.Exit(1)
+		}
 	},
 }
 

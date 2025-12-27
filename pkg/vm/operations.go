@@ -313,3 +313,101 @@ func MigrateVm(id int, sourceNode, targetNode string, online bool, withLocalDisk
 	}
 	return nil
 }
+
+// StartVMByNameOrID starts a VM by name or ID
+func StartVMByNameOrID(nameOrID string) error {
+	client, err := c.CreateClient()
+	if err != nil {
+		output.ClientError(err)
+		return fmt.Errorf("failed to create client: %w", err)
+	}
+
+	// Find the VM by name or ID
+	vm, err := FindByNameOrID(client, nameOrID)
+	if err != nil {
+		return fmt.Errorf("failed to find VM: %w", err)
+	}
+
+	// Start the VM
+	StartVm(vm.ID, vm.Node)
+	return nil
+}
+
+// ShutdownVMByNameOrID shuts down a VM by name or ID
+func ShutdownVMByNameOrID(nameOrID string) error {
+	client, err := c.CreateClient()
+	if err != nil {
+		output.ClientError(err)
+		return fmt.Errorf("failed to create client: %w", err)
+	}
+
+	// Find the VM by name or ID
+	vm, err := FindByNameOrID(client, nameOrID)
+	if err != nil {
+		return fmt.Errorf("failed to find VM: %w", err)
+	}
+
+	// Shutdown the VM
+	ShutdownVm(vm.ID, vm.Node)
+	return nil
+}
+
+// DeleteVMByNameOrID deletes a VM by name or ID
+func DeleteVMByNameOrID(nameOrID string) error {
+	client, err := c.CreateClient()
+	if err != nil {
+		output.ClientError(err)
+		return fmt.Errorf("failed to create client: %w", err)
+	}
+
+	// Find the VM by name or ID
+	vm, err := FindByNameOrID(client, nameOrID)
+	if err != nil {
+		return fmt.Errorf("failed to find VM: %w", err)
+	}
+
+	// Delete the VM
+	DeleteVm(vm.ID, vm.Node)
+	return nil
+}
+
+// CloneVMByNameOrID clones a VM by name or ID
+func CloneVMByNameOrID(sourceNameOrID string, name string, newID int, full bool) error {
+	client, err := c.CreateClient()
+	if err != nil {
+		output.ClientError(err)
+		return fmt.Errorf("failed to create client: %w", err)
+	}
+
+	// Find the source VM by name or ID
+	vm, err := FindByNameOrID(client, sourceNameOrID)
+	if err != nil {
+		return fmt.Errorf("failed to find source VM: %w", err)
+	}
+
+	// Clone the VM
+	return CloneVm(vm.ID, vm.Node, name, newID, full)
+}
+
+// MigrateVMByNameOrID migrates a VM by name or ID
+func MigrateVMByNameOrID(nameOrID string, sourceNode, targetNode string, online bool, withLocalDisks bool) error {
+	client, err := c.CreateClient()
+	if err != nil {
+		output.ClientError(err)
+		return fmt.Errorf("failed to create client: %w", err)
+	}
+
+	// Find the VM by name or ID
+	vm, err := FindByNameOrID(client, nameOrID)
+	if err != nil {
+		return fmt.Errorf("failed to find VM: %w", err)
+	}
+
+	// Use the discovered node if sourceNode is not specified
+	if sourceNode == "" {
+		sourceNode = vm.Node
+	}
+
+	// Migrate the VM
+	return MigrateVm(vm.ID, sourceNode, targetNode, online, withLocalDisks)
+}

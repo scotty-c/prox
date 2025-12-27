@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	c "github.com/scotty-c/prox/pkg/client"
+	"github.com/scotty-c/prox/pkg/output"
 )
 
 // Config configures a virtual machine (placeholder for future implementation)
@@ -210,4 +211,23 @@ func (v *VirtualMachine) GetPrimaryDisk(ctx context.Context) (string, error) {
 	}
 
 	return "", fmt.Errorf("no valid disk found for VM %d", v.ID)
+}
+
+// EditVMByNameOrID edits a VM by name or ID
+func EditVMByNameOrID(nameOrID string, name string, cores int, mem int, diskSize int) error {
+	client, err := c.CreateClient()
+	if err != nil {
+		output.ClientError(err)
+		return fmt.Errorf("failed to create client: %w", err)
+	}
+
+	// Find the VM by name or ID
+	vm, err := FindByNameOrID(client, nameOrID)
+	if err != nil {
+		return fmt.Errorf("failed to find VM: %w", err)
+	}
+
+	// Edit the VM
+	EditVm(vm.ID, vm.Node, name, cores, mem, diskSize)
+	return nil
 }

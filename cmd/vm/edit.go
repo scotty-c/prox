@@ -3,7 +3,6 @@ package cmd
 import (
 	"fmt"
 	"os"
-	"strconv"
 
 	"github.com/scotty-c/prox/pkg/vm"
 	"github.com/spf13/cobra"
@@ -12,26 +11,29 @@ import (
 // editCmd edit vm's on the proxmox server
 
 var editCmd = &cobra.Command{
-	Use:   "edit [VM_ID] [flags]",
+	Use:   "edit <name|id> [flags]",
 	Short: "Edit virtual machine configuration",
-	Long:  `Edit virtual machine configuration such as name, CPU, and memory. The VM's node will be automatically discovered if not specified.`,
-	Args:  cobra.ExactArgs(1),
+	Long: `Edit virtual machine configuration such as name, CPU, and memory. The VM's node will be automatically discovered if not specified.
+
+Examples:
+  prox vm edit myvm --name newname
+  prox vm edit 100 --cpu 4 --memory 4096
+  prox vm edit web-server --disk 50`,
+	Args: cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		// Parse VM ID from positional argument
-		id, err := strconv.Atoi(args[0])
-		if err != nil {
-			fmt.Printf("Error: Invalid VM ID '%s'. Must be a number.\n", args[0])
-			os.Exit(1)
-		}
+		nameOrID := args[0]
 
 		// Get flags
-		node, _ := cmd.Flags().GetString("node")
 		name, _ := cmd.Flags().GetString("name")
 		cpu, _ := cmd.Flags().GetInt("cpu")
 		memory, _ := cmd.Flags().GetInt("memory")
 		diskSize, _ := cmd.Flags().GetInt("disk")
 
-		vm.EditVm(id, node, name, cpu, memory, diskSize)
+		// Edit the VM
+		if err := vm.EditVMByNameOrID(nameOrID, name, cpu, memory, diskSize); err != nil {
+			fmt.Printf("Error: %v\n", err)
+			os.Exit(1)
+		}
 	},
 }
 
