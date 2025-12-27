@@ -9,6 +9,12 @@ import (
 
 // Validation utilities for Proxmox operations
 
+// Pre-compiled regex patterns for validation
+var (
+	vmNamePattern   = regexp.MustCompile(`^[a-zA-Z0-9-]+$`)
+	nodeNamePattern = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9-]*[a-zA-Z0-9]$|^[a-zA-Z0-9]$`)
+)
+
 // ValidateVMID checks if a VM ID is valid (typically 100-999999999)
 func ValidateVMID(vmid int) error {
 	if vmid < 100 || vmid > 999999999 {
@@ -28,8 +34,7 @@ func ValidateVMName(name string) error {
 	}
 
 	// VM names should only contain alphanumeric characters and hyphens
-	matched, _ := regexp.MatchString("^[a-zA-Z0-9-]+$", name)
-	if !matched {
+	if !vmNamePattern.MatchString(name) {
 		return fmt.Errorf("VM name can only contain alphanumeric characters and hyphens")
 	}
 
@@ -113,8 +118,7 @@ func ValidateNodeName(node string) error {
 	}
 
 	// Node names should follow hostname rules
-	matched, _ := regexp.MatchString("^[a-zA-Z0-9][a-zA-Z0-9-]*[a-zA-Z0-9]$|^[a-zA-Z0-9]$", node)
-	if !matched {
+	if !nodeNamePattern.MatchString(node) {
 		return fmt.Errorf("node name must be a valid hostname")
 	}
 
