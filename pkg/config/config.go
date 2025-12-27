@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/scotty-c/prox/pkg/crypto"
@@ -17,7 +18,7 @@ func Check() bool {
 	if err != nil {
 		return false
 	}
-	configFile := home + "/.prox/config"
+	configFile := filepath.Join(home, ".prox", "config")
 	if _, err := os.Stat(configFile); os.IsNotExist(err) {
 		return false
 	} else {
@@ -31,8 +32,8 @@ func Create(username string, password string, url string) error {
 	if err != nil {
 		return fmt.Errorf("failed to get user home directory: %w", err)
 	}
-	configDir := home + "/.prox"
-	configFile := configDir + "/config"
+	configDir := filepath.Join(home, ".prox")
+	configFile := filepath.Join(configDir, "config")
 
 	if _, err := os.Stat(configDir); os.IsNotExist(err) {
 		if err := os.Mkdir(configDir, 0700); err != nil {
@@ -84,7 +85,7 @@ func Read() (string, string, string, error) {
 	if err != nil {
 		return "", "", "", fmt.Errorf("failed to get user home directory: %w", err)
 	}
-	configFile := home + "/.prox/config"
+	configFile := filepath.Join(home, ".prox", "config")
 
 	file, err := os.Open(configFile)
 	if err != nil {
@@ -144,7 +145,7 @@ func Delete() error {
 	if err != nil {
 		return fmt.Errorf("failed to get user home directory: %w", err)
 	}
-	configFile := home + "/.prox/config"
+	configFile := filepath.Join(home, ".prox", "config")
 
 	if err := os.Remove(configFile); err != nil {
 		return fmt.Errorf("failed to delete config file: %w", err)
@@ -252,7 +253,7 @@ func readLegacy() (string, string, string) {
 	if err != nil {
 		return "", "", ""
 	}
-	configFile := home + "/.prox/config"
+	configFile := filepath.Join(home, ".prox", "config")
 
 	file, err := os.Open(configFile)
 	if err != nil {
