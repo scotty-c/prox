@@ -18,7 +18,7 @@ func DescribeVM(nameOrID string, node string) error {
 	fmt.Printf("Getting VM details for %s...\n", nameOrID)
 
 	// Find the VM by name or ID
-	vm, err := findVM(client, nameOrID)
+	vm, err := FindByNameOrID(client, nameOrID)
 	if err != nil {
 		return fmt.Errorf("failed to find VM: %w", err)
 	}

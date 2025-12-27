@@ -45,8 +45,8 @@ func formatUptime(uptimeSeconds int64) string {
 	}
 }
 
-// findVM finds a VM by either name or ID
-func findVM(client *c.ProxmoxClient, nameOrID string) (*VM, error) {
+// FindByNameOrID finds a VM by either name or ID
+func FindByNameOrID(client *c.ProxmoxClient, nameOrID string) (*VM, error) {
 	// Get cluster resources
 	resources, err := client.GetClusterResources(context.Background())
 	if err != nil {

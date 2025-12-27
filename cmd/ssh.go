@@ -97,7 +97,7 @@ func setupSSHConfig(nameOrID, username string, port int, keyPath string, dryRun 
 	var ip, resourceName, resourceType, node string
 	var resourceID int
 
-	vm, vmErr := findVMByNameOrID(client, nameOrID)
+	vm, vmErr := vm.FindByNameOrID(client, nameOrID)
 	if vmErr == nil {
 		// Found as VM
 		resourceType = "VM"
@@ -114,7 +114,7 @@ func setupSSHConfig(nameOrID, username string, port int, keyPath string, dryRun 
 		}
 	} else {
 		// Try as container
-		container, ctErr := findContainerByNameOrID(client, nameOrID)
+		container, ctErr := container.FindByNameOrID(client, nameOrID)
 		if ctErr != nil {
 			return fmt.Errorf("resource '%s' not found as VM or container. VM error: %v, Container error: %v", nameOrID, vmErr, ctErr)
 		}
@@ -186,80 +186,6 @@ func setupSSHConfig(nameOrID, username string, port int, keyPath string, dryRun 
 	fmt.Printf("Tip: You can now connect with: ssh %s\n", hostAlias)
 
 	return nil
-}
-
-func findVMByNameOrID(client *client.ProxmoxClient, nameOrID string) (*vm.VM, error) {
-	// Get cluster resources
-	resources, err := client.GetClusterResources(context.Background())
-	if err != nil {
-		return nil, fmt.Errorf("failed to get cluster resources: %w", err)
-	}
-
-	// Try to parse as ID first
-	if vmid, err := strconv.Atoi(nameOrID); err == nil {
-		// Search by ID
-		for _, resource := range resources {
-			if resource.Type == "qemu" && resource.VMID != nil && *resource.VMID == vmid {
-				return &vm.VM{
-					ID:     int(*resource.VMID),
-					Name:   resource.Name,
-					Status: resource.Status,
-					Node:   resource.Node,
-				}, nil
-			}
-		}
-	}
-
-	// Search by name
-	for _, resource := range resources {
-		if resource.Type == "qemu" && resource.Name == nameOrID {
-			return &vm.VM{
-				ID:     int(*resource.VMID),
-				Name:   resource.Name,
-				Status: resource.Status,
-				Node:   resource.Node,
-			}, nil
-		}
-	}
-
-	return nil, fmt.Errorf("VM '%s' not found", nameOrID)
-}
-
-func findContainerByNameOrID(client *client.ProxmoxClient, nameOrID string) (*container.Container, error) {
-	// Get cluster resources
-	resources, err := client.GetClusterResources(context.Background())
-	if err != nil {
-		return nil, fmt.Errorf("failed to get cluster resources: %w", err)
-	}
-
-	// Try to parse as ID first
-	if vmid, err := strconv.Atoi(nameOrID); err == nil {
-		// Search by ID
-		for _, resource := range resources {
-			if resource.Type == "lxc" && resource.VMID != nil && *resource.VMID == vmid {
-				return &container.Container{
-					ID:     int(*resource.VMID),
-					Name:   resource.Name,
-					Status: resource.Status,
-					Node:   resource.Node,
-				}, nil
-			}
-		}
-	}
-
-	// Search by name
-	for _, resource := range resources {
-		if resource.Type == "lxc" && resource.Name == nameOrID {
-			return &container.Container{
-				ID:     int(*resource.VMID),
-				Name:   resource.Name,
-				Status: resource.Status,
-				Node:   resource.Node,
-			}, nil
-		}
-	}
-
-	return nil, fmt.Errorf("container '%s' not found", nameOrID)
 }
 
 func isValidIP(ip string) bool {
@@ -365,10 +291,10 @@ func deleteSSHConfigEntry(nameOrID string, dryRun bool) error {
 	alias := nameOrID
 	var resolved bool
 	if cl, err := client.CreateClient(); err == nil {
-		if vmObj, vmErr := findVMByNameOrID(cl, nameOrID); vmErr == nil {
+		if vmObj, vmErr := vm.FindByNameOrID(cl, nameOrID); vmErr == nil {
 			alias = vmObj.Name
 			resolved = true
-		} else if ctObj, ctErr := findContainerByNameOrID(cl, nameOrID); ctErr == nil {
+		} else if ctObj, ctErr := container.FindByNameOrID(cl, nameOrID); ctErr == nil {
 			alias = ctObj.Name
 			resolved = true
 		}

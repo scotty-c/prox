@@ -147,8 +147,8 @@ func waitForTask(client *c.ProxmoxClient, node, taskID string) error {
 	}
 }
 
-// findContainer finds a container by name or ID
-func findContainer(client *c.ProxmoxClient, nameOrID string) (*Container, error) {
+// FindByNameOrID finds a container by name or ID
+func FindByNameOrID(client *c.ProxmoxClient, nameOrID string) (*Container, error) {
 	// Get cluster resources
 	resources, err := client.GetClusterResources(context.Background())
 	if err != nil {

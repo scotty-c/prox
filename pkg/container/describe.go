@@ -18,7 +18,7 @@ func DescribeContainer(nameOrID string) error {
 	fmt.Printf("Getting container details for %s...\n", nameOrID)
 
 	// Find the container
-	container, err := findContainer(client, nameOrID)
+	container, err := FindByNameOrID(client, nameOrID)
 	if err != nil {
 		return fmt.Errorf("failed to find container: %w", err)
 	}

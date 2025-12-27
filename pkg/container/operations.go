@@ -17,7 +17,7 @@ func StartContainer(nameOrID string) error {
 	fmt.Printf("Starting container %s...\n", nameOrID)
 
 	// Find the container
-	container, err := findContainer(client, nameOrID)
+	container, err := FindByNameOrID(client, nameOrID)
 	if err != nil {
 		return fmt.Errorf("failed to find container: %w", err)
 	}
@@ -57,7 +57,7 @@ func StopContainer(nameOrID string) error {
 	fmt.Printf("Stopping container %s...\n", nameOrID)
 
 	// Find the container
-	container, err := findContainer(client, nameOrID)
+	container, err := FindByNameOrID(client, nameOrID)
 	if err != nil {
 		return fmt.Errorf("failed to find container: %w", err)
 	}
@@ -98,7 +98,7 @@ func DeleteContainer(nameOrID string) error {
 	fmt.Println("WARNING: This action cannot be undone!")
 
 	// Find the container
-	container, err := findContainer(client, nameOrID)
+	container, err := FindByNameOrID(client, nameOrID)
 	if err != nil {
 		return fmt.Errorf("failed to find container: %w", err)
 	}
