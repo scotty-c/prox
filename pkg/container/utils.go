@@ -143,7 +143,7 @@ func waitForTask(client *c.ProxmoxClient, node, taskID string) error {
 		}
 
 		// Wait a bit before checking again
-		time.Sleep(2 * time.Second)
+		time.Sleep(c.TaskPollIntervalSeconds * time.Second)
 	}
 }
 

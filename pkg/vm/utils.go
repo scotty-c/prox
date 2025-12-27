@@ -78,7 +78,7 @@ func findVM(client *c.ProxmoxClient, nameOrID string) (*VM, error) {
 					vm.Disk = uint64(*resource.Disk)
 				}
 				if resource.CPU != nil {
-					vm.CPUs = int(*resource.CPU * 100)
+					vm.CPUs = int(*resource.CPU * c.CPUPercentageMultiplier)
 				}
 				if resource.Uptime != nil {
 					vm.Uptime = formatUptime(int64(*resource.Uptime))
@@ -139,6 +139,6 @@ func waitForTask(client *c.ProxmoxClient, node, taskID string) error {
 		}
 
 		// Wait a bit before checking again
-		time.Sleep(2 * time.Second)
+		time.Sleep(c.TaskPollIntervalSeconds * time.Second)
 	}
 }

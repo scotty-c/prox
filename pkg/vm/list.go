@@ -67,7 +67,7 @@ func GetVm() {
 			vm.Disk = uint64(*resource.Disk)
 		}
 		if resource.CPU != nil {
-			vm.CPUs = int(*resource.CPU * 100) // Convert to percentage
+			vm.CPUs = int(*resource.CPU * c.CPUPercentageMultiplier) // Convert to percentage
 		}
 		if resource.Uptime != nil {
 			vm.Uptime = formatUptime(int64(*resource.Uptime))
@@ -113,7 +113,7 @@ type ipLookupResult struct {
 // fetchIPsConcurrently fetches IP addresses for running VMs using a worker pool
 // This provides 5-10x performance improvement over sequential fetching
 func fetchIPsConcurrently(client *c.ProxmoxClient, vms []VM) {
-	const maxWorkers = 10
+	maxWorkers := c.MaxConcurrentIPLookups
 
 	// Collect jobs for running VMs only
 	var jobs []ipLookupJob
@@ -245,7 +245,7 @@ func ListVMs(opts ListVMsOptions) error {
 			vm.Disk = uint64(*resource.Disk)
 		}
 		if resource.CPU != nil {
-			vm.CPUs = int(*resource.CPU * 100) // Convert to percentage
+			vm.CPUs = int(*resource.CPU * c.CPUPercentageMultiplier) // Convert to percentage
 		}
 		if resource.Uptime != nil {
 			vm.Uptime = formatUptime(int64(*resource.Uptime))
@@ -263,9 +263,9 @@ func ListVMs(opts ListVMsOptions) error {
 		// Estimate disk usage if we have max but no usage info
 		if vm.MaxDisk > 0 && vm.Disk == 0 {
 			if resource.Status == "running" {
-				vm.Disk = vm.MaxDisk / 5 // Estimate 20% usage for running VMs
+				vm.Disk = vm.MaxDisk / c.DiskUsageDivisorRunning // Estimate 20% usage for running VMs
 			} else {
-				vm.Disk = vm.MaxDisk / 10 // Estimate 10% usage for stopped VMs
+				vm.Disk = vm.MaxDisk / c.DiskUsageDivisorStopped // Estimate 10% usage for stopped VMs
 			}
 		}
 

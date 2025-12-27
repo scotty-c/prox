@@ -76,7 +76,7 @@ func ListContainers(node string, runningOnly bool, jsonOutput bool) error {
 			container.Disk = uint64(*resource.Disk)
 		}
 		if resource.CPU != nil {
-			container.CPUs = int(*resource.CPU * 100) // Convert to percentage
+			container.CPUs = int(*resource.CPU * c.CPUPercentageMultiplier) // Convert to percentage
 		}
 		if resource.Uptime != nil {
 			container.Uptime = formatUptime(int64(*resource.Uptime))

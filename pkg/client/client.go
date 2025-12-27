@@ -110,7 +110,7 @@ func NewClient(baseURL, username, password string) *ProxmoxClient {
 
 	client := &http.Client{
 		Transport: transport,
-		Timeout:   30 * time.Second,
+		Timeout:   DefaultTimeout * time.Second,
 	}
 
 	return &ProxmoxClient{
