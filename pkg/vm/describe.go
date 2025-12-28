@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 
 	c "github.com/scotty-c/prox/pkg/client"
 	"github.com/scotty-c/prox/pkg/output"
@@ -38,16 +39,36 @@ func GetVMDetails(nameOrID string, node string) (*VMDetails, error) {
 		node = vm.Node
 	}
 
+	// Fetch config and status in parallel
+	var (
+		config map[string]interface{}
+		status map[string]interface{}
+		configErr, statusErr error
+		wg sync.WaitGroup
+	)
+
+	wg.Add(2)
+
 	// Get VM configuration
-	config, err := client.GetVMConfig(ctx, node, vm.ID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get VM config: %w", err)
-	}
+	go func() {
+		defer wg.Done()
+		config, configErr = client.GetVMConfig(ctx, node, vm.ID)
+	}()
 
 	// Get VM status
-	status, err := client.GetVMStatus(ctx, node, vm.ID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get VM status: %w", err)
+	go func() {
+		defer wg.Done()
+		status, statusErr = client.GetVMStatus(ctx, node, vm.ID)
+	}()
+
+	wg.Wait()
+
+	// Check for errors
+	if configErr != nil {
+		return nil, fmt.Errorf("failed to get VM config: %w", configErr)
+	}
+	if statusErr != nil {
+		return nil, fmt.Errorf("failed to get VM status: %w", statusErr)
 	}
 
 	// Get VM IP if available

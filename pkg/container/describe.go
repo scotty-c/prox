@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 
 	c "github.com/scotty-c/prox/pkg/client"
 	"github.com/scotty-c/prox/pkg/output"
@@ -30,16 +31,36 @@ func GetContainerDetails(nameOrID string) (*ContainerDetails, error) {
 		return nil, fmt.Errorf("failed to find container: %w", err)
 	}
 
+	// Fetch config and status in parallel
+	var (
+		config map[string]interface{}
+		status map[string]interface{}
+		configErr, statusErr error
+		wg sync.WaitGroup
+	)
+
+	wg.Add(2)
+
 	// Get container configuration
-	config, err := client.GetContainerConfig(ctx, container.Node, container.ID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get container config: %w", err)
-	}
+	go func() {
+		defer wg.Done()
+		config, configErr = client.GetContainerConfig(ctx, container.Node, container.ID)
+	}()
 
 	// Get container status
-	status, err := client.GetContainerStatus(ctx, container.Node, container.ID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get container status: %w", err)
+	go func() {
+		defer wg.Done()
+		status, statusErr = client.GetContainerStatus(ctx, container.Node, container.ID)
+	}()
+
+	wg.Wait()
+
+	// Check for errors
+	if configErr != nil {
+		return nil, fmt.Errorf("failed to get container config: %w", configErr)
+	}
+	if statusErr != nil {
+		return nil, fmt.Errorf("failed to get container status: %w", statusErr)
 	}
 
 	return &ContainerDetails{
