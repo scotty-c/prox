@@ -480,7 +480,7 @@ func (c *ProxmoxClient) CloneVM(ctx context.Context, node string, vmid int, newi
 
 	// Add full parameter if requested to create a full clone instead of linked clone
 	if full {
-		reqBody["full"] = 1
+		reqBody["full"] = ProxmoxBoolTrue
 	}
 
 	body, err := c.makeRequest(ctx, "POST", path, reqBody)

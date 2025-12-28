@@ -339,7 +339,7 @@ func MigrateVM(ctx context.Context, id int, sourceNode, targetNode string, onlin
 
 	// Set migration type (online/offline)
 	if online {
-		options["online"] = 1
+		options["online"] = c.ProxmoxBoolTrue
 		output.Info("Performing online migration (VM will continue running)\n")
 	} else {
 		output.Info("Performing offline migration (VM will be stopped)\n")
@@ -347,7 +347,7 @@ func MigrateVM(ctx context.Context, id int, sourceNode, targetNode string, onlin
 
 	// Handle local disks
 	if withLocalDisks {
-		options["with-local-disks"] = 1
+		options["with-local-disks"] = c.ProxmoxBoolTrue
 		output.Info("Including local disks in migration\n")
 	}
 

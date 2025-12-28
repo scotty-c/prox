@@ -35,6 +35,10 @@ const (
 	ClusterResourcesCacheTTL = 10 // Time-to-live for cluster resources cache (seconds)
 	IPCacheTTL               = 60 // Time-to-live for IP address cache (seconds)
 
+	// Proxmox API boolean values
+	ProxmoxBoolTrue  = 1
+	ProxmoxBoolFalse = 0
+
 	// VM name constraints
 	MaxVMNameLength = 15
 
