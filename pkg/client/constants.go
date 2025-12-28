@@ -33,6 +33,7 @@ const (
 
 	// Caching
 	ClusterResourcesCacheTTL = 10 // Time-to-live for cluster resources cache (seconds)
+	IPCacheTTL               = 60 // Time-to-live for IP address cache (seconds)
 
 	// VM name constraints
 	MaxVMNameLength = 15

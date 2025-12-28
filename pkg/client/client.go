@@ -31,6 +31,16 @@ type ProxmoxClient struct {
 	cachedResources      []Resource
 	cachedResourcesTime  time.Time
 	cachedResourcesMutex sync.RWMutex
+
+	// IP address cache for VMs and containers
+	ipCache      map[string]ipCacheEntry
+	ipCacheMutex sync.RWMutex
+}
+
+// ipCacheEntry represents a cached IP address with its timestamp
+type ipCacheEntry struct {
+	ip        string
+	timestamp time.Time
 }
 
 // AuthResponse represents the response from Proxmox authentication
@@ -189,6 +199,7 @@ func NewClient(baseURL, username, password string) *ProxmoxClient {
 		Username:   username,
 		Password:   password,
 		HTTPClient: client,
+		ipCache:    make(map[string]ipCacheEntry),
 	}
 }
 
@@ -817,33 +828,75 @@ func (c *ProxmoxClient) GetVMNode(ctx context.Context, vmid int) (string, error)
 	return "", fmt.Errorf("VM %d not found in cluster", vmid)
 }
 
+// getCachedIP retrieves a cached IP address if it exists and hasn't expired
+func (c *ProxmoxClient) getCachedIP(node string, vmid int) (string, bool) {
+	cacheKey := fmt.Sprintf("%s:%d", node, vmid)
+
+	c.ipCacheMutex.RLock()
+	defer c.ipCacheMutex.RUnlock()
+
+	if entry, exists := c.ipCache[cacheKey]; exists {
+		// Check if cache entry is still valid
+		if time.Since(entry.timestamp).Seconds() < IPCacheTTL {
+			return entry.ip, true
+		}
+	}
+
+	return "", false
+}
+
+// setCachedIP stores an IP address in the cache with the current timestamp
+func (c *ProxmoxClient) setCachedIP(node string, vmid int, ip string) {
+	cacheKey := fmt.Sprintf("%s:%d", node, vmid)
+
+	c.ipCacheMutex.Lock()
+	defer c.ipCacheMutex.Unlock()
+
+	c.ipCache[cacheKey] = ipCacheEntry{
+		ip:        ip,
+		timestamp: time.Now(),
+	}
+}
+
 // GetVMIP gets the IP address of a VM using multiple methods
 func (c *ProxmoxClient) GetVMIP(ctx context.Context, node string, vmid int) (string, error) {
+	// Check cache first
+	if cachedIP, found := c.getCachedIP(node, vmid); found {
+		return cachedIP, nil
+	}
+
 	// Method 1: Try QEMU guest agent first (most reliable when available)
 	if ip := c.getVMIPFromGuestAgent(ctx, node, vmid); ip != "N/A" {
+		c.setCachedIP(node, vmid, ip)
 		return ip, nil
 	}
 
 	// Method 2: Try to get IP from VM network configuration
 	if ip := c.getVMIPFromConfig(ctx, node, vmid); ip != "N/A" {
+		c.setCachedIP(node, vmid, ip)
 		return ip, nil
 	}
 
 	// Method 3: Try to get IP from VM status/config
 	if ip := c.getVMIPFromStatus(ctx, node, vmid); ip != "N/A" {
+		c.setCachedIP(node, vmid, ip)
 		return ip, nil
 	}
 
 	// Method 4: Try to get IP from network interfaces
 	if ip := c.getVMIPFromInterfaces(ctx, node, vmid); ip != "N/A" {
+		c.setCachedIP(node, vmid, ip)
 		return ip, nil
 	}
 
 	// Method 5: Fallback - try getting IP from cluster resources or other sources
 	if ip := c.getVMIPFromClusterResources(ctx, vmid); ip != "N/A" {
+		c.setCachedIP(node, vmid, ip)
 		return ip, nil
 	}
 
+	// Cache "N/A" result to avoid repeated lookups for VMs without IPs
+	c.setCachedIP(node, vmid, "N/A")
 	return "N/A", nil
 }
 
@@ -1028,16 +1081,25 @@ func (c *ProxmoxClient) getVMIPFromClusterResources(ctx context.Context, vmid in
 
 // GetContainerIP gets the IP address of a container using multiple methods
 func (c *ProxmoxClient) GetContainerIP(ctx context.Context, node string, vmid int) (string, error) {
+	// Check cache first
+	if cachedIP, found := c.getCachedIP(node, vmid); found {
+		return cachedIP, nil
+	}
+
 	// Method 1: Try LXC guest agent first
 	if ip := c.getContainerIPFromGuestAgent(ctx, node, vmid); ip != "N/A" {
+		c.setCachedIP(node, vmid, ip)
 		return ip, nil
 	}
 
 	// Method 2: Try alternative methods
 	if ip, err := c.GetContainerIPAlternative(ctx, node, vmid); err == nil && ip != "N/A" {
+		c.setCachedIP(node, vmid, ip)
 		return ip, nil
 	}
 
+	// Cache "N/A" result to avoid repeated lookups
+	c.setCachedIP(node, vmid, "N/A")
 	return "N/A", nil
 }
 
@@ -1071,6 +1133,11 @@ func (c *ProxmoxClient) getContainerIPFromGuestAgent(ctx context.Context, node s
 func (c *ProxmoxClient) GetContainerIPAlternative(ctx context.Context, node string, vmid int) (string, error) {
 	// IMPORTANT: Do not call GetContainerIP here to avoid infinite recursion.
 
+	// Check cache first
+	if cachedIP, found := c.getCachedIP(node, vmid); found {
+		return cachedIP, nil
+	}
+
 	// Try to get IP from container status
 	status, err := c.GetContainerStatus(ctx, node, vmid)
 	if err != nil {
@@ -1080,6 +1147,7 @@ func (c *ProxmoxClient) GetContainerIPAlternative(ctx context.Context, node stri
 	// Check if there's IP information in the status
 	if ips, exists := status["ips"]; exists {
 		if ipStr, ok := ips.(string); ok && ipStr != "" {
+			c.setCachedIP(node, vmid, ipStr)
 			return ipStr, nil
 		}
 	}
@@ -1088,11 +1156,13 @@ func (c *ProxmoxClient) GetContainerIPAlternative(ctx context.Context, node stri
 	path := fmt.Sprintf("/nodes/%s/lxc/%d/interfaces", node, vmid)
 	body, err := c.makeRequest(ctx, "GET", path, nil)
 	if err != nil {
+		c.setCachedIP(node, vmid, "N/A")
 		return "N/A", nil
 	}
 
 	var resp APIResponse
 	if err := json.Unmarshal(body, &resp); err != nil {
+		c.setCachedIP(node, vmid, "N/A")
 		return "N/A", nil
 	}
 
@@ -1105,9 +1175,11 @@ func (c *ProxmoxClient) GetContainerIPAlternative(ctx context.Context, node stri
 						if strings.Contains(inetStr, "/") {
 							parts := strings.Split(inetStr, "/")
 							if len(parts) > 0 && parts[0] != "127.0.0.1" {
+								c.setCachedIP(node, vmid, parts[0])
 								return parts[0], nil
 							}
 						} else if inetStr != "127.0.0.1" {
+							c.setCachedIP(node, vmid, inetStr)
 							return inetStr, nil
 						}
 					}
@@ -1116,6 +1188,8 @@ func (c *ProxmoxClient) GetContainerIPAlternative(ctx context.Context, node stri
 		}
 	}
 
+	// Cache "N/A" result to avoid repeated lookups
+	c.setCachedIP(node, vmid, "N/A")
 	return "N/A", nil
 }
 
