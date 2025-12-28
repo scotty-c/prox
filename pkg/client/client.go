@@ -78,6 +78,7 @@ type Resource struct {
 	MaxDisk *int64   `json:"maxdisk,omitempty"`
 	Disk    *int64   `json:"disk,omitempty"`
 	Uptime  *int64   `json:"uptime,omitempty"`
+	Tags    string   `json:"tags,omitempty"` // Semicolon-separated tags
 }
 
 // Version represents Proxmox version info

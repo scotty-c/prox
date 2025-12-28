@@ -20,6 +20,21 @@ type ListVMsOptions struct {
 	ShowIPs     bool   // Fetch and display IP addresses (slower)
 	Detailed    bool   // Show detailed disk information (slower)
 	JSONOutput  bool   // Output as JSON instead of table
+	Tag         string // Filter by tag (empty for all VMs)
+}
+
+// hasTag checks if a tag exists in the semicolon-separated tags string
+func hasTag(tags, tag string) bool {
+	if tags == "" {
+		return false
+	}
+	tagList := strings.Split(tags, ";")
+	for _, t := range tagList {
+		if strings.TrimSpace(t) == tag {
+			return true
+		}
+	}
+	return false
 }
 
 // GetVM retrieves and displays all virtual machines
@@ -234,12 +249,18 @@ func ListVMs(opts ListVMsOptions) error {
 			continue
 		}
 
+		// Filter by tag if specified
+		if opts.Tag != "" && !hasTag(resource.Tags, opts.Tag) {
+			continue
+		}
+
 		// Create VM object
 		vm := VM{
 			ID:     int(*resource.VMID),
 			Name:   resource.Name,
 			Status: resource.Status,
 			Node:   resource.Node,
+			Tags:   resource.Tags,
 		}
 
 		// Add resource information if available

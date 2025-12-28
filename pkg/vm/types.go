@@ -36,6 +36,7 @@ type VM struct {
 	MaxDisk   uint64 `json:"max_disk"`
 	Uptime    string `json:"uptime"`
 	IP        string `json:"ip"`
+	Tags      string `json:"tags,omitempty"` // Semicolon-separated tags
 }
 
 // NewTask creates a new Task instance

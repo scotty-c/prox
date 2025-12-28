@@ -98,6 +98,7 @@ prox --profile production vm list   # Use specific profile for one command
 VM workflow:
 ```bash
 prox vm list
+prox vm list --tag production # Filter VMs by tag
 prox vm start 100
 prox vm describe 100          # shows IPs, disks, resources
 prox ssh 100                  # Add/update SSH config entry for VM 100
@@ -111,6 +112,7 @@ prox vm delete 101
 Container workflow:
 ```bash
 prox ct templates
+prox ct list --tag database   # Filter containers by tag
 # create: prox ct create <name> <template>
 prox ct create web ubuntu:22.04 --ssh-keys-file ~/.ssh/id_rsa.pub --memory 1024 --disk 10
 prox ct start web
@@ -215,8 +217,8 @@ Containers (ct)
 		- prox ct create ci debian:12 --vmid 9002 --cores 2
 
 - list
-	- Flags: -n, --node <node>; -r, --running (only running)
-	- Example: prox ct list --running
+	- Flags: -n, --node <node>; -r, --running (only running); -t, --tag <tag> (filter by tag)
+	- Example: prox ct list --running --tag production
 
 - describe <name|id>
 	- Flags: none
@@ -232,7 +234,7 @@ Containers (ct)
 
 VMs (vm)
 - list
-	- Flags: -n, --node <node>; -r, --running; -i, --ip (show IPs); -d, --detailed (disk info)
+	- Flags: -n, --node <node>; -r, --running; -i, --ip (show IPs); -d, --detailed (disk info); -t, --tag <tag> (filter by tag)
 
 - describe <id|name>
 	- Flags: -n, --node <node> (optional)

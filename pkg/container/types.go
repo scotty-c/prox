@@ -23,6 +23,7 @@ type Container struct {
 	MaxDisk   uint64 `json:"max_disk"`
 	Uptime    string `json:"uptime"`
 	IP        string `json:"ip"`
+	Tags      string `json:"tags,omitempty"` // Semicolon-separated tags
 }
 
 // ResolvedTemplate represents a resolved template with its node location

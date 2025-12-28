@@ -5,14 +5,29 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/jedib0t/go-pretty/v6/table"
 	c "github.com/scotty-c/prox/pkg/client"
 	"github.com/scotty-c/prox/pkg/output"
 )
 
+// hasTag checks if a tag exists in the semicolon-separated tags string
+func hasTag(tags, tag string) bool {
+	if tags == "" {
+		return false
+	}
+	tagList := strings.Split(tags, ";")
+	for _, t := range tagList {
+		if strings.TrimSpace(t) == tag {
+			return true
+		}
+	}
+	return false
+}
+
 // ListContainers lists all LXC containers
-func ListContainers(node string, runningOnly bool, jsonOutput bool) error {
+func ListContainers(node string, runningOnly bool, jsonOutput bool, tag string) error {
 	client, err := c.CreateClient()
 	if err != nil {
 		if !jsonOutput {
@@ -61,12 +76,18 @@ func ListContainers(node string, runningOnly bool, jsonOutput bool) error {
 			continue
 		}
 
+		// Filter by tag if specified
+		if tag != "" && !hasTag(resource.Tags, tag) {
+			continue
+		}
+
 		// Create container object
 		container := Container{
 			ID:     int(*resource.VMID),
 			Name:   resource.Name,
 			Status: resource.Status,
 			Node:   resource.Node,
+			Tags:   resource.Tags,
 		}
 
 		// Add resource information if available
