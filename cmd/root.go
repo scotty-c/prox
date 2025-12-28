@@ -91,6 +91,22 @@ func init() {
 	RootCmd.PersistentFlags().BoolP("quiet", "q", false, "Suppress non-essential output (for scripting)")
 	RootCmd.PersistentFlags().String("profile", "", "Use a specific configuration profile")
 
+	// Define command groups for better organization
+	RootCmd.AddGroup(
+		&cobra.Group{
+			ID:    "core",
+			Title: "Core Commands:",
+		},
+		&cobra.Group{
+			ID:    "management",
+			Title: "Resource Management:",
+		},
+		&cobra.Group{
+			ID:    "utilities",
+			Title: "Utility Commands:",
+		},
+	)
+
 	// Register node command group
 	RootCmd.AddCommand(node.NodeCmd)
 	// ...existing code...

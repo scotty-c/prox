@@ -12,8 +12,9 @@ import (
 )
 
 var statusCmd = &cobra.Command{
-	Use:   "status",
-	Short: "Show connection status and cluster health",
+	Use:     "status",
+	GroupID: "core",
+	Short:   "Show connection status and cluster health",
 	Long: `Display connection status and cluster health information.
 
 This command will:

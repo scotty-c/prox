@@ -11,8 +11,9 @@ import (
 )
 
 var logsCmd = &cobra.Command{
-	Use:   "logs <upid>",
-	Short: "View Proxmox task logs",
+	Use:     "logs <upid>",
+	GroupID: "utilities",
+	Short:   "View Proxmox task logs",
 	Long: `View logs for a Proxmox task using its UPID (Unique Process ID).
 
 The UPID format is typically returned by operations like VM clone, migrate, 

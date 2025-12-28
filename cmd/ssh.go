@@ -16,8 +16,9 @@ import (
 )
 
 var sshCmd = &cobra.Command{
-	Use:   "ssh [VM_OR_CONTAINER_NAME_OR_ID]",
-	Short: "Setup SSH configuration for a VM or container",
+	Use:     "ssh [VM_OR_CONTAINER_NAME_OR_ID]",
+	GroupID: "utilities",
+	Short:   "Setup SSH configuration for a VM or container",
 	Long: `Lookup the IP address of a VM or container and setup SSH configuration.
 
 This command will:

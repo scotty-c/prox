@@ -10,6 +10,7 @@ import (
 // ctCmd represents the container command
 var ctCmd = &cobra.Command{
 	Use:     "ct",
+	GroupID: "management",
 	Aliases: []string{"container", "lxc"},
 	Short:   "Manage LXC containers on Proxmox VE",
 	Long:    `Commands for managing LXC containers including create, start, stop, describe, list, templates, and more.`,

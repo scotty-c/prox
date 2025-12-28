@@ -34,9 +34,10 @@ func SetVersionInfo(version, commit, buildDate, goVersion string) {
 }
 
 var versionCmd = &cobra.Command{
-	Use:   "version",
-	Short: "Display version information",
-	Long:  `Display detailed version information including version number, git commit, build date, and Go version.`,
+	Use:     "version",
+	GroupID: "utilities",
+	Short:   "Display version information",
+	Long:    `Display detailed version information including version number, git commit, build date, and Go version.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		verbose, _ := cmd.Flags().GetBool("verbose")
 

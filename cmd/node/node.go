@@ -9,9 +9,10 @@ import (
 
 // NodeCmd represents the base command for node operations
 var NodeCmd = &cobra.Command{
-	Use:   "node",
-	Short: "Manage Proxmox nodes",
-	Long:  `Manage Proxmox nodes in the datacenter.`,
+	Use:     "node",
+	GroupID: "management",
+	Short:   "Manage Proxmox nodes",
+	Long:    `Manage Proxmox nodes in the datacenter.`,
 }
 
 func init() {
