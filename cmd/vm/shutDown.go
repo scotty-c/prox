@@ -23,9 +23,10 @@ Examples:
 	Args: cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		nameOrID := args[0]
+		wait, _ := cmd.Flags().GetBool("wait")
 
 		// Shutdown the VM
-		if err := vm.ShutdownVMByNameOrID(nameOrID); err != nil {
+		if err := vm.ShutdownVMByNameOrIDWithWait(nameOrID, wait); err != nil {
 			fmt.Printf("Error: %v\n", err)
 			os.Exit(1)
 		}
@@ -34,5 +35,6 @@ Examples:
 
 func init() {
 	sdCmd.Flags().StringP("node", "n", "", "Proxmox node name (optional - will be auto-discovered if not specified)")
+	sdCmd.Flags().BoolP("wait", "w", false, "Wait for the operation to complete and show duration")
 	vmCmd.AddCommand(sdCmd)
 }
