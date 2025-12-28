@@ -52,7 +52,7 @@ func ShutdownVM(ctx context.Context, id int, node string) {
 }
 
 // ShutdownVMWithWait shuts down a VM by ID and node with optional wait
-func ShutdownVMWithWait(ctx context.Context, id int, node string, wait bool, client *c.ProxmoxClient) {
+func ShutdownVMWithWait(ctx context.Context, id int, node string, wait bool, client c.ProxmoxClientInterface) {
 	if client == nil {
 		var err error
 		client, err = c.CreateClient()
@@ -123,7 +123,7 @@ func StartVM(ctx context.Context, id int, node string) {
 }
 
 // StartVMWithWait starts a VM by ID and node with optional wait
-func StartVMWithWait(ctx context.Context, id int, node string, wait bool, client *c.ProxmoxClient) {
+func StartVMWithWait(ctx context.Context, id int, node string, wait bool, client c.ProxmoxClientInterface) {
 	if client == nil {
 		var err error
 		client, err = c.CreateClient()

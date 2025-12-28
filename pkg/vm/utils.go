@@ -47,7 +47,7 @@ func formatUptime(uptimeSeconds int64) string {
 }
 
 // FindByNameOrID finds a VM by either name or ID
-func FindByNameOrID(ctx context.Context, client *c.ProxmoxClient, nameOrID string) (*VM, error) {
+func FindByNameOrID(ctx context.Context, client c.ProxmoxClientInterface, nameOrID string) (*VM, error) {
 	// Get cluster resources
 	resources, err := client.GetClusterResources(ctx)
 	if err != nil {
@@ -125,7 +125,7 @@ func FindByNameOrID(ctx context.Context, client *c.ProxmoxClient, nameOrID strin
 }
 
 // waitForTask waits for a Proxmox task to complete
-func waitForTask(ctx context.Context, client *c.ProxmoxClient, node, taskID string) error {
+func waitForTask(ctx context.Context, client c.ProxmoxClientInterface, node, taskID string) error {
 	s := spinner.New(spinner.CharSets[14], 100*time.Millisecond)
 	s.Suffix = " Processing..."
 	s.Start()

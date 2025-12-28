@@ -54,7 +54,7 @@ func ListTemplates(node string) {
 }
 
 // getNodeTemplates gets templates from a specific node
-func getNodeTemplates(client *c.ProxmoxClient, node string) ([]Template, error) {
+func getNodeTemplates(client c.ProxmoxClientInterface, node string) ([]Template, error) {
 	templates, err := client.GetContainerTemplates(context.Background(), node)
 	if err != nil {
 		return nil, err

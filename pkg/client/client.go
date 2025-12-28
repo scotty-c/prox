@@ -105,6 +105,58 @@ type ContainerTemplate struct {
 	Used  uint64 `json:"used,omitempty"`
 }
 
+// ProxmoxClientInterface defines the interface for Proxmox client operations
+// This interface enables mocking and testing
+type ProxmoxClientInterface interface {
+	// Authentication
+	Authenticate(ctx context.Context) error
+
+	// Version and cluster info
+	GetVersion(ctx context.Context) (*Version, error)
+	GetNodes(ctx context.Context) ([]Node, error)
+	GetClusterResources(ctx context.Context) ([]Resource, error)
+	GetClusterStatus(ctx context.Context) (*ClusterStatus, error)
+	ClearClusterResourcesCache()
+
+	// VM operations
+	StartVM(ctx context.Context, node string, vmid int) (string, error)
+	StopVM(ctx context.Context, node string, vmid int) (string, error)
+	DeleteVM(ctx context.Context, node string, vmid int) (string, error)
+	CloneVM(ctx context.Context, node string, vmid int, newid int, name string, full bool) (string, error)
+	UpdateVM(ctx context.Context, node string, vmid int, config map[string]interface{}) (string, error)
+	ResizeDisk(ctx context.Context, node string, vmid int, disk string, size string) (string, error)
+	GetVMConfig(ctx context.Context, node string, vmid int) (map[string]interface{}, error)
+	GetVMStatus(ctx context.Context, node string, vmid int) (map[string]interface{}, error)
+	GetVMDiskInfo(ctx context.Context, node string, vmid int) (uint64, uint64, error)
+	GetVMNode(ctx context.Context, vmid int) (string, error)
+	GetVMIP(ctx context.Context, node string, vmid int) (string, error)
+	GetVMNetworkInterfaces(ctx context.Context, node string, vmid int) ([]NetworkInterface, error)
+	IsVMRunning(ctx context.Context, vmid int) (bool, error)
+	MigrateVM(ctx context.Context, node string, vmid int, targetNode string, options map[string]interface{}) (string, error)
+
+	// Container operations
+	CreateContainer(ctx context.Context, node string, vmid int, params map[string]interface{}) (string, error)
+	StartContainer(ctx context.Context, node string, vmid int) (string, error)
+	StopContainer(ctx context.Context, node string, vmid int) (string, error)
+	DeleteContainer(ctx context.Context, node string, vmid int) (string, error)
+	GetContainerConfig(ctx context.Context, node string, vmid int) (map[string]interface{}, error)
+	GetContainerStatus(ctx context.Context, node string, vmid int) (map[string]interface{}, error)
+	GetContainerTemplates(ctx context.Context, node string) ([]ContainerTemplate, error)
+	GetContainerIP(ctx context.Context, node string, vmid int) (string, error)
+	GetContainerIPAlternative(ctx context.Context, node string, vmid int) (string, error)
+	GetContainerNetworkInterfaces(ctx context.Context, node string, vmid int) ([]NetworkInterface, error)
+	IsContainerRunning(ctx context.Context, vmid int) (bool, error)
+
+	// Node operations
+	GetNodeIP(ctx context.Context, node string) (string, error)
+
+	// Task operations
+	GetNextVMID(ctx context.Context) (int, error)
+	GetTaskStatus(ctx context.Context, node, upid string) (*Task, error)
+	GetTaskLog(ctx context.Context, node, upid string, start int, limit int) ([]string, error)
+	WaitForTask(ctx context.Context, node, taskID string) (*Task, error)
+}
+
 // Client cache for reuse across operations
 var (
 	cachedClient     *ProxmoxClient
@@ -698,7 +750,7 @@ func ReadConfig() (string, string, string, error) {
 }
 
 // CreateClient creates a new authenticated Proxmox client with caching
-func CreateClient() (*ProxmoxClient, error) {
+func CreateClient() (ProxmoxClientInterface, error) {
 	user, pass, url, err := ReadConfig()
 	if err != nil {
 		return nil, fmt.Errorf("failed to read config: %w", err)

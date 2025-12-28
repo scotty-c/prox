@@ -8,7 +8,7 @@ import (
 type VirtualMachine struct {
 	ID     int
 	Node   string
-	Client *c.ProxmoxClient
+	Client c.ProxmoxClientInterface
 }
 
 // Task represents a Proxmox task

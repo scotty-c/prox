@@ -133,7 +133,7 @@ type ipLookupResult struct {
 
 // fetchIPsConcurrently fetches IP addresses for running VMs using a worker pool
 // This provides 5-10x performance improvement over sequential fetching
-func fetchIPsConcurrently(client *c.ProxmoxClient, vms []VM) {
+func fetchIPsConcurrently(client c.ProxmoxClientInterface, vms []VM) {
 	maxWorkers := c.MaxConcurrentIPLookups
 
 	// Collect jobs for running VMs only

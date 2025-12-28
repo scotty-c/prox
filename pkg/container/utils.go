@@ -91,7 +91,7 @@ func parseTemplateVersion(volID string) string {
 }
 
 // getClusterNodes gets all nodes in the cluster
-func getClusterNodes(client *c.ProxmoxClient) ([]string, error) {
+func getClusterNodes(client c.ProxmoxClientInterface) ([]string, error) {
 	resources, err := client.GetClusterResources(context.Background())
 	if err != nil {
 		return nil, err
@@ -128,7 +128,7 @@ func autoDetectNode(client *c.ProxmoxClient) (string, error) {
 }
 
 // waitForTask waits for a Proxmox task to complete
-func waitForTask(ctx context.Context, client *c.ProxmoxClient, node, taskID string) error {
+func waitForTask(ctx context.Context, client c.ProxmoxClientInterface, node, taskID string) error {
 	// Exponential backoff configuration
 	backoff := 500 * time.Millisecond // Start at 500ms
 	maxBackoff := 5 * time.Second     // Cap at 5s
@@ -161,7 +161,7 @@ func waitForTask(ctx context.Context, client *c.ProxmoxClient, node, taskID stri
 }
 
 // FindByNameOrID finds a container by name or ID
-func FindByNameOrID(ctx context.Context, client *c.ProxmoxClient, nameOrID string) (*Container, error) {
+func FindByNameOrID(ctx context.Context, client c.ProxmoxClientInterface, nameOrID string) (*Container, error) {
 	// Get cluster resources
 	resources, err := client.GetClusterResources(ctx)
 	if err != nil {

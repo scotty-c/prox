@@ -82,7 +82,7 @@ func viewTaskLogs(upid string, follow bool, tail int) error {
 	return nil
 }
 
-func followTaskLogs(ctx context.Context, c *client.ProxmoxClient, node, upid string) error {
+func followTaskLogs(ctx context.Context, c client.ProxmoxClientInterface, node, upid string) error {
 	start := 0
 	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
