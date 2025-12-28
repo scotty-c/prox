@@ -190,6 +190,11 @@ func (v *VirtualMachine) Clone(ctx context.Context, name string, newId int, full
 
 // CloneVM clones a VM by ID and node
 func CloneVM(ctx context.Context, id int, node string, name string, newId int, full bool) error {
+	return CloneVMWithWait(ctx, id, node, name, newId, full, true)
+}
+
+// CloneVMWithWait clones a VM by ID and node with optional wait
+func CloneVMWithWait(ctx context.Context, id int, node string, name string, newId int, full bool, wait bool) error {
 	client, err := c.CreateClient()
 	if err != nil {
 		output.Error("Error creating client: %v\n", err)
@@ -226,6 +231,7 @@ func CloneVM(ctx context.Context, id int, node string, name string, newId int, f
 	}
 	output.Info("Cloning VM %d to new VM %d (%s) on node %s using %s clone...\n", id, newId, name, node, cloneType)
 
+	startTime := time.Now()
 	task, err := vm.Clone(ctx, name, newId, full)
 	if err != nil {
 		output.Error("Error: Failed to clone VM %d: %v\n", id, err)
@@ -234,17 +240,25 @@ func CloneVM(ctx context.Context, id int, node string, name string, newId int, f
 
 	output.Result("VM %d clone command issued successfully\n", id)
 	output.Result("Task ID: %s\n", task.ID)
-	output.Infoln("Waiting for clone operation to complete...")
 
-	// Wait for the clone task to complete
-	err = waitForTask(ctx, client, node, task.ID)
-	if err != nil {
-		output.Error("Error: Clone failed: %v\n", err)
-		return fmt.Errorf("clone failed: %w", err)
+	if wait {
+		output.Infoln("Waiting for clone operation to complete...")
+
+		// Wait for the clone task to complete
+		err = waitForTask(ctx, client, node, task.ID)
+		if err != nil {
+			output.Error("Error: Clone failed: %v\n", err)
+			return fmt.Errorf("clone failed: %w", err)
+		}
+
+		duration := time.Since(startTime)
+		output.Result("VM clone completed successfully in %s!\n", duration.Round(time.Millisecond))
+		output.Result("New VM: %s (ID: %d)\n", name, newId)
+	} else {
+		output.Result("VM clone started successfully\n")
+		output.Result("New VM: %s (ID: %d)\n", name, newId)
 	}
 
-	output.Result("VM clone completed successfully!\n")
-	output.Result("New VM: %s (ID: %d)\n", name, newId)
 	output.Info("Tip: Use 'prox vm list' to check the new VM\n")
 	return nil
 }
@@ -339,6 +353,7 @@ func MigrateVM(ctx context.Context, id int, sourceNode, targetNode string, onlin
 
 	output.Info("Migrating VM %d from %s to %s...\n", id, sourceNode, targetNode)
 
+	startTime := time.Now()
 	// Start the migration
 	taskID, err := client.MigrateVM(ctx, sourceNode, id, targetNode, options)
 	if err != nil {
@@ -356,7 +371,8 @@ func MigrateVM(ctx context.Context, id int, sourceNode, targetNode string, onlin
 		return fmt.Errorf("migration failed: %w", err)
 	}
 
-	output.Result("VM %d migration completed successfully!\n", id)
+	duration := time.Since(startTime)
+	output.Result("VM %d migration completed successfully in %s!\n", id, duration.Round(time.Millisecond))
 	output.Result("VM %d is now running on node: %s\n", id, targetNode)
 
 	if online {
@@ -439,6 +455,11 @@ func DeleteVMByNameOrID(nameOrID string) error {
 
 // CloneVMByNameOrID clones a VM by name or ID
 func CloneVMByNameOrID(sourceNameOrID string, name string, newID int, full bool) error {
+	return CloneVMByNameOrIDWithWait(sourceNameOrID, name, newID, full, true)
+}
+
+// CloneVMByNameOrIDWithWait clones a VM by name or ID with optional wait
+func CloneVMByNameOrIDWithWait(sourceNameOrID string, name string, newID int, full bool, wait bool) error {
 	ctx := context.Background()
 	client, err := c.CreateClient()
 	if err != nil {
@@ -453,7 +474,7 @@ func CloneVMByNameOrID(sourceNameOrID string, name string, newID int, full bool)
 	}
 
 	// Clone the VM
-	return CloneVM(ctx, vm.ID, vm.Node, name, newID, full)
+	return CloneVMWithWait(ctx, vm.ID, vm.Node, name, newID, full, wait)
 }
 
 // MigrateVMByNameOrID migrates a VM by name or ID
