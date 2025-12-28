@@ -8,6 +8,7 @@ import (
 
 	c "github.com/scotty-c/prox/pkg/client"
 	"github.com/scotty-c/prox/pkg/output"
+	"github.com/scotty-c/prox/pkg/util"
 )
 
 // ContainerDetails holds all information about a container for JSON output
@@ -167,7 +168,7 @@ func displayContainerDetails(container *Container, config map[string]interface{}
 		}
 
 		if uptime, ok := status["uptime"].(float64); ok {
-			output.Result("   Uptime: %s\n", formatUptime(int64(uptime)))
+			output.Result("   Uptime: %s\n", util.FormatUptime(int64(uptime)))
 		}
 
 		if cpuUsage, ok := status["cpu"].(float64); ok {
@@ -178,8 +179,8 @@ func displayContainerDetails(container *Container, config map[string]interface{}
 			if memMax, ok := status["maxmem"].(float64); ok {
 				memPercent := (memUsage / memMax) * 100
 				output.Result("   Memory Usage: %s / %s (%.1f%%)\n",
-					formatSize(uint64(memUsage)),
-					formatSize(uint64(memMax)),
+					util.FormatSize(uint64(memUsage)),
+					util.FormatSize(uint64(memMax)),
 					memPercent)
 			}
 		}
@@ -188,8 +189,8 @@ func displayContainerDetails(container *Container, config map[string]interface{}
 			if diskMax, ok := status["maxdisk"].(float64); ok {
 				diskPercent := (diskUsage / diskMax) * 100
 				output.Result("   Disk Usage: %s / %s (%.1f%%)\n",
-					formatSize(uint64(diskUsage)),
-					formatSize(uint64(diskMax)),
+					util.FormatSize(uint64(diskUsage)),
+					util.FormatSize(uint64(diskMax)),
 					diskPercent)
 			}
 		}
@@ -198,8 +199,8 @@ func displayContainerDetails(container *Container, config map[string]interface{}
 			if swapMax, ok := status["maxswap"].(float64); ok {
 				swapPercent := (swapUsage / swapMax) * 100
 				output.Result("   Swap Usage: %s / %s (%.1f%%)\n",
-					formatSize(uint64(swapUsage)),
-					formatSize(uint64(swapMax)),
+					util.FormatSize(uint64(swapUsage)),
+					util.FormatSize(uint64(swapMax)),
 					swapPercent)
 			}
 		}

@@ -11,6 +11,7 @@ import (
 	"github.com/jedib0t/go-pretty/v6/table"
 	c "github.com/scotty-c/prox/pkg/client"
 	"github.com/scotty-c/prox/pkg/output"
+	"github.com/scotty-c/prox/pkg/util"
 )
 
 // ListVMsOptions contains options for listing virtual machines
@@ -91,7 +92,7 @@ func GetVM() {
 			vm.CPUs = int(*resource.CPU * c.CPUPercentageMultiplier) // Convert to percentage
 		}
 		if resource.Uptime != nil {
-			vm.Uptime = formatUptime(int64(*resource.Uptime))
+			vm.Uptime = util.FormatUptime(int64(*resource.Uptime))
 		}
 
 		// Get IP address for running VMs
@@ -280,7 +281,7 @@ func ListVMs(opts ListVMsOptions) error {
 			vm.CPUs = int(*resource.CPU * c.CPUPercentageMultiplier) // Convert to percentage
 		}
 		if resource.Uptime != nil {
-			vm.Uptime = formatUptime(int64(*resource.Uptime))
+			vm.Uptime = util.FormatUptime(int64(*resource.Uptime))
 		}
 
 		// Get more accurate disk information if cluster resources don't provide it
@@ -381,8 +382,8 @@ func displayVMsTable(vms []VM, runningOnly bool, showIPs bool, showDisk bool) {
 		// Format memory usage
 		var memoryStr string
 		if vm.MaxMemory > 0 {
-			memUsed := formatSize(vm.Memory)
-			memMax := formatSize(vm.MaxMemory)
+			memUsed := util.FormatSize(vm.Memory)
+			memMax := util.FormatSize(vm.MaxMemory)
 			memPercent := float64(vm.Memory) / float64(vm.MaxMemory) * 100
 			memoryStr = fmt.Sprintf("%s/%s (%.1f%%)", memUsed, memMax, memPercent)
 		} else {
@@ -393,8 +394,8 @@ func displayVMsTable(vms []VM, runningOnly bool, showIPs bool, showDisk bool) {
 		var diskStr string
 		if showDisk {
 			if vm.MaxDisk > 1 {
-				diskUsed := formatSize(vm.Disk)
-				diskMax := formatSize(vm.MaxDisk)
+				diskUsed := util.FormatSize(vm.Disk)
+				diskMax := util.FormatSize(vm.MaxDisk)
 				diskPercent := float64(vm.Disk) / float64(vm.MaxDisk) * 100
 				diskStr = fmt.Sprintf("%s/%s (%.1f%%)", diskUsed, diskMax, diskPercent)
 			} else if vm.MaxDisk == 1 {

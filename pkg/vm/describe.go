@@ -8,6 +8,7 @@ import (
 
 	c "github.com/scotty-c/prox/pkg/client"
 	"github.com/scotty-c/prox/pkg/output"
+	"github.com/scotty-c/prox/pkg/util"
 )
 
 // VMDetails holds all information about a VM for JSON output
@@ -192,7 +193,7 @@ func displayVMDetails(id int, name, node string, config, status map[string]inter
 		output.Result("📊 Runtime Status:\n")
 
 		if uptime, ok := status["uptime"].(float64); ok {
-			output.Result("   Uptime: %s\n", formatUptime(int64(uptime)))
+			output.Result("   Uptime: %s\n", util.FormatUptime(int64(uptime)))
 		}
 
 		if cpuUsage, ok := status["cpu"].(float64); ok {
@@ -203,8 +204,8 @@ func displayVMDetails(id int, name, node string, config, status map[string]inter
 			if memMax, ok := status["maxmem"].(float64); ok {
 				memPercent := (memUsage / memMax) * 100
 				output.Result("   Memory Usage: %s / %s (%.1f%%)\n",
-					formatSize(uint64(memUsage)),
-					formatSize(uint64(memMax)),
+					util.FormatSize(uint64(memUsage)),
+					util.FormatSize(uint64(memMax)),
 					memPercent)
 			}
 		}
@@ -233,17 +234,17 @@ func displayVMDetails(id int, name, node string, config, status map[string]inter
 		if diskUsageOk && diskMaxOk && diskMax > 0 {
 			diskPercent := (diskUsage / diskMax) * 100
 			output.Result("   Disk Usage: %s / %s (%.1f%%)\n",
-				formatSize(uint64(diskUsage)),
-				formatSize(uint64(diskMax)),
+				util.FormatSize(uint64(diskUsage)),
+				util.FormatSize(uint64(diskMax)),
 				diskPercent)
 		}
 
 		if netin, ok := status["netin"].(float64); ok {
-			output.Result("   Network In: %s\n", formatSize(uint64(netin)))
+			output.Result("   Network In: %s\n", util.FormatSize(uint64(netin)))
 		}
 
 		if netout, ok := status["netout"].(float64); ok {
-			output.Result("   Network Out: %s\n", formatSize(uint64(netout)))
+			output.Result("   Network Out: %s\n", util.FormatSize(uint64(netout)))
 		}
 
 		output.Result("\n")

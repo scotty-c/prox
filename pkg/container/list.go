@@ -11,6 +11,7 @@ import (
 	"github.com/jedib0t/go-pretty/v6/table"
 	c "github.com/scotty-c/prox/pkg/client"
 	"github.com/scotty-c/prox/pkg/output"
+	"github.com/scotty-c/prox/pkg/util"
 )
 
 // hasTag checks if a tag exists in the semicolon-separated tags string
@@ -189,7 +190,7 @@ func ListContainers(node string, runningOnly bool, jsonOutput bool, tag string) 
 			container.CPUs = int(*resource.CPU * c.CPUPercentageMultiplier) // Convert to percentage
 		}
 		if resource.Uptime != nil {
-			container.Uptime = formatUptime(int64(*resource.Uptime))
+			container.Uptime = util.FormatUptime(int64(*resource.Uptime))
 		}
 
 		// Initialize IP as N/A (will be updated concurrently for running containers)
@@ -239,8 +240,8 @@ func displayContainersTable(containers []Container, runningOnly bool) {
 		// Format memory usage
 		var memoryStr string
 		if container.MaxMemory > 0 {
-			memUsed := formatSize(container.Memory)
-			memMax := formatSize(container.MaxMemory)
+			memUsed := util.FormatSize(container.Memory)
+			memMax := util.FormatSize(container.MaxMemory)
 			memPercent := float64(container.Memory) / float64(container.MaxMemory) * 100
 			memoryStr = fmt.Sprintf("%s/%s (%.1f%%)", memUsed, memMax, memPercent)
 		} else {
@@ -250,8 +251,8 @@ func displayContainersTable(containers []Container, runningOnly bool) {
 		// Format disk usage
 		var diskStr string
 		if container.MaxDisk > 0 {
-			diskUsed := formatSize(container.Disk)
-			diskMax := formatSize(container.MaxDisk)
+			diskUsed := util.FormatSize(container.Disk)
+			diskMax := util.FormatSize(container.MaxDisk)
 			diskPercent := float64(container.Disk) / float64(container.MaxDisk) * 100
 			diskStr = fmt.Sprintf("%s/%s (%.1f%%)", diskUsed, diskMax, diskPercent)
 		} else {

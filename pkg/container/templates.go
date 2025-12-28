@@ -8,6 +8,7 @@ import (
 	"github.com/jedib0t/go-pretty/v6/table"
 	c "github.com/scotty-c/prox/pkg/client"
 	"github.com/scotty-c/prox/pkg/output"
+	"github.com/scotty-c/prox/pkg/util"
 )
 
 // ListTemplates lists all available container templates
@@ -68,7 +69,7 @@ func getNodeTemplates(client c.ProxmoxClientInterface, node string) ([]Template,
 			Description: parseTemplateDescription(template.VolID),
 			OS:          parseTemplateOS(template.VolID),
 			Version:     parseTemplateVersion(template.VolID),
-			Size:        formatSize(template.Size),
+			Size:        util.FormatSize(template.Size),
 			Node:        node,
 		}
 		result = append(result, tmpl)
