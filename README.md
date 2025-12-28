@@ -23,6 +23,7 @@ Key capabilities:
 - Container (LXC): create (template shortcuts + SSH key injection), list, start/stop, describe
 - Rich describe output: IP discovery (guest agent / DHCP / static), disks, resources, uptime
 - Secure encrypted credential storage (AES‑256, automatic legacy migration)
+- Multiple configuration profiles (homelab, production, etc.) with easy switching
 - SSH key validation (file or stdin, multi‑key, type checks)
 - Clear progress + helpful errors
 - Modular Go codebase (easy to extend) + Makefile automation
@@ -82,9 +83,17 @@ prox completion powershell >> $PROFILE
 After setup, restart your shell or source the completion file. You'll then have tab completion for all commands, flags, and arguments.
 
 ## Quick Start
-Configure (stored encrypted):
+Configure (stored encrypted with profile support):
 ```bash
+# Set up the default profile
 prox config setup -u admin@pam -p secret -l https://proxmox.example.com:8006
+
+# Or create multiple profiles for different environments
+prox config create homelab -u admin@pam -p secret -l https://homelab:8006
+prox config create production -u admin@pam -p secret -l https://prod:8006 --use
+prox config list                    # List all profiles
+prox config use homelab             # Switch to homelab profile
+prox --profile production vm list   # Use specific profile for one command
 ```
 VM workflow:
 ```bash
@@ -134,12 +143,16 @@ Pro tips:
 - Use `prox ssh <resource> --delete [--dry-run]` to remove an entry safely
 
 ## Core Commands
-Config:
+Config (with profile support):
 ```bash
-prox config setup -u user -p pass -l https://host:8006
-prox config read     # masked
-prox config update
-prox config delete
+prox config setup -u user -p pass -l https://host:8006  # Set up default profile
+prox config create <profile> -u user -p pass -l https://host:8006  # Create a new profile
+prox config list                                         # List all profiles
+prox config use <profile>                                # Switch to a different profile
+prox config read                                         # Read current profile (masked)
+prox config update                                       # Update current profile
+prox config delete                                       # Delete current profile
+prox --profile <name> [command]                          # Use specific profile for one command
 ```
 VMs:
 ```bash
@@ -289,8 +302,9 @@ Tip: run any command with --help for full details.
 
 ## Security
 - AES‑256 encryption for stored credentials (system/user bound)
-- Plaintext legacy configs auto‑migrated
-- Secure file perms (600)
+- Plaintext legacy configs auto‑migrated to profile system
+- Profiles stored in `~/.prox/profiles/` with secure file perms (600)
+- Automatic migration from old single-config format to profiles
 - See SECURITY.md for encryption details & migration command
 ```bash
 prox config migrate   # migrate legacy plaintext if present

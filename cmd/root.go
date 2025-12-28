@@ -7,6 +7,7 @@ import (
 	"os"
 
 	"github.com/scotty-c/prox/cmd/node"
+	c "github.com/scotty-c/prox/pkg/config"
 	"github.com/scotty-c/prox/pkg/output"
 	"github.com/spf13/cobra"
 )
@@ -28,14 +29,20 @@ Features:
   • Environment variable support for CI/CD scenarios
 
 Configuration:
-  prox uses a config file at ~/.prox/config by default. Alternatively, you can use
-  environment variables for CI/CD and automation:
+  prox supports multiple configuration profiles for different environments.
+  Profiles are stored in ~/.prox/profiles/ directory.
+
+  Environment variables for CI/CD and automation:
     PROX_URL      - Proxmox server URL (e.g., https://proxmox.example.com:8006)
     PROX_USER     - Username (e.g., root@pam)
     PROX_PASSWORD - Password or API token
 
 Examples:
   prox config setup                    # Configure connection to Proxmox server
+  prox config create homelab -u user -p pass -l https://homelab:8006  # Create profile
+  prox config list                     # List all profiles
+  prox config use homelab              # Switch to homelab profile
+  prox --profile production vm list   # Use specific profile for one command
   prox vm list                        # List all virtual machines
   prox vm start myvm                  # Start a virtual machine
   prox vm clone source-vm new-vm      # Clone a virtual machine
@@ -61,6 +68,12 @@ Use "prox [command] --help" for more information about a command.`,
 		// Set quiet mode based on flag
 		quiet, _ := cmd.Flags().GetBool("quiet")
 		output.SetQuiet(quiet)
+
+		// Set profile override if flag is provided
+		profile, _ := cmd.Flags().GetString("profile")
+		if profile != "" {
+			c.SetProfileOverride(profile)
+		}
 	},
 }
 
@@ -76,6 +89,7 @@ func Execute() {
 func init() {
 	// Add persistent flags available to all commands
 	RootCmd.PersistentFlags().BoolP("quiet", "q", false, "Suppress non-essential output (for scripting)")
+	RootCmd.PersistentFlags().String("profile", "", "Use a specific configuration profile")
 
 	// Register node command group
 	RootCmd.AddCommand(node.NodeCmd)
