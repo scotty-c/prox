@@ -1370,6 +1370,9 @@ func (c *ProxmoxClient) GetVMDiskInfo(ctx context.Context, node string, vmid int
 	var totalSize uint64 = 0
 	var usedSize uint64 = 0
 
+	// Cache for storage content to avoid repeated API calls for the same storage
+	storageCache := make(map[string][]interface{})
+
 	// Check all possible disk types
 	diskKeys := []string{"ide0", "ide1", "ide2", "ide3", "sata0", "sata1", "sata2", "sata3", "scsi0", "scsi1", "scsi2", "scsi3", "virtio0", "virtio1", "virtio2", "virtio3", "efidisk0", "tpmstate0"}
 
@@ -1407,8 +1410,8 @@ func (c *ProxmoxClient) GetVMDiskInfo(ctx context.Context, node string, vmid int
 							volumeID = volumeID[:commaIndex]
 						}
 
-						// Try to get disk size from storage API
-						if storageSize, err := c.getStorageVolumeSize(ctx, node, storage, volumeID); err == nil {
+						// Try to get disk size from storage API (with caching)
+						if storageSize, err := c.getStorageVolumeSizeWithCache(ctx, node, storage, volumeID, storageCache); err == nil {
 							diskSize = storageSize
 						}
 					}
@@ -1488,6 +1491,59 @@ func (c *ProxmoxClient) getStorageVolumeSize(ctx context.Context, node, storage,
 								if sizeFloat, ok := size.(float64); ok {
 									return uint64(sizeFloat), nil
 								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	return 0, fmt.Errorf("volume not found in storage")
+}
+
+// getStorageVolumeSizeWithCache is like getStorageVolumeSize but uses a cache to avoid
+// repeated API calls for the same storage. This significantly improves performance when
+// a VM has multiple disks on the same storage.
+func (c *ProxmoxClient) getStorageVolumeSizeWithCache(ctx context.Context, node, storage, volumeID string, cache map[string][]interface{}) (uint64, error) {
+	cacheKey := fmt.Sprintf("%s:%s", node, storage)
+
+	// Check if we have cached content for this storage
+	contentList, cached := cache[cacheKey]
+
+	if !cached {
+		// Fetch storage content from API
+		path := fmt.Sprintf("/nodes/%s/storage/%s/content", node, storage)
+
+		body, err := c.makeRequest(ctx, "GET", path, nil)
+		if err != nil {
+			return 0, err
+		}
+
+		var resp APIResponse
+		if err := json.Unmarshal(body, &resp); err != nil {
+			return 0, err
+		}
+
+		if list, ok := resp.Data.([]interface{}); ok {
+			contentList = list
+			// Cache the content for future lookups
+			cache[cacheKey] = contentList
+		} else {
+			return 0, fmt.Errorf("unexpected storage content format")
+		}
+	}
+
+	// Search for the volume in the cached content
+	for _, content := range contentList {
+		if contentMap, ok := content.(map[string]interface{}); ok {
+			if volID, exists := contentMap["volid"]; exists {
+				if volIDStr, ok := volID.(string); ok {
+					// Match the volume ID - try exact match first, then partial match
+					if volIDStr == fmt.Sprintf("%s:%s", storage, volumeID) || strings.Contains(volIDStr, volumeID) {
+						if size, exists := contentMap["size"]; exists {
+							if sizeFloat, ok := size.(float64); ok {
+								return uint64(sizeFloat), nil
 							}
 						}
 					}
