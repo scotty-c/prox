@@ -93,7 +93,6 @@ func CreateContainer(node, name, template string, vmid int, memory, disk int, co
 	}
 
 	output.Result("Task started: %s\n", taskID)
-	output.Infoln("Waiting for container creation to complete...")
 
 	// Wait for task completion
 	err = waitForTask(ctx, client, node, taskID)

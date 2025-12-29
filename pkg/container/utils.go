@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/briandowns/spinner"
 	c "github.com/scotty-c/prox/pkg/client"
 	"github.com/scotty-c/prox/pkg/util"
 )
@@ -94,6 +95,11 @@ func autoDetectNode(client *c.ProxmoxClient) (string, error) {
 
 // waitForTask waits for a Proxmox task to complete
 func waitForTask(ctx context.Context, client c.ProxmoxClientInterface, node, taskID string) error {
+	s := spinner.New(spinner.CharSets[14], 100*time.Millisecond)
+	s.Suffix = " Processing..."
+	s.Start()
+	defer s.Stop()
+
 	// Exponential backoff configuration
 	backoff := 500 * time.Millisecond // Start at 500ms
 	maxBackoff := 5 * time.Second     // Cap at 5s

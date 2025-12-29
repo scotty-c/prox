@@ -37,7 +37,6 @@ func StartContainer(nameOrID string) error {
 	}
 
 	output.Result("Task started: %s\n", taskID)
-	output.Infoln("Waiting for container to start...")
 
 	// Wait for task completion
 	err = waitForTask(ctx, client, container.Node, taskID)
@@ -78,7 +77,6 @@ func StopContainer(nameOrID string) error {
 	}
 
 	output.Result("Task started: %s\n", taskID)
-	output.Infoln("Waiting for container to stop...")
 
 	// Wait for task completion
 	err = waitForTask(ctx, client, container.Node, taskID)
@@ -114,7 +112,6 @@ func DeleteContainer(nameOrID string) error {
 	}
 
 	output.Result("Task started: %s\n", taskID)
-	output.Infoln("Waiting for container deletion...")
 
 	// Wait for task completion
 	err = waitForTask(ctx, client, container.Node, taskID)
