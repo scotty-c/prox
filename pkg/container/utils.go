@@ -8,6 +8,7 @@ import (
 	"time"
 
 	c "github.com/scotty-c/prox/pkg/client"
+	"github.com/scotty-c/prox/pkg/util"
 )
 
 // parseTemplateDescription extracts a readable description from template name
@@ -147,19 +148,41 @@ func FindByNameOrID(ctx context.Context, client c.ProxmoxClientInterface, nameOr
 		}
 	}
 
-	// Search by name
+	// Search by name and collect all container names for suggestions
+	var allContainerNames []string
 	for _, resource := range resources {
-		if resource.Type == "lxc" && resource.Name == nameOrID {
-			return &Container{
-				ID:     int(*resource.VMID),
-				Name:   resource.Name,
-				Status: resource.Status,
-				Node:   resource.Node,
-			}, nil
+		if resource.Type == "lxc" {
+			if resource.Name == nameOrID {
+				return &Container{
+					ID:     int(*resource.VMID),
+					Name:   resource.Name,
+					Status: resource.Status,
+					Node:   resource.Node,
+				}, nil
+			}
+			// Collect container names for fuzzy matching
+			if resource.Name != "" {
+				allContainerNames = append(allContainerNames, resource.Name)
+			}
 		}
 	}
 
-	return nil, fmt.Errorf("container '%s' not found", nameOrID)
+	// Container not found - provide helpful suggestions
+	errorMsg := fmt.Sprintf("container '%s' not found", nameOrID)
+
+	// Find similar names using fuzzy matching
+	suggestions := util.FindSimilarStrings(nameOrID, allContainerNames, 3)
+	if len(suggestions) > 0 {
+		errorMsg += "\n\nDid you mean one of these?"
+		for _, suggestion := range suggestions {
+			errorMsg += fmt.Sprintf("\n  • %s", suggestion)
+		}
+		errorMsg += "\n\nRun 'prox ct list' to see all available containers"
+	} else if len(allContainerNames) > 0 {
+		errorMsg += "\n\nRun 'prox ct list' to see all available containers"
+	}
+
+	return nil, fmt.Errorf(errorMsg)
 }
 
 // ValidateSSHKeys validates SSH public keys format and returns the number of valid keys
