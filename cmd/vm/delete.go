@@ -40,7 +40,7 @@ Examples:
 
 		// Delete the VM
 		if err := vm.DeleteVMByNameOrID(nameOrID); err != nil {
-			fmt.Printf("Error: %v\n", err)
+			output.VMError("delete", err)
 			os.Exit(1)
 		}
 	},

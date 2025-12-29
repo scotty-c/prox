@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/scotty-c/prox/pkg/output"
 	"github.com/scotty-c/prox/pkg/vm"
 	"github.com/spf13/cobra"
 )
@@ -40,7 +41,7 @@ Examples:
 
 		// Perform the migration
 		if err := vm.MigrateVMByNameOrID(nameOrID, sourceNode, targetNode, online, withLocalDisks); err != nil {
-			fmt.Printf("Error: %v\n", err)
+			output.VMError("migrate", err)
 			os.Exit(1)
 		}
 	},

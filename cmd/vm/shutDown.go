@@ -1,10 +1,10 @@
 package cmd
 
 import (
-	"fmt"
 	"os"
 
 	"github.com/scotty-c/prox/pkg/completion"
+	"github.com/scotty-c/prox/pkg/output"
 	"github.com/scotty-c/prox/pkg/vm"
 	"github.com/spf13/cobra"
 )
@@ -29,7 +29,7 @@ Examples:
 
 		// Shutdown the VM
 		if err := vm.ShutdownVMByNameOrIDWithWait(nameOrID, wait); err != nil {
-			fmt.Printf("Error: %v\n", err)
+			output.VMError("shutdown", err)
 			os.Exit(1)
 		}
 	},

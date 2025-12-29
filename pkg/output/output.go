@@ -147,3 +147,41 @@ func APIError(operation string, err error) {
 func UserError(operation string, err error) {
 	fmt.Fprintf(os.Stderr, "Error: %s: %v\n", operation, err)
 }
+
+// VMError prints an error message for VM operation failures with helpful context
+func VMError(operation string, err error) {
+	fmt.Fprintf(os.Stderr, "Error: %s\n", err)
+
+	errMsg := strings.ToLower(err.Error())
+
+	// Provide contextual help based on error type
+	if strings.Contains(errMsg, "not found") {
+		fmt.Fprintf(os.Stderr, "\nTip: Run 'prox vm list' to see all available virtual machines\n")
+	} else if strings.Contains(errMsg, "permission") || strings.Contains(errMsg, "403") {
+		fmt.Fprintf(os.Stderr, "\nTip: Check that your user has permission to %s VMs\n", operation)
+	} else if strings.Contains(errMsg, "already running") {
+		fmt.Fprintf(os.Stderr, "\nTip: Use 'prox vm list' to check VM status\n")
+	} else if strings.Contains(errMsg, "already stopped") || strings.Contains(errMsg, "not running") {
+		fmt.Fprintf(os.Stderr, "\nTip: Use 'prox vm list' to check VM status\n")
+	}
+}
+
+// ContainerError prints an error message for container operation failures with helpful context
+func ContainerError(operation string, err error) {
+	fmt.Fprintf(os.Stderr, "Error: %s\n", err)
+
+	errMsg := strings.ToLower(err.Error())
+
+	// Provide contextual help based on error type
+	if strings.Contains(errMsg, "not found") {
+		fmt.Fprintf(os.Stderr, "\nTip: Run 'prox ct list' to see all available containers\n")
+	} else if strings.Contains(errMsg, "permission") || strings.Contains(errMsg, "403") {
+		fmt.Fprintf(os.Stderr, "\nTip: Check that your user has permission to %s containers\n", operation)
+	} else if strings.Contains(errMsg, "already running") {
+		fmt.Fprintf(os.Stderr, "\nTip: Use 'prox ct list' to check container status\n")
+	} else if strings.Contains(errMsg, "already stopped") || strings.Contains(errMsg, "not running") {
+		fmt.Fprintf(os.Stderr, "\nTip: Use 'prox ct list' to check container status\n")
+	} else if strings.Contains(errMsg, "template") {
+		fmt.Fprintf(os.Stderr, "\nTip: Use 'prox ct templates' to see available templates\n")
+	}
+}

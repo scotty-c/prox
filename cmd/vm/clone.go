@@ -5,6 +5,7 @@ import (
 	"os"
 	"strconv"
 
+	"github.com/scotty-c/prox/pkg/output"
 	"github.com/scotty-c/prox/pkg/vm"
 	"github.com/spf13/cobra"
 )
@@ -59,7 +60,7 @@ Examples:
 
 		wait := !noWait // Invert: default is to wait
 		if err := vm.CloneVMByNameOrIDWithWait(sourceNameOrID, name, newID, full, wait); err != nil {
-			fmt.Printf("Error: %v\n", err)
+			output.VMError("clone", err)
 			os.Exit(1)
 		}
 	},

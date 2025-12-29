@@ -1,10 +1,10 @@
 package cmd
 
 import (
-	"fmt"
 	"os"
 
 	"github.com/scotty-c/prox/pkg/completion"
+	"github.com/scotty-c/prox/pkg/output"
 	"github.com/scotty-c/prox/pkg/vm"
 	"github.com/spf13/cobra"
 )
@@ -33,7 +33,7 @@ Examples:
 
 		// Edit the VM
 		if err := vm.EditVMByNameOrID(nameOrID, name, cpu, memory, diskSize); err != nil {
-			fmt.Printf("Error: %v\n", err)
+			output.VMError("edit", err)
 			os.Exit(1)
 		}
 	},

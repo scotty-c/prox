@@ -1,10 +1,10 @@
 package cmd
 
 import (
-	"fmt"
 	"os"
 
 	"github.com/scotty-c/prox/pkg/completion"
+	"github.com/scotty-c/prox/pkg/output"
 	"github.com/scotty-c/prox/pkg/vm"
 	"github.com/spf13/cobra"
 )
@@ -28,7 +28,7 @@ Examples:
 
 		// Start the VM
 		if err := vm.StartVMByNameOrIDWithWait(nameOrID, wait); err != nil {
-			fmt.Printf("Error: %v\n", err)
+			output.VMError("start", err)
 			os.Exit(1)
 		}
 	},
