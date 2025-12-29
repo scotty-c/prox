@@ -47,18 +47,18 @@ func (v *VirtualMachine) Shutdown(ctx context.Context) (*Task, error) {
 }
 
 // ShutdownVM shuts down a VM by ID and node
-func ShutdownVM(ctx context.Context, id int, node string) {
-	ShutdownVMWithWait(ctx, id, node, false, nil)
+func ShutdownVM(ctx context.Context, id int, node string) error {
+	return ShutdownVMWithWait(ctx, id, node, false, nil)
 }
 
 // ShutdownVMWithWait shuts down a VM by ID and node with optional wait
-func ShutdownVMWithWait(ctx context.Context, id int, node string, wait bool, client c.ProxmoxClientInterface) {
+func ShutdownVMWithWait(ctx context.Context, id int, node string, wait bool, client c.ProxmoxClientInterface) error {
 	if client == nil {
 		var err error
 		client, err = c.CreateClient()
 		if err != nil {
 			output.Error("Error creating client: %v\n", err)
-			return
+			return fmt.Errorf("failed to create client: %w", err)
 		}
 	}
 
@@ -68,7 +68,7 @@ func ShutdownVMWithWait(ctx context.Context, id int, node string, wait bool, cli
 		discoveredNode, err := client.GetVMNode(ctx, id)
 		if err != nil {
 			output.Error("Error: Failed to find VM %d: %v\n", id, err)
-			return
+			return fmt.Errorf("failed to find VM %d: %w", id, err)
 		}
 		node = discoveredNode
 		output.Info("Found VM %d on node %s\n", id, node)
@@ -86,7 +86,7 @@ func ShutdownVMWithWait(ctx context.Context, id int, node string, wait bool, cli
 	task, err := vm.Shutdown(ctx)
 	if err != nil {
 		output.Error("Error: Failed to shutdown VM %d: %v\n", id, err)
-		return
+		return fmt.Errorf("failed to shutdown VM %d: %w", id, err)
 	}
 
 	output.Result("VM %d shutdown command issued successfully\n", id)
@@ -97,13 +97,15 @@ func ShutdownVMWithWait(ctx context.Context, id int, node string, wait bool, cli
 		err = waitForTask(ctx, client, node, task.ID)
 		if err != nil {
 			output.Error("Error: Shutdown failed: %v\n", err)
-			return
+			return fmt.Errorf("shutdown failed: %w", err)
 		}
 		duration := time.Since(startTime)
 		output.Result("VM %d shut down successfully in %s\n", id, duration.Round(time.Millisecond))
 	} else {
 		output.Info("Tip: Use 'prox vms list' to check the current status\n")
 	}
+
+	return nil
 }
 
 // Start starts a virtual machine
@@ -118,18 +120,18 @@ func (v *VirtualMachine) Start(ctx context.Context) (*Task, error) {
 }
 
 // StartVM starts a VM by ID and node
-func StartVM(ctx context.Context, id int, node string) {
-	StartVMWithWait(ctx, id, node, false, nil)
+func StartVM(ctx context.Context, id int, node string) error {
+	return StartVMWithWait(ctx, id, node, false, nil)
 }
 
 // StartVMWithWait starts a VM by ID and node with optional wait
-func StartVMWithWait(ctx context.Context, id int, node string, wait bool, client c.ProxmoxClientInterface) {
+func StartVMWithWait(ctx context.Context, id int, node string, wait bool, client c.ProxmoxClientInterface) error {
 	if client == nil {
 		var err error
 		client, err = c.CreateClient()
 		if err != nil {
 			output.Error("Error creating client: %v\n", err)
-			return
+			return fmt.Errorf("failed to create client: %w", err)
 		}
 	}
 
@@ -139,7 +141,7 @@ func StartVMWithWait(ctx context.Context, id int, node string, wait bool, client
 		discoveredNode, err := client.GetVMNode(ctx, id)
 		if err != nil {
 			output.Error("Error: Failed to find VM %d: %v\n", id, err)
-			return
+			return fmt.Errorf("failed to find VM %d: %w", id, err)
 		}
 		node = discoveredNode
 		output.Info("Found VM %d on node %s\n", id, node)
@@ -157,7 +159,7 @@ func StartVMWithWait(ctx context.Context, id int, node string, wait bool, client
 	task, err := vm.Start(ctx)
 	if err != nil {
 		output.Error("Error: Failed to start VM %d: %v\n", id, err)
-		return
+		return fmt.Errorf("failed to start VM %d: %w", id, err)
 	}
 
 	output.Result("VM %d start command issued successfully\n", id)
@@ -168,13 +170,14 @@ func StartVMWithWait(ctx context.Context, id int, node string, wait bool, client
 		err = waitForTask(ctx, client, node, task.ID)
 		if err != nil {
 			output.Error("Error: Start failed: %v\n", err)
-			return
+			return fmt.Errorf("start failed: %w", err)
 		}
 		duration := time.Since(startTime)
 		output.Result("VM %d started successfully in %s\n", id, duration.Round(time.Millisecond))
 	} else {
 		output.Info("Tip: Use 'prox vms list' to check the current status\n")
 	}
+	return nil
 }
 
 // Clone clones a virtual machine
@@ -404,7 +407,9 @@ func StartVMByNameOrIDWithWait(nameOrID string, wait bool) error {
 	}
 
 	// Start the VM
-	StartVMWithWait(ctx, vm.ID, vm.Node, wait, client)
+	if err := StartVMWithWait(ctx, vm.ID, vm.Node, wait, client); err != nil {
+		return fmt.Errorf("failed to start VM: %w", err)
+	}
 	return nil
 }
 
@@ -429,7 +434,9 @@ func ShutdownVMByNameOrIDWithWait(nameOrID string, wait bool) error {
 	}
 
 	// Shutdown the VM
-	ShutdownVMWithWait(ctx, vm.ID, vm.Node, wait, client)
+	if err := ShutdownVMWithWait(ctx, vm.ID, vm.Node, wait, client); err != nil {
+		return fmt.Errorf("failed to shutdown VM: %w", err)
+	}
 	return nil
 }
 
