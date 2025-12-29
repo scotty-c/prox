@@ -42,10 +42,10 @@ func GetVMDetails(nameOrID string, node string) (*VMDetails, error) {
 
 	// Fetch config and status in parallel
 	var (
-		config map[string]interface{}
-		status map[string]interface{}
+		config               map[string]interface{}
+		status               map[string]interface{}
 		configErr, statusErr error
-		wg sync.WaitGroup
+		wg                   sync.WaitGroup
 	)
 
 	wg.Add(2)

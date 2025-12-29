@@ -12,10 +12,10 @@ import (
 
 // deleteCmd represents the delete command
 var deleteCmd = &cobra.Command{
-	Use:     "delete [CONTAINER_ID or NAME] [flags]",
-	Aliases: []string{"del", "rm"},
-	Short:   "Delete a container",
-	Long:    `Delete a container from the Proxmox VE server by providing the container ID or name. The node will be automatically discovered.`,
+	Use:               "delete [CONTAINER_ID or NAME] [flags]",
+	Aliases:           []string{"del", "rm"},
+	Short:             "Delete a container",
+	Long:              `Delete a container from the Proxmox VE server by providing the container ID or name. The node will be automatically discovered.`,
 	Args:              cobra.ExactArgs(1),
 	ValidArgsFunction: completion.GetContainerNames,
 	Run: func(cmd *cobra.Command, args []string) {
