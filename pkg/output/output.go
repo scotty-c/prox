@@ -141,3 +141,9 @@ func APIError(operation string, err error) {
 		fmt.Fprintf(os.Stderr, "\nTip: Resource not found. Use 'prox vm list' or 'prox ct list' to see available resources\n")
 	}
 }
+
+// UserError prints a simple, non-redundant error message for operation failures
+// operation should be a lowercase gerund phrase (e.g., "starting container", "reading file")
+func UserError(operation string, err error) {
+	fmt.Fprintf(os.Stderr, "Error: %s: %v\n", operation, err)
+}

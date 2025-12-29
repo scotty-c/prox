@@ -30,7 +30,7 @@ var deleteCmd = &cobra.Command{
 
 		err := container.DeleteContainer(nameOrID)
 		if err != nil {
-			fmt.Printf("Error: Error deleting container: %v\n", err)
+			output.UserError("deleting container", err)
 			os.Exit(1)
 		}
 	},

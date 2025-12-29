@@ -44,11 +44,11 @@ Examples:
 		if jsonOutput {
 			details, err := vm.GetVMDetails(nameOrID, node)
 			if err != nil {
-				fmt.Printf("Error: Error getting VM details: %v\n", err)
+				output.UserError("getting VM details", err)
 				os.Exit(1)
 			}
 			if err := output.OutputJSON(details); err != nil {
-				fmt.Printf("Error: Error outputting JSON: %v\n", err)
+				output.UserError("outputting JSON", err)
 				os.Exit(1)
 			}
 			return
@@ -57,7 +57,7 @@ Examples:
 		// Describe the VM
 		err := vm.DescribeVM(nameOrID, node)
 		if err != nil {
-			fmt.Printf("Error: Error describing VM: %v\n", err)
+			output.UserError("describing VM", err)
 			os.Exit(1)
 		}
 	},

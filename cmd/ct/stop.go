@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/scotty-c/prox/pkg/container"
+	"github.com/scotty-c/prox/pkg/output"
 	"github.com/spf13/cobra"
 )
 
@@ -32,7 +33,7 @@ Examples:
 		// Stop the container
 		err := container.StopContainer(nameOrID)
 		if err != nil {
-			fmt.Printf("Error: Error stopping container: %v\n", err)
+			output.UserError("stopping container", err)
 			os.Exit(1)
 		}
 	},

@@ -35,11 +35,11 @@ Examples:
 		if jsonOutput {
 			details, err := container.GetContainerDetails(nameOrID)
 			if err != nil {
-				fmt.Printf("Error: Error getting container details: %v\n", err)
+				output.UserError("getting container details", err)
 				os.Exit(1)
 			}
 			if err := output.OutputJSON(details); err != nil {
-				fmt.Printf("Error: Error outputting JSON: %v\n", err)
+				output.UserError("outputting JSON", err)
 				os.Exit(1)
 			}
 			return
@@ -48,7 +48,7 @@ Examples:
 		// Describe the container
 		err := container.DescribeContainer(nameOrID)
 		if err != nil {
-			fmt.Printf("Error: Error describing container: %v\n", err)
+			output.UserError("describing container", err)
 			os.Exit(1)
 		}
 	},

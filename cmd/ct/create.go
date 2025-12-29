@@ -8,6 +8,7 @@ import (
 	"syscall"
 
 	"github.com/scotty-c/prox/pkg/container"
+	"github.com/scotty-c/prox/pkg/output"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 )
@@ -109,7 +110,7 @@ Examples:
 			fmt.Print("Enter password for container: ")
 			passwordBytes, err := term.ReadPassword(int(syscall.Stdin))
 			if err != nil {
-				fmt.Printf("Error: Error reading password: %v\n", err)
+				output.UserError("reading password", err)
 				os.Exit(1)
 			}
 			password = string(passwordBytes)
@@ -140,7 +141,7 @@ Examples:
 				fmt.Printf("🔑 Reading SSH keys from: %s\n", sshKeysFile)
 				keyBytes, err := os.ReadFile(sshKeysFile)
 				if err != nil {
-					fmt.Printf("Error: Error reading SSH keys file '%s': %v\n", sshKeysFile, err)
+					output.UserError(fmt.Sprintf("reading SSH keys file '%s'", sshKeysFile), err)
 					fmt.Println("Tip: Make sure the file exists and is readable")
 					os.Exit(1)
 				}
@@ -178,7 +179,7 @@ Examples:
 		// Create the container
 		err := container.CreateContainer(node, name, template, vmid, memory, disk, cores, password, sshKeys, storage)
 		if err != nil {
-			fmt.Printf("Error: Error creating container: %v\n", err)
+			output.UserError("creating container", err)
 			os.Exit(1)
 		}
 	},
