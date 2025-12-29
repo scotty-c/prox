@@ -5,16 +5,18 @@ import (
 	"fmt"
 
 	c "github.com/scotty-c/prox/pkg/client"
+	"github.com/scotty-c/prox/pkg/output"
 )
 
 // CreateContainer creates a new LXC container
-func CreateContainer(node, name, template string, vmid int, memory, disk int, cores int, password, sshKeys string) error {
+func CreateContainer(node, name, template string, vmid int, memory, disk int, cores int, password, sshKeys, storage string) error {
+	ctx := context.Background()
 	client, err := c.CreateClient()
 	if err != nil {
 		return fmt.Errorf("error creating client: %w", err)
 	}
 
-	fmt.Printf("🚀 Creating container %s...\n", name)
+	output.Info("Creating container %s...\n", name)
 
 	// Resolve template if it's in short format
 	resolvedTemplate, err := ResolveTemplate(template)
@@ -26,25 +28,33 @@ func CreateContainer(node, name, template string, vmid int, memory, disk int, co
 	// Use the node where the template is located, unless a specific node is provided
 	if node == "" {
 		node = resolvedTemplate.Node
-		fmt.Printf("📍 Using node: %s (where template is located)\n", node)
+		output.Info("Using node: %s (where template is located)\n", node)
 	} else {
 		// If user specified a node, verify the template exists on that node
 		if node != resolvedTemplate.Node {
-			fmt.Printf("⚠️  Template is on node %s, but you specified node %s. Using template's node %s\n",
+			output.Error("WARNING: Template is on node %s, but you specified node %s. Using template's node %s\n",
 				resolvedTemplate.Node, node, resolvedTemplate.Node)
 			node = resolvedTemplate.Node
 		}
-		fmt.Printf("📍 Using node: %s\n", node)
+		output.Info("Using node: %s\n", node)
 	}
 
 	// Get next available VMID if not provided
 	if vmid == 0 {
-		nextID, err := client.GetNextVMID(context.Background())
+		nextID, err := client.GetNextVMID(ctx)
 		if err != nil {
 			return fmt.Errorf("failed to get next VM ID: %w", err)
 		}
 		vmid = nextID
-		fmt.Printf("🔢 Using VM ID: %d\n", vmid)
+		output.Info("🔢 Using VM ID: %d\n", vmid)
+	}
+
+	// Use default storage if not specified
+	if storage == "" {
+		storage = "local-lvm"
+		output.Info("📦 Using default storage: %s\n", storage)
+	} else {
+		output.Info("📦 Using storage: %s\n", storage)
 	}
 
 	// Prepare container parameters
@@ -52,7 +62,7 @@ func CreateContainer(node, name, template string, vmid int, memory, disk int, co
 		"hostname":     name,
 		"ostemplate":   template,
 		"memory":       memory,
-		"rootfs":       fmt.Sprintf("local-lvm:%d", disk),
+		"rootfs":       fmt.Sprintf("%s:%d", storage, disk),
 		"cores":        cores,
 		"net0":         "name=eth0,bridge=vmbr0,ip=dhcp",
 		"start":        0, // Don't start automatically
@@ -72,27 +82,26 @@ func CreateContainer(node, name, template string, vmid int, memory, disk int, co
 		}
 		if validKeys > 0 {
 			params["ssh-public-keys"] = sshKeys
-			fmt.Printf("🔑 Added %d SSH public key(s)\n", validKeys)
+			output.Info("🔑 Added %d SSH public key(s)\n", validKeys)
 		}
 	}
 
 	// Create the container
-	taskID, err := client.CreateContainer(context.Background(), node, vmid, params)
+	taskID, err := client.CreateContainer(ctx, node, vmid, params)
 	if err != nil {
 		return fmt.Errorf("failed to create container: %w", err)
 	}
 
-	fmt.Printf("⏳ Task started: %s\n", taskID)
-	fmt.Println("🔄 Waiting for container creation to complete...")
+	output.Result("Task started: %s\n", taskID)
 
 	// Wait for task completion
-	err = waitForTask(client, node, taskID)
+	err = waitForTask(ctx, client, node, taskID)
 	if err != nil {
 		return fmt.Errorf("container creation failed: %w", err)
 	}
 
-	fmt.Printf("✅ Container %s (ID: %d) created successfully on node %s\n", name, vmid, node)
-	fmt.Printf("💡 Use 'prox ct start %s' to start the container\n", name)
+	output.Result("Container %s (ID: %d) created successfully on node %s\n", name, vmid, node)
+	output.Info("Tip: Use 'prox ct start %s' to start the container\n", name)
 
 	return nil
 }

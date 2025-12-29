@@ -8,9 +8,10 @@ import (
 // vmCmd represents the root vm command
 
 var vmCmd = &cobra.Command{
-	Use:   "vm",
-	Short: "Manage virtual machines on Proxmox VE",
-	Long:  `Commands for managing virtual machines including start, stop, clone, delete, and more.`,
+	Use:     "vm",
+	GroupID: "management",
+	Short:   "Manage virtual machines on Proxmox VE",
+	Long:    `Commands for managing virtual machines including start, stop, clone, delete, and more.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		cmd.Help()
 	},

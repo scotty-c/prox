@@ -9,8 +9,10 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/scotty-c/prox/pkg/config"
@@ -24,6 +26,21 @@ type ProxmoxClient struct {
 	HTTPClient *http.Client
 	ticket     string
 	csrfToken  string
+
+	// Cluster resources cache
+	cachedResources      []Resource
+	cachedResourcesTime  time.Time
+	cachedResourcesMutex sync.RWMutex
+
+	// IP address cache for VMs and containers
+	ipCache      map[string]ipCacheEntry
+	ipCacheMutex sync.RWMutex
+}
+
+// ipCacheEntry represents a cached IP address with its timestamp
+type ipCacheEntry struct {
+	ip        string
+	timestamp time.Time
 }
 
 // AuthResponse represents the response from Proxmox authentication
@@ -39,6 +56,12 @@ type AuthResponse struct {
 // APIResponse represents a generic API response
 type APIResponse struct {
 	Data   interface{} `json:"data"`
+	Errors interface{} `json:"errors"`
+}
+
+// ClusterResourcesResponse represents the response from cluster resources endpoint
+type ClusterResourcesResponse struct {
+	Data   []Resource  `json:"data"`
 	Errors interface{} `json:"errors"`
 }
 
@@ -65,6 +88,7 @@ type Resource struct {
 	MaxDisk *int64   `json:"maxdisk,omitempty"`
 	Disk    *int64   `json:"disk,omitempty"`
 	Uptime  *int64   `json:"uptime,omitempty"`
+	Tags    string   `json:"tags,omitempty"` // Semicolon-separated tags
 }
 
 // Version represents Proxmox version info
@@ -91,18 +115,83 @@ type ContainerTemplate struct {
 	Used  uint64 `json:"used,omitempty"`
 }
 
+// ProxmoxClientInterface defines the interface for Proxmox client operations
+// This interface enables mocking and testing
+type ProxmoxClientInterface interface {
+	// Authentication
+	Authenticate(ctx context.Context) error
+
+	// Version and cluster info
+	GetVersion(ctx context.Context) (*Version, error)
+	GetNodes(ctx context.Context) ([]Node, error)
+	GetClusterResources(ctx context.Context) ([]Resource, error)
+	GetClusterStatus(ctx context.Context) (*ClusterStatus, error)
+	ClearClusterResourcesCache()
+
+	// VM operations
+	StartVM(ctx context.Context, node string, vmid int) (string, error)
+	StopVM(ctx context.Context, node string, vmid int) (string, error)
+	DeleteVM(ctx context.Context, node string, vmid int) (string, error)
+	CloneVM(ctx context.Context, node string, vmid int, newid int, name string, full bool) (string, error)
+	UpdateVM(ctx context.Context, node string, vmid int, config map[string]interface{}) (string, error)
+	ResizeDisk(ctx context.Context, node string, vmid int, disk string, size string) (string, error)
+	GetVMConfig(ctx context.Context, node string, vmid int) (map[string]interface{}, error)
+	GetVMStatus(ctx context.Context, node string, vmid int) (map[string]interface{}, error)
+	GetVMDiskInfo(ctx context.Context, node string, vmid int) (uint64, uint64, error)
+	GetVMNode(ctx context.Context, vmid int) (string, error)
+	GetVMIP(ctx context.Context, node string, vmid int) (string, error)
+	GetVMNetworkInterfaces(ctx context.Context, node string, vmid int) ([]NetworkInterface, error)
+	IsVMRunning(ctx context.Context, vmid int) (bool, error)
+	MigrateVM(ctx context.Context, node string, vmid int, targetNode string, options map[string]interface{}) (string, error)
+
+	// Container operations
+	CreateContainer(ctx context.Context, node string, vmid int, params map[string]interface{}) (string, error)
+	StartContainer(ctx context.Context, node string, vmid int) (string, error)
+	StopContainer(ctx context.Context, node string, vmid int) (string, error)
+	DeleteContainer(ctx context.Context, node string, vmid int) (string, error)
+	GetContainerConfig(ctx context.Context, node string, vmid int) (map[string]interface{}, error)
+	GetContainerStatus(ctx context.Context, node string, vmid int) (map[string]interface{}, error)
+	GetContainerTemplates(ctx context.Context, node string) ([]ContainerTemplate, error)
+	GetContainerIP(ctx context.Context, node string, vmid int) (string, error)
+	GetContainerIPAlternative(ctx context.Context, node string, vmid int) (string, error)
+	GetContainerNetworkInterfaces(ctx context.Context, node string, vmid int) ([]NetworkInterface, error)
+	IsContainerRunning(ctx context.Context, vmid int) (bool, error)
+
+	// Node operations
+	GetNodeIP(ctx context.Context, node string) (string, error)
+
+	// Task operations
+	GetNextVMID(ctx context.Context) (int, error)
+	GetTaskStatus(ctx context.Context, node, upid string) (*Task, error)
+	GetTaskLog(ctx context.Context, node, upid string, start int, limit int) ([]string, error)
+	WaitForTask(ctx context.Context, node, taskID string) (*Task, error)
+}
+
+// Client cache for reuse across operations
+var (
+	cachedClient     *ProxmoxClient
+	cachedClientKey  string
+	clientCacheMutex sync.RWMutex
+)
+
 // NewClient creates a new Proxmox client
 func NewClient(baseURL, username, password string) *ProxmoxClient {
 	// Create HTTP client with custom transport for self-signed certificates
+	// and connection pooling for better performance
 	transport := &http.Transport{
 		TLSClientConfig: &tls.Config{
 			InsecureSkipVerify: true,
 		},
+		// Connection pooling settings for better reuse
+		MaxIdleConns:        100,              // Maximum idle connections across all hosts
+		MaxIdleConnsPerHost: 10,               // Maximum idle connections per host
+		MaxConnsPerHost:     10,               // Maximum total connections per host
+		IdleConnTimeout:     90 * time.Second, // How long idle connections stay alive
 	}
 
 	client := &http.Client{
 		Transport: transport,
-		Timeout:   30 * time.Second,
+		Timeout:   DefaultTimeout * time.Second,
 	}
 
 	return &ProxmoxClient{
@@ -110,6 +199,7 @@ func NewClient(baseURL, username, password string) *ProxmoxClient {
 		Username:   username,
 		Password:   password,
 		HTTPClient: client,
+		ipCache:    make(map[string]ipCacheEntry),
 	}
 }
 
@@ -282,82 +372,42 @@ func (c *ProxmoxClient) GetNodes(ctx context.Context) ([]Node, error) {
 	return nodes, nil
 }
 
-// GetClusterResources gets cluster resources
+// GetClusterResources gets cluster resources with short-lived caching
 func (c *ProxmoxClient) GetClusterResources(ctx context.Context) ([]Resource, error) {
+	// Try to use cached data (read lock)
+	c.cachedResourcesMutex.RLock()
+	if time.Since(c.cachedResourcesTime) < time.Duration(ClusterResourcesCacheTTL)*time.Second {
+		cached := c.cachedResources
+		c.cachedResourcesMutex.RUnlock()
+		return cached, nil
+	}
+	c.cachedResourcesMutex.RUnlock()
+
+	// Cache miss or expired, fetch from API (write lock)
+	c.cachedResourcesMutex.Lock()
+	defer c.cachedResourcesMutex.Unlock()
+
+	// Double-check after acquiring write lock (another goroutine might have refreshed)
+	if time.Since(c.cachedResourcesTime) < time.Duration(ClusterResourcesCacheTTL)*time.Second {
+		return c.cachedResources, nil
+	}
+
+	// Fetch from API
 	body, err := c.makeRequest(ctx, "GET", "/cluster/resources", nil)
 	if err != nil {
 		return nil, err
 	}
 
-	var resp APIResponse
+	var resp ClusterResourcesResponse
 	if err := json.Unmarshal(body, &resp); err != nil {
 		return nil, fmt.Errorf("failed to parse cluster resources response: %w", err)
 	}
 
-	resourcesData, ok := resp.Data.([]interface{})
-	if !ok {
-		return nil, fmt.Errorf("unexpected cluster resources response format")
-	}
+	// Update cache
+	c.cachedResources = resp.Data
+	c.cachedResourcesTime = time.Now()
 
-	var resources []Resource
-	for _, resourceData := range resourcesData {
-		resourceMap, ok := resourceData.(map[string]interface{})
-		if !ok {
-			continue
-		}
-
-		resource := Resource{}
-		if v, ok := resourceMap["id"].(string); ok {
-			resource.ID = v
-		}
-		if v, ok := resourceMap["type"].(string); ok {
-			resource.Type = v
-		}
-		if v, ok := resourceMap["node"].(string); ok {
-			resource.Node = v
-		}
-		if v, ok := resourceMap["name"].(string); ok {
-			resource.Name = v
-		}
-		if v, ok := resourceMap["status"].(string); ok {
-			resource.Status = v
-		}
-		if v, ok := resourceMap["vmid"].(float64); ok {
-			vmid := int(v)
-			resource.VMID = &vmid
-		}
-		if v, ok := resourceMap["maxcpu"].(float64); ok {
-			maxcpu := int(v)
-			resource.MaxCPU = &maxcpu
-		}
-		if v, ok := resourceMap["cpu"].(float64); ok {
-			resource.CPU = &v
-		}
-		if v, ok := resourceMap["maxmem"].(float64); ok {
-			maxmem := int64(v)
-			resource.MaxMem = &maxmem
-		}
-		if v, ok := resourceMap["mem"].(float64); ok {
-			mem := int64(v)
-			resource.Mem = &mem
-		}
-		if v, ok := resourceMap["maxdisk"].(float64); ok {
-			maxdisk := int64(v)
-			resource.MaxDisk = &maxdisk
-		}
-		if v, ok := resourceMap["disk"].(float64); ok {
-			disk := int64(v)
-			resource.Disk = &disk
-		}
-		if v, ok := resourceMap["uptime"].(float64); ok {
-			uptime := int64(v)
-			resource.Uptime = &uptime
-		}
-
-		resources = append(resources, resource)
-	}
-
-	return resources, nil
+	return resp.Data, nil
 }
 
 // StartVM starts a virtual machine
@@ -430,7 +480,7 @@ func (c *ProxmoxClient) CloneVM(ctx context.Context, node string, vmid int, newi
 
 	// Add full parameter if requested to create a full clone instead of linked clone
 	if full {
-		reqBody["full"] = 1
+		reqBody["full"] = ProxmoxBoolTrue
 	}
 
 	body, err := c.makeRequest(ctx, "POST", path, reqBody)
@@ -645,20 +695,121 @@ func (c *ProxmoxClient) GetTaskStatus(ctx context.Context, node, upid string) (*
 	return task, nil
 }
 
-// ReadConfig reads configuration from file
+// GetTaskLog retrieves the log for a Proxmox task
+func (c *ProxmoxClient) GetTaskLog(ctx context.Context, node, upid string, start int, limit int) ([]string, error) {
+	path := fmt.Sprintf("/nodes/%s/tasks/%s/log", node, upid)
+
+	// Add query parameters for pagination
+	params := url.Values{}
+	if start > 0 {
+		params.Add("start", strconv.Itoa(start))
+	}
+	if limit > 0 {
+		params.Add("limit", strconv.Itoa(limit))
+	}
+
+	if len(params) > 0 {
+		path = path + "?" + params.Encode()
+	}
+
+	body, err := c.makeRequest(ctx, "GET", path, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	var resp APIResponse
+	if err := json.Unmarshal(body, &resp); err != nil {
+		return nil, fmt.Errorf("failed to parse task log response: %w", err)
+	}
+
+	// The log response is an array of log line objects
+	logData, ok := resp.Data.([]interface{})
+	if !ok {
+		return nil, fmt.Errorf("unexpected task log response format")
+	}
+
+	var lines []string
+	for _, item := range logData {
+		logLine, ok := item.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		// Each log entry has "n" (line number) and "t" (text)
+		if text, ok := logLine["t"].(string); ok {
+			lines = append(lines, text)
+		}
+	}
+
+	return lines, nil
+}
+
+// ReadConfig reads configuration from environment variables or file
 func ReadConfig() (string, string, string, error) {
+	// Check environment variables first (for CI/CD scenarios)
+	envURL := os.Getenv("PROX_URL")
+	envUser := os.Getenv("PROX_USER")
+	envPass := os.Getenv("PROX_PASSWORD")
+
+	// If all environment variables are set, use them
+	if envURL != "" && envUser != "" && envPass != "" {
+		return envUser, envPass, envURL, nil
+	}
+
+	// Fall back to config file
 	return config.Read()
 }
 
-// CreateClient creates a new authenticated Proxmox client
-func CreateClient() (*ProxmoxClient, error) {
+// CreateClient creates a new authenticated Proxmox client with caching
+func CreateClient() (ProxmoxClientInterface, error) {
 	user, pass, url, err := ReadConfig()
 	if err != nil {
 		return nil, fmt.Errorf("failed to read config: %w", err)
 	}
 
+	// Create a cache key based on user and URL
+	cacheKey := fmt.Sprintf("%s@%s", user, url)
+
+	// Try to get cached client first (read lock)
+	clientCacheMutex.RLock()
+	if cachedClient != nil && cachedClientKey == cacheKey {
+		client := cachedClient
+		clientCacheMutex.RUnlock()
+		return client, nil
+	}
+	clientCacheMutex.RUnlock()
+
+	// Need to create new client (write lock)
+	clientCacheMutex.Lock()
+	defer clientCacheMutex.Unlock()
+
+	// Double-check after acquiring write lock
+	if cachedClient != nil && cachedClientKey == cacheKey {
+		return cachedClient, nil
+	}
+
+	// Create new client and cache it
 	client := NewClient(url, user, pass)
+	cachedClient = client
+	cachedClientKey = cacheKey
+
 	return client, nil
+}
+
+// ClearClientCache clears the cached client (useful for testing or config changes)
+func ClearClientCache() {
+	clientCacheMutex.Lock()
+	defer clientCacheMutex.Unlock()
+	cachedClient = nil
+	cachedClientKey = ""
+}
+
+// ClearClusterResourcesCache clears the cluster resources cache for this client
+func (c *ProxmoxClient) ClearClusterResourcesCache() {
+	c.cachedResourcesMutex.Lock()
+	defer c.cachedResourcesMutex.Unlock()
+	c.cachedResources = nil
+	c.cachedResourcesTime = time.Time{}
 }
 
 // GetVMNode finds which node a VM is running on
@@ -677,60 +828,81 @@ func (c *ProxmoxClient) GetVMNode(ctx context.Context, vmid int) (string, error)
 	return "", fmt.Errorf("VM %d not found in cluster", vmid)
 }
 
+// getCachedIP retrieves a cached IP address if it exists and hasn't expired
+func (c *ProxmoxClient) getCachedIP(node string, vmid int) (string, bool) {
+	cacheKey := fmt.Sprintf("%s:%d", node, vmid)
+
+	c.ipCacheMutex.RLock()
+	defer c.ipCacheMutex.RUnlock()
+
+	if entry, exists := c.ipCache[cacheKey]; exists {
+		// Check if cache entry is still valid
+		if time.Since(entry.timestamp).Seconds() < IPCacheTTL {
+			return entry.ip, true
+		}
+	}
+
+	return "", false
+}
+
+// setCachedIP stores an IP address in the cache with the current timestamp
+func (c *ProxmoxClient) setCachedIP(node string, vmid int, ip string) {
+	cacheKey := fmt.Sprintf("%s:%d", node, vmid)
+
+	c.ipCacheMutex.Lock()
+	defer c.ipCacheMutex.Unlock()
+
+	c.ipCache[cacheKey] = ipCacheEntry{
+		ip:        ip,
+		timestamp: time.Now(),
+	}
+}
+
 // GetVMIP gets the IP address of a VM using multiple methods
 func (c *ProxmoxClient) GetVMIP(ctx context.Context, node string, vmid int) (string, error) {
+	// Check cache first
+	if cachedIP, found := c.getCachedIP(node, vmid); found {
+		return cachedIP, nil
+	}
+
 	// Method 1: Try QEMU guest agent first (most reliable when available)
 	if ip := c.getVMIPFromGuestAgent(ctx, node, vmid); ip != "N/A" {
+		c.setCachedIP(node, vmid, ip)
 		return ip, nil
 	}
 
 	// Method 2: Try to get IP from VM network configuration
 	if ip := c.getVMIPFromConfig(ctx, node, vmid); ip != "N/A" {
+		c.setCachedIP(node, vmid, ip)
 		return ip, nil
 	}
 
 	// Method 3: Try to get IP from VM status/config
 	if ip := c.getVMIPFromStatus(ctx, node, vmid); ip != "N/A" {
+		c.setCachedIP(node, vmid, ip)
 		return ip, nil
 	}
 
 	// Method 4: Try to get IP from network interfaces
 	if ip := c.getVMIPFromInterfaces(ctx, node, vmid); ip != "N/A" {
+		c.setCachedIP(node, vmid, ip)
 		return ip, nil
 	}
 
 	// Method 5: Fallback - try getting IP from cluster resources or other sources
 	if ip := c.getVMIPFromClusterResources(ctx, vmid); ip != "N/A" {
+		c.setCachedIP(node, vmid, ip)
 		return ip, nil
 	}
 
+	// Cache "N/A" result to avoid repeated lookups for VMs without IPs
+	c.setCachedIP(node, vmid, "N/A")
 	return "N/A", nil
 }
 
-// getVMIPFromGuestAgent tries to get IP from QEMU guest agent
-func (c *ProxmoxClient) getVMIPFromGuestAgent(ctx context.Context, node string, vmid int) string {
-	path := fmt.Sprintf("/nodes/%s/qemu/%d/agent/network-get-interfaces", node, vmid)
-	body, err := c.makeRequest(ctx, "GET", path, nil)
-	if err != nil {
-		return "N/A"
-	}
-
-	var resp APIResponse
-	if err := json.Unmarshal(body, &resp); err != nil {
-		return "N/A"
-	}
-
-	result, ok := resp.Data.(map[string]interface{})
-	if !ok {
-		return "N/A"
-	}
-
-	interfaces, ok := result["result"].([]interface{})
-	if !ok {
-		return "N/A"
-	}
-
-	// Prioritize interfaces - look for eth0, ens3, etc. first
+// extractIPFromInterfaces extracts IP address from guest agent network interfaces
+// Prioritizes primary network interfaces (eth0, ens3, ens18, enp0s3) and filters loopback
+func extractIPFromInterfaces(interfaces []interface{}) string {
 	var primaryIP, anyIP string
 
 	for _, iface := range interfaces {
@@ -791,6 +963,32 @@ func (c *ProxmoxClient) getVMIPFromGuestAgent(ctx context.Context, node string, 
 	}
 
 	return "N/A"
+}
+
+// getVMIPFromGuestAgent tries to get IP from QEMU guest agent
+func (c *ProxmoxClient) getVMIPFromGuestAgent(ctx context.Context, node string, vmid int) string {
+	path := fmt.Sprintf("/nodes/%s/qemu/%d/agent/network-get-interfaces", node, vmid)
+	body, err := c.makeRequest(ctx, "GET", path, nil)
+	if err != nil {
+		return "N/A"
+	}
+
+	var resp APIResponse
+	if err := json.Unmarshal(body, &resp); err != nil {
+		return "N/A"
+	}
+
+	result, ok := resp.Data.(map[string]interface{})
+	if !ok {
+		return "N/A"
+	}
+
+	interfaces, ok := result["result"].([]interface{})
+	if !ok {
+		return "N/A"
+	}
+
+	return extractIPFromInterfaces(interfaces)
 }
 
 // getVMIPFromStatus tries to get IP from VM status
@@ -883,16 +1081,25 @@ func (c *ProxmoxClient) getVMIPFromClusterResources(ctx context.Context, vmid in
 
 // GetContainerIP gets the IP address of a container using multiple methods
 func (c *ProxmoxClient) GetContainerIP(ctx context.Context, node string, vmid int) (string, error) {
+	// Check cache first
+	if cachedIP, found := c.getCachedIP(node, vmid); found {
+		return cachedIP, nil
+	}
+
 	// Method 1: Try LXC guest agent first
 	if ip := c.getContainerIPFromGuestAgent(ctx, node, vmid); ip != "N/A" {
+		c.setCachedIP(node, vmid, ip)
 		return ip, nil
 	}
 
 	// Method 2: Try alternative methods
 	if ip, err := c.GetContainerIPAlternative(ctx, node, vmid); err == nil && ip != "N/A" {
+		c.setCachedIP(node, vmid, ip)
 		return ip, nil
 	}
 
+	// Cache "N/A" result to avoid repeated lookups
+	c.setCachedIP(node, vmid, "N/A")
 	return "N/A", nil
 }
 
@@ -919,72 +1126,17 @@ func (c *ProxmoxClient) getContainerIPFromGuestAgent(ctx context.Context, node s
 		return "N/A"
 	}
 
-	// Prioritize interfaces - look for eth0, ens3, etc. first
-	var primaryIP, anyIP string
-
-	for _, iface := range interfaces {
-		ifaceMap, ok := iface.(map[string]interface{})
-		if !ok {
-			continue
-		}
-
-		ifaceName, _ := ifaceMap["name"].(string)
-		ipAddresses, ok := ifaceMap["ip-addresses"].([]interface{})
-		if !ok {
-			continue
-		}
-
-		for _, ipData := range ipAddresses {
-			ipMap, ok := ipData.(map[string]interface{})
-			if !ok {
-				continue
-			}
-
-			ip, ok := ipMap["ip-address"].(string)
-			if !ok {
-				continue
-			}
-
-			ipType, ok := ipMap["ip-address-type"].(string)
-			if !ok || ipType != "ipv4" {
-				continue
-			}
-
-			// Skip loopback addresses
-			if ip == "127.0.0.1" || ip == "::1" {
-				continue
-			}
-
-			// Prioritize primary network interfaces
-			if ifaceName == "eth0" || ifaceName == "ens3" || ifaceName == "ens18" || ifaceName == "enp0s3" {
-				primaryIP = ip
-				break
-			}
-
-			// Keep any valid IP as fallback
-			if anyIP == "" {
-				anyIP = ip
-			}
-		}
-
-		if primaryIP != "" {
-			break
-		}
-	}
-
-	if primaryIP != "" {
-		return primaryIP
-	}
-	if anyIP != "" {
-		return anyIP
-	}
-
-	return "N/A"
+	return extractIPFromInterfaces(interfaces)
 }
 
 // GetContainerIPAlternative tries to get container IP from various sources
 func (c *ProxmoxClient) GetContainerIPAlternative(ctx context.Context, node string, vmid int) (string, error) {
 	// IMPORTANT: Do not call GetContainerIP here to avoid infinite recursion.
+
+	// Check cache first
+	if cachedIP, found := c.getCachedIP(node, vmid); found {
+		return cachedIP, nil
+	}
 
 	// Try to get IP from container status
 	status, err := c.GetContainerStatus(ctx, node, vmid)
@@ -995,6 +1147,7 @@ func (c *ProxmoxClient) GetContainerIPAlternative(ctx context.Context, node stri
 	// Check if there's IP information in the status
 	if ips, exists := status["ips"]; exists {
 		if ipStr, ok := ips.(string); ok && ipStr != "" {
+			c.setCachedIP(node, vmid, ipStr)
 			return ipStr, nil
 		}
 	}
@@ -1003,11 +1156,13 @@ func (c *ProxmoxClient) GetContainerIPAlternative(ctx context.Context, node stri
 	path := fmt.Sprintf("/nodes/%s/lxc/%d/interfaces", node, vmid)
 	body, err := c.makeRequest(ctx, "GET", path, nil)
 	if err != nil {
+		c.setCachedIP(node, vmid, "N/A")
 		return "N/A", nil
 	}
 
 	var resp APIResponse
 	if err := json.Unmarshal(body, &resp); err != nil {
+		c.setCachedIP(node, vmid, "N/A")
 		return "N/A", nil
 	}
 
@@ -1020,9 +1175,11 @@ func (c *ProxmoxClient) GetContainerIPAlternative(ctx context.Context, node stri
 						if strings.Contains(inetStr, "/") {
 							parts := strings.Split(inetStr, "/")
 							if len(parts) > 0 && parts[0] != "127.0.0.1" {
+								c.setCachedIP(node, vmid, parts[0])
 								return parts[0], nil
 							}
 						} else if inetStr != "127.0.0.1" {
+							c.setCachedIP(node, vmid, inetStr)
 							return inetStr, nil
 						}
 					}
@@ -1031,6 +1188,8 @@ func (c *ProxmoxClient) GetContainerIPAlternative(ctx context.Context, node stri
 		}
 	}
 
+	// Cache "N/A" result to avoid repeated lookups
+	c.setCachedIP(node, vmid, "N/A")
 	return "N/A", nil
 }
 
@@ -1285,6 +1444,9 @@ func (c *ProxmoxClient) GetVMDiskInfo(ctx context.Context, node string, vmid int
 	var totalSize uint64 = 0
 	var usedSize uint64 = 0
 
+	// Cache for storage content to avoid repeated API calls for the same storage
+	storageCache := make(map[string][]interface{})
+
 	// Check all possible disk types
 	diskKeys := []string{"ide0", "ide1", "ide2", "ide3", "sata0", "sata1", "sata2", "sata3", "scsi0", "scsi1", "scsi2", "scsi3", "virtio0", "virtio1", "virtio2", "virtio3", "efidisk0", "tpmstate0"}
 
@@ -1322,8 +1484,8 @@ func (c *ProxmoxClient) GetVMDiskInfo(ctx context.Context, node string, vmid int
 							volumeID = volumeID[:commaIndex]
 						}
 
-						// Try to get disk size from storage API
-						if storageSize, err := c.getStorageVolumeSize(ctx, node, storage, volumeID); err == nil {
+						// Try to get disk size from storage API (with caching)
+						if storageSize, err := c.getStorageVolumeSizeWithCache(ctx, node, storage, volumeID, storageCache); err == nil {
 							diskSize = storageSize
 						}
 					}
@@ -1403,6 +1565,59 @@ func (c *ProxmoxClient) getStorageVolumeSize(ctx context.Context, node, storage,
 								if sizeFloat, ok := size.(float64); ok {
 									return uint64(sizeFloat), nil
 								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	return 0, fmt.Errorf("volume not found in storage")
+}
+
+// getStorageVolumeSizeWithCache is like getStorageVolumeSize but uses a cache to avoid
+// repeated API calls for the same storage. This significantly improves performance when
+// a VM has multiple disks on the same storage.
+func (c *ProxmoxClient) getStorageVolumeSizeWithCache(ctx context.Context, node, storage, volumeID string, cache map[string][]interface{}) (uint64, error) {
+	cacheKey := fmt.Sprintf("%s:%s", node, storage)
+
+	// Check if we have cached content for this storage
+	contentList, cached := cache[cacheKey]
+
+	if !cached {
+		// Fetch storage content from API
+		path := fmt.Sprintf("/nodes/%s/storage/%s/content", node, storage)
+
+		body, err := c.makeRequest(ctx, "GET", path, nil)
+		if err != nil {
+			return 0, err
+		}
+
+		var resp APIResponse
+		if err := json.Unmarshal(body, &resp); err != nil {
+			return 0, err
+		}
+
+		if list, ok := resp.Data.([]interface{}); ok {
+			contentList = list
+			// Cache the content for future lookups
+			cache[cacheKey] = contentList
+		} else {
+			return 0, fmt.Errorf("unexpected storage content format")
+		}
+	}
+
+	// Search for the volume in the cached content
+	for _, content := range contentList {
+		if contentMap, ok := content.(map[string]interface{}); ok {
+			if volID, exists := contentMap["volid"]; exists {
+				if volIDStr, ok := volID.(string); ok {
+					// Match the volume ID - try exact match first, then partial match
+					if volIDStr == fmt.Sprintf("%s:%s", storage, volumeID) || strings.Contains(volIDStr, volumeID) {
+						if size, exists := contentMap["size"]; exists {
+							if sizeFloat, ok := size.(float64); ok {
+								return uint64(sizeFloat), nil
 							}
 						}
 					}

@@ -2,7 +2,10 @@
 BIN_DIR=./bin
 BINARY_NAME=prox
 VERSION?=$(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
-LDFLAGS=-ldflags "-X main.version=${VERSION}"
+COMMIT?=$(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+BUILD_DATE?=$(shell date -u '+%Y-%m-%d_%H:%M:%S')
+GO_VERSION?=$(shell go version | awk '{print $$3}')
+LDFLAGS=-ldflags "-X main.version=${VERSION} -X main.commit=${COMMIT} -X main.buildDate=${BUILD_DATE} -X main.goVersion=${GO_VERSION}"
 
 # Default target
 .DEFAULT_GOAL := help

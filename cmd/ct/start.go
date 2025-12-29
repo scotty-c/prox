@@ -4,7 +4,9 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/scotty-c/prox/pkg/completion"
 	"github.com/scotty-c/prox/pkg/container"
+	"github.com/scotty-c/prox/pkg/output"
 	"github.com/spf13/cobra"
 )
 
@@ -25,13 +27,14 @@ Examples:
 		}
 		return nil
 	},
+	ValidArgsFunction: completion.GetContainerNames,
 	Run: func(cmd *cobra.Command, args []string) {
 		nameOrID := args[0]
 
 		// Start the container
 		err := container.StartContainer(nameOrID)
 		if err != nil {
-			fmt.Printf("❌ Error starting container: %v\n", err)
+			output.UserError("starting container", err)
 			os.Exit(1)
 		}
 	},

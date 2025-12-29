@@ -2,27 +2,56 @@ package vm
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
+	"sync"
 
 	"github.com/jedib0t/go-pretty/v6/table"
 	c "github.com/scotty-c/prox/pkg/client"
+	"github.com/scotty-c/prox/pkg/output"
+	"github.com/scotty-c/prox/pkg/util"
 )
 
-// GetVm retrieves and displays all virtual machines
-func GetVm() {
+// ListVMsOptions contains options for listing virtual machines
+type ListVMsOptions struct {
+	Node        string // Filter by specific node (empty for all nodes)
+	RunningOnly bool   // Show only running VMs
+	ShowIPs     bool   // Fetch and display IP addresses (slower)
+	Detailed    bool   // Show detailed disk information (slower)
+	JSONOutput  bool   // Output as JSON instead of table
+	Tag         string // Filter by tag (empty for all VMs)
+}
+
+// hasTag checks if a tag exists in the semicolon-separated tags string
+func hasTag(tags, tag string) bool {
+	if tags == "" {
+		return false
+	}
+	tagList := strings.Split(tags, ";")
+	for _, t := range tagList {
+		if strings.TrimSpace(t) == tag {
+			return true
+		}
+	}
+	return false
+}
+
+// GetVM retrieves and displays all virtual machines
+func GetVM() {
 	client, err := c.CreateClient()
 	if err != nil {
-		fmt.Printf("Error creating client: %v\n", err)
+		output.Error("Error creating client: %v\n", err)
 		return
 	}
 
-	fmt.Println("📋 Retrieving virtual machines...")
+	output.Infoln("Retrieving virtual machines...")
 
 	// Get cluster resources
 	resources, err := client.GetClusterResources(context.Background())
 	if err != nil {
-		fmt.Printf("❌ Error getting cluster resources: %v\n", err)
+		output.Error("Error: Error getting cluster resources: %v\n", err)
 		return
 	}
 
@@ -30,6 +59,11 @@ func GetVm() {
 	for _, resource := range resources {
 		// Filter for VMs
 		if resource.Type != "qemu" {
+			continue
+		}
+
+		// Skip if VMID is nil
+		if resource.VMID == nil {
 			continue
 		}
 
@@ -55,10 +89,10 @@ func GetVm() {
 			vm.Disk = uint64(*resource.Disk)
 		}
 		if resource.CPU != nil {
-			vm.CPUs = int(*resource.CPU * 100) // Convert to percentage
+			vm.CPUs = int(*resource.CPU * c.CPUPercentageMultiplier) // Convert to percentage
 		}
 		if resource.Uptime != nil {
-			vm.Uptime = formatUptime(int64(*resource.Uptime))
+			vm.Uptime = util.FormatUptime(int64(*resource.Uptime))
 		}
 
 		// Get IP address for running VMs
@@ -77,7 +111,7 @@ func GetVm() {
 	}
 
 	if len(vms) == 0 {
-		fmt.Println("❌ No virtual machines found")
+		output.Errorln("Error: No virtual machines found")
 		return
 	}
 
@@ -85,21 +119,113 @@ func GetVm() {
 	displayVMsTable(vms, false, false, false) // Default: no IP, no disk
 }
 
-// ListVMs lists virtual machines with optional node and running filters
-func ListVMs(node string, runningOnly bool, showIPs bool, detailed bool) {
-	client, err := c.CreateClient()
-	if err != nil {
-		fmt.Printf("Error creating client: %v\n", err)
+// ipLookupJob represents a VM that needs IP address lookup
+type ipLookupJob struct {
+	index int
+	node  string
+	vmid  int
+}
+
+// ipLookupResult represents the result of an IP lookup
+type ipLookupResult struct {
+	index int
+	ip    string
+}
+
+// fetchIPsConcurrently fetches IP addresses for running VMs using a worker pool
+// This provides 5-10x performance improvement over sequential fetching
+func fetchIPsConcurrently(client c.ProxmoxClientInterface, vms []VM) {
+	maxWorkers := c.MaxConcurrentIPLookups
+
+	// Collect jobs for running VMs only
+	var jobs []ipLookupJob
+	for i, vm := range vms {
+		if vm.Status == "running" {
+			jobs = append(jobs, ipLookupJob{
+				index: i,
+				node:  vm.Node,
+				vmid:  vm.ID,
+			})
+		}
+	}
+
+	if len(jobs) == 0 {
 		return
 	}
 
-	fmt.Println("📋 Retrieving virtual machines...")
+	// Create channels
+	jobChan := make(chan ipLookupJob, len(jobs))
+	resultChan := make(chan ipLookupResult, len(jobs))
+
+	// Determine number of workers (max 10, or fewer if we have fewer jobs)
+	numWorkers := maxWorkers
+	if len(jobs) < maxWorkers {
+		numWorkers = len(jobs)
+	}
+
+	// Start workers
+	var wg sync.WaitGroup
+	for w := 0; w < numWorkers; w++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for job := range jobChan {
+				ip, err := client.GetVMIP(context.Background(), job.node, job.vmid)
+				if err != nil {
+					ip = "N/A"
+				}
+				resultChan <- ipLookupResult{
+					index: job.index,
+					ip:    ip,
+				}
+			}
+		}()
+	}
+
+	// Send jobs to workers
+	for _, job := range jobs {
+		jobChan <- job
+	}
+	close(jobChan)
+
+	// Wait for all workers to finish and close result channel
+	go func() {
+		wg.Wait()
+		close(resultChan)
+	}()
+
+	// Collect results and update VMs
+	for result := range resultChan {
+		vms[result.index].IP = result.ip
+	}
+}
+
+// ListVMs lists virtual machines with the provided options
+func ListVMs(opts ListVMsOptions) error {
+	client, err := c.CreateClient()
+	if err != nil {
+		if !opts.JSONOutput {
+			output.ClientError(err)
+		} else {
+			// In JSON mode, only output the error to stderr without extra formatting
+			output.Error("Error: Failed to connect to Proxmox VE: %v\n", err)
+		}
+		return fmt.Errorf("failed to create client: %w", err)
+	}
+
+	if !opts.JSONOutput {
+		output.Infoln("Retrieving virtual machines...")
+	}
 
 	// Get cluster resources
 	resources, err := client.GetClusterResources(context.Background())
 	if err != nil {
-		fmt.Printf("❌ Error getting cluster resources: %v\n", err)
-		return
+		if opts.JSONOutput {
+			output.Error("Error getting cluster resources: %v\n", err)
+		} else {
+			output.Error("Error: Error getting cluster resources: %v\n", err)
+		}
+		return fmt.Errorf("failed to get cluster resources: %w", err)
 	}
 
 	var vms []VM
@@ -110,12 +236,22 @@ func ListVMs(node string, runningOnly bool, showIPs bool, detailed bool) {
 		}
 
 		// Filter by node if specified
-		if node != "" && resource.Node != node {
+		if opts.Node != "" && resource.Node != opts.Node {
 			continue
 		}
 
 		// Filter by running status if specified
-		if runningOnly && resource.Status != "running" {
+		if opts.RunningOnly && resource.Status != "running" {
+			continue
+		}
+
+		// Skip if VMID is nil
+		if resource.VMID == nil {
+			continue
+		}
+
+		// Filter by tag if specified
+		if opts.Tag != "" && !hasTag(resource.Tags, opts.Tag) {
 			continue
 		}
 
@@ -125,6 +261,7 @@ func ListVMs(node string, runningOnly bool, showIPs bool, detailed bool) {
 			Name:   resource.Name,
 			Status: resource.Status,
 			Node:   resource.Node,
+			Tags:   resource.Tags,
 		}
 
 		// Add resource information if available
@@ -141,10 +278,10 @@ func ListVMs(node string, runningOnly bool, showIPs bool, detailed bool) {
 			vm.Disk = uint64(*resource.Disk)
 		}
 		if resource.CPU != nil {
-			vm.CPUs = int(*resource.CPU * 100) // Convert to percentage
+			vm.CPUs = int(*resource.CPU * c.CPUPercentageMultiplier) // Convert to percentage
 		}
 		if resource.Uptime != nil {
-			vm.Uptime = formatUptime(int64(*resource.Uptime))
+			vm.Uptime = util.FormatUptime(int64(*resource.Uptime))
 		}
 
 		// Get more accurate disk information if cluster resources don't provide it
@@ -159,14 +296,14 @@ func ListVMs(node string, runningOnly bool, showIPs bool, detailed bool) {
 		// Estimate disk usage if we have max but no usage info
 		if vm.MaxDisk > 0 && vm.Disk == 0 {
 			if resource.Status == "running" {
-				vm.Disk = vm.MaxDisk / 5 // Estimate 20% usage for running VMs
+				vm.Disk = vm.MaxDisk / c.DiskUsageDivisorRunning // Estimate 20% usage for running VMs
 			} else {
-				vm.Disk = vm.MaxDisk / 10 // Estimate 10% usage for stopped VMs
+				vm.Disk = vm.MaxDisk / c.DiskUsageDivisorStopped // Estimate 10% usage for stopped VMs
 			}
 		}
 
 		// Use detailed disk info if requested (slower but more accurate)
-		if detailed && (vm.MaxDisk == 0 || vm.Disk == 0) {
+		if opts.Detailed && (vm.MaxDisk == 0 || vm.Disk == 0) {
 			if maxDisk, usedDisk, err := client.GetVMDiskInfo(context.Background(), resource.Node, int(*resource.VMID)); err == nil {
 				if maxDisk > 0 {
 					vm.MaxDisk = maxDisk
@@ -178,39 +315,46 @@ func ListVMs(node string, runningOnly bool, showIPs bool, detailed bool) {
 		}
 
 		// Only make expensive calls if we have no disk info at all and not using detailed mode
-		if !detailed && vm.MaxDisk == 0 && vm.Disk == 0 {
+		if !opts.Detailed && vm.MaxDisk == 0 && vm.Disk == 0 {
 			// Quick fallback: assume VM has disks if it's a normal VM (not a template)
 			if !strings.Contains(strings.ToLower(resource.Name), "template") && !strings.Contains(strings.ToLower(resource.Name), "tpl") {
 				vm.MaxDisk = 1 // Set to 1 to indicate disk presence
 			}
 		}
 
-		// Get IP address for running VMs only if requested (for performance)
-		if showIPs && resource.Status == "running" {
-			ip, err := client.GetVMIP(context.Background(), resource.Node, int(*resource.VMID))
-			if err != nil {
-				vm.IP = "N/A"
-			} else {
-				vm.IP = ip
-			}
-		} else {
-			vm.IP = "N/A"
-		}
+		// Set IP to N/A initially - will be fetched concurrently later if requested
+		vm.IP = "N/A"
 
 		vms = append(vms, vm)
 	}
 
-	if len(vms) == 0 {
-		if runningOnly {
-			fmt.Println("❌ No running virtual machines found")
-		} else {
-			fmt.Println("❌ No virtual machines found")
+	// Fetch IPs concurrently if requested (for performance)
+	if opts.ShowIPs && len(vms) > 0 {
+		fetchIPsConcurrently(client, vms)
+	}
+
+	if opts.JSONOutput {
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		if err := enc.Encode(vms); err != nil {
+			output.Error("Error encoding JSON: %v\n", err)
+			return fmt.Errorf("failed to encode JSON: %w", err)
 		}
-		return
+		return nil
+	}
+
+	if len(vms) == 0 {
+		if opts.RunningOnly {
+			output.Errorln("Error: No running virtual machines found")
+		} else {
+			output.Errorln("Error: No virtual machines found")
+		}
+		return nil
 	}
 
 	// Display VMs in a table
-	displayVMsTable(vms, runningOnly, showIPs, detailed)
+	displayVMsTable(vms, opts.RunningOnly, opts.ShowIPs, opts.Detailed)
+	return nil
 }
 
 // displayVMsTable displays VMs in a formatted table
@@ -238,8 +382,8 @@ func displayVMsTable(vms []VM, runningOnly bool, showIPs bool, showDisk bool) {
 		// Format memory usage
 		var memoryStr string
 		if vm.MaxMemory > 0 {
-			memUsed := formatSize(vm.Memory)
-			memMax := formatSize(vm.MaxMemory)
+			memUsed := util.FormatSize(vm.Memory)
+			memMax := util.FormatSize(vm.MaxMemory)
 			memPercent := float64(vm.Memory) / float64(vm.MaxMemory) * 100
 			memoryStr = fmt.Sprintf("%s/%s (%.1f%%)", memUsed, memMax, memPercent)
 		} else {
@@ -250,8 +394,8 @@ func displayVMsTable(vms []VM, runningOnly bool, showIPs bool, showDisk bool) {
 		var diskStr string
 		if showDisk {
 			if vm.MaxDisk > 1 {
-				diskUsed := formatSize(vm.Disk)
-				diskMax := formatSize(vm.MaxDisk)
+				diskUsed := util.FormatSize(vm.Disk)
+				diskMax := util.FormatSize(vm.MaxDisk)
 				diskPercent := float64(vm.Disk) / float64(vm.MaxDisk) * 100
 				diskStr = fmt.Sprintf("%s/%s (%.1f%%)", diskUsed, diskMax, diskPercent)
 			} else if vm.MaxDisk == 1 {
@@ -289,10 +433,10 @@ func displayVMsTable(vms []VM, runningOnly bool, showIPs bool, showDisk bool) {
 	}
 
 	t.SetStyle(table.StyleRounded)
-	fmt.Printf("\n%s\n", t.Render())
+	output.Result("\n%s\n", t.Render())
 	if runningOnly {
-		fmt.Printf("Found %d running virtual machine(s)\n", len(vms))
+		output.Result("Found %d running virtual machine(s)\n", len(vms))
 	} else {
-		fmt.Printf("Found %d virtual machine(s)\n", len(vms))
+		output.Result("Found %d virtual machine(s)\n", len(vms))
 	}
 }

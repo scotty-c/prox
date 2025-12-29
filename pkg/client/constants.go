@@ -18,6 +18,27 @@ const (
 	MinCPUCores = 1
 	MaxCPUCores = 128
 
+	// CPU percentage conversion
+	CPUPercentageMultiplier = 100
+
+	// Disk usage estimation divisors
+	DiskUsageDivisorRunning = 5  // Estimate 20% usage (1/5) for running VMs
+	DiskUsageDivisorStopped = 10 // Estimate 10% usage (1/10) for stopped VMs
+
+	// Task polling
+	TaskPollIntervalSeconds = 2 // Interval for polling task status
+
+	// Worker pool
+	MaxConcurrentIPLookups = 10 // Maximum concurrent IP lookup workers
+
+	// Caching
+	ClusterResourcesCacheTTL = 10 // Time-to-live for cluster resources cache (seconds)
+	IPCacheTTL               = 60 // Time-to-live for IP address cache (seconds)
+
+	// Proxmox API boolean values
+	ProxmoxBoolTrue  = 1
+	ProxmoxBoolFalse = 0
+
 	// VM name constraints
 	MaxVMNameLength = 15
 

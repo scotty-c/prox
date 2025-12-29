@@ -7,44 +7,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/briandowns/spinner"
 	c "github.com/scotty-c/prox/pkg/client"
+	"github.com/scotty-c/prox/pkg/util"
 )
-
-// formatSize formats size in bytes to human readable format
-func formatSize(sizeBytes uint64) string {
-	const unit = 1024
-	if sizeBytes < unit {
-		return fmt.Sprintf("%d B", sizeBytes)
-	}
-	div, exp := uint64(unit), 0
-	for n := sizeBytes / unit; n >= unit; n /= unit {
-		div *= unit
-		exp++
-	}
-	return fmt.Sprintf("%.1f %cB", float64(sizeBytes)/float64(div), "KMGTPE"[exp])
-}
-
-// formatUptime formats uptime in seconds to human readable format
-func formatUptime(uptimeSeconds int64) string {
-	if uptimeSeconds <= 0 {
-		return "0s"
-	}
-
-	days := uptimeSeconds / 86400
-	hours := (uptimeSeconds % 86400) / 3600
-	minutes := (uptimeSeconds % 3600) / 60
-	seconds := uptimeSeconds % 60
-
-	if days > 0 {
-		return fmt.Sprintf("%dd %dh %dm", days, hours, minutes)
-	} else if hours > 0 {
-		return fmt.Sprintf("%dh %dm %ds", hours, minutes, seconds)
-	} else if minutes > 0 {
-		return fmt.Sprintf("%dm %ds", minutes, seconds)
-	} else {
-		return fmt.Sprintf("%ds", seconds)
-	}
-}
 
 // parseTemplateDescription extracts a readable description from template name
 func parseTemplateDescription(volID string) string {
@@ -91,7 +57,7 @@ func parseTemplateVersion(volID string) string {
 }
 
 // getClusterNodes gets all nodes in the cluster
-func getClusterNodes(client *c.ProxmoxClient) ([]string, error) {
+func getClusterNodes(client c.ProxmoxClientInterface) ([]string, error) {
 	resources, err := client.GetClusterResources(context.Background())
 	if err != nil {
 		return nil, err
@@ -128,9 +94,18 @@ func autoDetectNode(client *c.ProxmoxClient) (string, error) {
 }
 
 // waitForTask waits for a Proxmox task to complete
-func waitForTask(client *c.ProxmoxClient, node, taskID string) error {
+func waitForTask(ctx context.Context, client c.ProxmoxClientInterface, node, taskID string) error {
+	s := spinner.New(spinner.CharSets[14], 100*time.Millisecond)
+	s.Suffix = " Processing..."
+	s.Start()
+	defer s.Stop()
+
+	// Exponential backoff configuration
+	backoff := 500 * time.Millisecond // Start at 500ms
+	maxBackoff := 5 * time.Second     // Cap at 5s
+
 	for {
-		task, err := client.GetTaskStatus(context.Background(), node, taskID)
+		task, err := client.GetTaskStatus(ctx, node, taskID)
 		if err != nil {
 			return fmt.Errorf("failed to get task status: %w", err)
 		}
@@ -142,15 +117,24 @@ func waitForTask(client *c.ProxmoxClient, node, taskID string) error {
 			return fmt.Errorf("task failed with exit code: %s", task.ExitCode)
 		}
 
-		// Wait a bit before checking again
-		time.Sleep(2 * time.Second)
+		// Wait with exponential backoff before checking again
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(backoff):
+			// Double the backoff for next iteration, cap at maxBackoff
+			backoff = backoff * 2
+			if backoff > maxBackoff {
+				backoff = maxBackoff
+			}
+		}
 	}
 }
 
-// findContainer finds a container by name or ID
-func findContainer(client *c.ProxmoxClient, nameOrID string) (*Container, error) {
+// FindByNameOrID finds a container by name or ID
+func FindByNameOrID(ctx context.Context, client c.ProxmoxClientInterface, nameOrID string) (*Container, error) {
 	// Get cluster resources
-	resources, err := client.GetClusterResources(context.Background())
+	resources, err := client.GetClusterResources(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get cluster resources: %w", err)
 	}
@@ -170,19 +154,41 @@ func findContainer(client *c.ProxmoxClient, nameOrID string) (*Container, error)
 		}
 	}
 
-	// Search by name
+	// Search by name and collect all container names for suggestions
+	var allContainerNames []string
 	for _, resource := range resources {
-		if resource.Type == "lxc" && resource.Name == nameOrID {
-			return &Container{
-				ID:     int(*resource.VMID),
-				Name:   resource.Name,
-				Status: resource.Status,
-				Node:   resource.Node,
-			}, nil
+		if resource.Type == "lxc" {
+			if resource.Name == nameOrID {
+				return &Container{
+					ID:     int(*resource.VMID),
+					Name:   resource.Name,
+					Status: resource.Status,
+					Node:   resource.Node,
+				}, nil
+			}
+			// Collect container names for fuzzy matching
+			if resource.Name != "" {
+				allContainerNames = append(allContainerNames, resource.Name)
+			}
 		}
 	}
 
-	return nil, fmt.Errorf("container '%s' not found", nameOrID)
+	// Container not found - provide helpful suggestions
+	errorMsg := fmt.Sprintf("container '%s' not found", nameOrID)
+
+	// Find similar names using fuzzy matching
+	suggestions := util.FindSimilarStrings(nameOrID, allContainerNames, 3)
+	if len(suggestions) > 0 {
+		errorMsg += "\n\nDid you mean one of these?"
+		for _, suggestion := range suggestions {
+			errorMsg += fmt.Sprintf("\n  • %s", suggestion)
+		}
+		errorMsg += "\n\nRun 'prox ct list' to see all available containers"
+	} else if len(allContainerNames) > 0 {
+		errorMsg += "\n\nRun 'prox ct list' to see all available containers"
+	}
+
+	return nil, fmt.Errorf(errorMsg)
 }
 
 // ValidateSSHKeys validates SSH public keys format and returns the number of valid keys

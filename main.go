@@ -10,6 +10,15 @@ import (
 	_ "github.com/scotty-c/prox/cmd/vm"
 )
 
+// Build-time variables injected via ldflags
+var (
+	version   = "dev"
+	commit    = "unknown"
+	buildDate = "unknown"
+	goVersion = "unknown"
+)
+
 func main() {
+	cmd.SetVersionInfo(version, commit, buildDate, goVersion)
 	cmd.Execute()
 }

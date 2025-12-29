@@ -1,3 +1,5 @@
+// Package node provides functionality for managing Proxmox VE nodes, including
+// querying node information, formatting node data for display, and node-level operations.
 package node
 
 import (

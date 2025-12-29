@@ -16,8 +16,9 @@ import (
 )
 
 var sshCmd = &cobra.Command{
-	Use:   "ssh [VM_OR_CONTAINER_NAME_OR_ID]",
-	Short: "Setup SSH configuration for a VM or container",
+	Use:     "ssh [VM_OR_CONTAINER_NAME_OR_ID]",
+	GroupID: "utilities",
+	Short:   "Setup SSH configuration for a VM or container",
 	Long: `Lookup the IP address of a VM or container and setup SSH configuration.
 
 This command will:
@@ -78,6 +79,8 @@ func init() {
 }
 
 func setupSSHConfig(nameOrID, username string, port int, keyPath string, dryRun bool) error {
+	ctx := context.Background()
+
 	// Validate input
 	if nameOrID == "" {
 		return fmt.Errorf("VM or container name/ID cannot be empty")
@@ -97,7 +100,7 @@ func setupSSHConfig(nameOrID, username string, port int, keyPath string, dryRun 
 	var ip, resourceName, resourceType, node string
 	var resourceID int
 
-	vm, vmErr := findVMByNameOrID(client, nameOrID)
+	vm, vmErr := vm.FindByNameOrID(ctx, client, nameOrID)
 	if vmErr == nil {
 		// Found as VM
 		resourceType = "VM"
@@ -105,16 +108,16 @@ func setupSSHConfig(nameOrID, username string, port int, keyPath string, dryRun 
 		resourceID = vm.ID
 		node = vm.Node
 
-		fmt.Printf("🔍 Found %s: %s (ID: %d) on node %s\n", resourceType, resourceName, resourceID, node)
+		fmt.Printf("Found %s: %s (ID: %d) on node %s\n", resourceType, resourceName, resourceID, node)
 
 		// Get VM IP
-		ip, err = client.GetVMIP(context.Background(), node, resourceID)
+		ip, err = client.GetVMIP(ctx, node, resourceID)
 		if err != nil {
 			return fmt.Errorf("failed to get VM IP: %w", err)
 		}
 	} else {
 		// Try as container
-		container, ctErr := findContainerByNameOrID(client, nameOrID)
+		container, ctErr := container.FindByNameOrID(ctx, client, nameOrID)
 		if ctErr != nil {
 			return fmt.Errorf("resource '%s' not found as VM or container. VM error: %v, Container error: %v", nameOrID, vmErr, ctErr)
 		}
@@ -124,10 +127,10 @@ func setupSSHConfig(nameOrID, username string, port int, keyPath string, dryRun 
 		resourceID = container.ID
 		node = container.Node
 
-		fmt.Printf("🔍 Found %s: %s (ID: %d) on node %s\n", resourceType, resourceName, resourceID, node)
+		fmt.Printf("Found %s: %s (ID: %d) on node %s\n", resourceType, resourceName, resourceID, node)
 
 		// Get Container IP
-		ip, err = client.GetContainerIP(context.Background(), node, resourceID)
+		ip, err = client.GetContainerIP(ctx, node, resourceID)
 		if err != nil {
 			return fmt.Errorf("failed to get container IP: %w", err)
 		}
@@ -163,7 +166,7 @@ func setupSSHConfig(nameOrID, username string, port int, keyPath string, dryRun 
 	hostAlias := resourceName
 	sshConfigEntry := generateSSHConfigEntry(hostAlias, ip, username, port, keyPath)
 
-	fmt.Printf("📍 IP Address: %s\n", ip)
+	fmt.Printf("IP Address: %s\n", ip)
 	fmt.Printf("👤 SSH Username: %s\n", username)
 	fmt.Printf("🚪 SSH Port: %d\n", port)
 	if keyPath != "" {
@@ -171,8 +174,8 @@ func setupSSHConfig(nameOrID, username string, port int, keyPath string, dryRun 
 	}
 
 	if dryRun {
-		fmt.Printf("\n📋 SSH config entry that would be added:\n\n%s\n", sshConfigEntry)
-		fmt.Printf("💡 To apply these changes, run the command without --dry-run\n")
+		fmt.Printf("\nSSH config entry that would be added:\n\n%s\n", sshConfigEntry)
+		fmt.Printf("Tip: To apply these changes, run the command without --dry-run\n")
 		return nil
 	}
 
@@ -182,84 +185,10 @@ func setupSSHConfig(nameOrID, username string, port int, keyPath string, dryRun 
 		return fmt.Errorf("failed to update SSH config: %w", err)
 	}
 
-	fmt.Printf("\n✅ SSH configuration updated successfully!\n")
-	fmt.Printf("💡 You can now connect with: ssh %s\n", hostAlias)
+	fmt.Printf("\nSSH configuration updated successfully!\n")
+	fmt.Printf("Tip: You can now connect with: ssh %s\n", hostAlias)
 
 	return nil
-}
-
-func findVMByNameOrID(client *client.ProxmoxClient, nameOrID string) (*vm.VM, error) {
-	// Get cluster resources
-	resources, err := client.GetClusterResources(context.Background())
-	if err != nil {
-		return nil, fmt.Errorf("failed to get cluster resources: %w", err)
-	}
-
-	// Try to parse as ID first
-	if vmid, err := strconv.Atoi(nameOrID); err == nil {
-		// Search by ID
-		for _, resource := range resources {
-			if resource.Type == "qemu" && resource.VMID != nil && *resource.VMID == vmid {
-				return &vm.VM{
-					ID:     int(*resource.VMID),
-					Name:   resource.Name,
-					Status: resource.Status,
-					Node:   resource.Node,
-				}, nil
-			}
-		}
-	}
-
-	// Search by name
-	for _, resource := range resources {
-		if resource.Type == "qemu" && resource.Name == nameOrID {
-			return &vm.VM{
-				ID:     int(*resource.VMID),
-				Name:   resource.Name,
-				Status: resource.Status,
-				Node:   resource.Node,
-			}, nil
-		}
-	}
-
-	return nil, fmt.Errorf("VM '%s' not found", nameOrID)
-}
-
-func findContainerByNameOrID(client *client.ProxmoxClient, nameOrID string) (*container.Container, error) {
-	// Get cluster resources
-	resources, err := client.GetClusterResources(context.Background())
-	if err != nil {
-		return nil, fmt.Errorf("failed to get cluster resources: %w", err)
-	}
-
-	// Try to parse as ID first
-	if vmid, err := strconv.Atoi(nameOrID); err == nil {
-		// Search by ID
-		for _, resource := range resources {
-			if resource.Type == "lxc" && resource.VMID != nil && *resource.VMID == vmid {
-				return &container.Container{
-					ID:     int(*resource.VMID),
-					Name:   resource.Name,
-					Status: resource.Status,
-					Node:   resource.Node,
-				}, nil
-			}
-		}
-	}
-
-	// Search by name
-	for _, resource := range resources {
-		if resource.Type == "lxc" && resource.Name == nameOrID {
-			return &container.Container{
-				ID:     int(*resource.VMID),
-				Name:   resource.Name,
-				Status: resource.Status,
-				Node:   resource.Node,
-			}, nil
-		}
-	}
-
-	return nil, fmt.Errorf("container '%s' not found", nameOrID)
 }
 
 func isValidIP(ip string) bool {
@@ -357,6 +286,8 @@ func addToSSHConfig(hostAlias, configEntry string) error {
 }
 
 func deleteSSHConfigEntry(nameOrID string, dryRun bool) error {
+	ctx := context.Background()
+
 	if nameOrID == "" {
 		return fmt.Errorf("VM or container name/ID cannot be empty")
 	}
@@ -365,19 +296,19 @@ func deleteSSHConfigEntry(nameOrID string, dryRun bool) error {
 	alias := nameOrID
 	var resolved bool
 	if cl, err := client.CreateClient(); err == nil {
-		if vmObj, vmErr := findVMByNameOrID(cl, nameOrID); vmErr == nil {
+		if vmObj, vmErr := vm.FindByNameOrID(ctx, cl, nameOrID); vmErr == nil {
 			alias = vmObj.Name
 			resolved = true
-		} else if ctObj, ctErr := findContainerByNameOrID(cl, nameOrID); ctErr == nil {
+		} else if ctObj, ctErr := container.FindByNameOrID(ctx, cl, nameOrID); ctErr == nil {
 			alias = ctObj.Name
 			resolved = true
 		}
 	}
 
 	if resolved {
-		fmt.Printf("🔍 Resolved resource to host alias '%s'\n", alias)
+		fmt.Printf("Resolved resource to host alias '%s'\n", alias)
 	} else {
-		fmt.Printf("ℹ️  Treating '%s' as host alias (resource not resolved)\n", alias)
+		fmt.Printf("Note: Treating '%s' as host alias (resource not resolved)\n", alias)
 	}
 
 	removed, block, err := removeFromSSHConfig(alias, dryRun)
@@ -395,9 +326,9 @@ func deleteSSHConfigEntry(nameOrID string, dryRun bool) error {
 	}
 
 	if removed {
-		fmt.Printf("✅ Removed SSH config entry for host '%s'\n", alias)
+		fmt.Printf("Removed SSH config entry for host '%s'\n", alias)
 	} else {
-		fmt.Printf("⚠️  No SSH config entry found for host '%s'\n", alias)
+		fmt.Printf("WARNING: No SSH config entry found for host '%s'\n", alias)
 	}
 	return nil
 }
@@ -489,7 +420,7 @@ func listSSHConfigEntries() error {
 	configPath := filepath.Join(sshDir, "config")
 
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
-		fmt.Println("ℹ️  No SSH config file found (~/.ssh/config)")
+		fmt.Println("Note: No SSH config file found (~/.ssh/config)")
 		return nil
 	}
 
@@ -546,7 +477,7 @@ func listSSHConfigEntries() error {
 	flush()
 
 	if len(entries) == 0 {
-		fmt.Println("ℹ️  No host entries found in SSH config")
+		fmt.Println("Note: No host entries found in SSH config")
 		return nil
 	}
 

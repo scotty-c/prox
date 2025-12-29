@@ -5,7 +5,9 @@ Simple CLI for Proxmox VE. Focus on: zero required --node flags (auto discovery)
 ## Contents
 - [Why Prox?](#why-prox)
 - [Install](#install)
+- [Shell Completion](#shell-completion)
 - [Quick Start](#quick-start)
+- [Performance & User Experience](#performance--user-experience)
 - [Core Commands](#core-commands)
 - [Flags Cheat Sheet](#flags-cheat-sheet)
 - [Security](#security)
@@ -22,8 +24,11 @@ Key capabilities:
 - Container (LXC): create (template shortcuts + SSH key injection), list, start/stop, describe
 - Rich describe output: IP discovery (guest agent / DHCP / static), disks, resources, uptime
 - Secure encrypted credential storage (AES‑256, automatic legacy migration)
+- Multiple configuration profiles (homelab, production, etc.) with easy switching
 - SSH key validation (file or stdin, multi‑key, type checks)
-- Clear progress + helpful errors
+- **Smart UX**: fuzzy matching suggestions ("Did you mean?"), context-aware error messages, real-time progress spinners
+- **Shell completion**: dynamic VM/container name completion for all commands (bash/zsh/fish/powershell)
+- **Performance**: parallel API calls, intelligent caching (IP addresses, storage volumes), concurrent operations
 - Modular Go codebase (easy to extend) + Makefile automation
 
 ## Install
@@ -41,14 +46,69 @@ prox --help
 ```
 Docker / compose usage: see DOCKER.md.
 
-## Quick Start
-Configure (stored encrypted):
+## Shell Completion
+Enable tab completion for your shell (bash, zsh, fish, or powershell). Prox provides **dynamic completion** that queries your Proxmox cluster in real-time, offering VM and container names/IDs as you type.
+
+**Bash:**
 ```bash
+# Linux:
+prox completion bash | sudo tee /etc/bash_completion.d/prox
+
+# macOS:
+prox completion bash > /usr/local/etc/bash_completion.d/prox
+```
+
+**Zsh:**
+```bash
+# Add to ~/.zshrc:
+source <(prox completion zsh)
+
+# Or generate to completion directory:
+prox completion zsh > "${fpath[1]}/_prox"
+```
+
+**Fish:**
+```bash
+prox completion fish | source
+
+# Or persist it:
+prox completion fish > ~/.config/fish/completions/prox.fish
+```
+
+**PowerShell:**
+```powershell
+prox completion powershell | Out-String | Invoke-Expression
+
+# Or add to your profile:
+prox completion powershell >> $PROFILE
+```
+
+After setup, restart your shell or source the completion file. You'll then have tab completion for all commands, flags, and arguments.
+
+**Example usage:**
+```bash
+prox vm start <TAB>          # Shows all VM names and IDs
+prox ct describe web<TAB>    # Completes container names starting with "web"
+prox vm migrate myv<TAB>     # Completes VM names starting with "myv"
+```
+
+## Quick Start
+Configure (stored encrypted with profile support):
+```bash
+# Set up the default profile
 prox config setup -u admin@pam -p secret -l https://proxmox.example.com:8006
+
+# Or create multiple profiles for different environments
+prox config create homelab -u admin@pam -p secret -l https://homelab:8006
+prox config create production -u admin@pam -p secret -l https://prod:8006 --use
+prox config list                    # List all profiles
+prox config use homelab             # Switch to homelab profile
+prox --profile production vm list   # Use specific profile for one command
 ```
 VM workflow:
 ```bash
 prox vm list
+prox vm list --tag production # Filter VMs by tag
 prox vm start 100
 prox vm describe 100          # shows IPs, disks, resources
 prox ssh 100                  # Add/update SSH config entry for VM 100
@@ -62,6 +122,7 @@ prox vm delete 101
 Container workflow:
 ```bash
 prox ct templates
+prox ct list --tag database   # Filter containers by tag
 # create: prox ct create <name> <template>
 prox ct create web ubuntu:22.04 --ssh-keys-file ~/.ssh/id_rsa.pub --memory 1024 --disk 10
 prox ct start web
@@ -92,14 +153,50 @@ Pro tips:
 - Use `prox ssh <resource> --dry-run` to preview SSH config changes
 - Use `prox ssh --list` to view current managed entries
 - Use `prox ssh <resource> --delete [--dry-run]` to remove an entry safely
+- **Typo correction**: If you mistype a VM/container name, Prox suggests similar names:
+  ```bash
+  $ prox vm start web-servr
+  Error: VM 'web-servr' not found
+
+  Did you mean one of these?
+    • web-server
+    • web-server-backup
+    • api-server
+
+  Run 'prox vm list' to see all available virtual machines
+  ```
+
+## Performance & User Experience
+
+**Intelligent Error Handling:**
+- **Context-aware errors**: Get specific guidance based on the operation and error type
+- **Fuzzy matching**: Typos suggest similar resource names (Levenshtein distance algorithm)
+- **Helpful tips**: Permission errors, resource not found, and other common issues include actionable next steps
+
+**Performance Optimizations:**
+- **Parallel operations**: VM/container describe operations run config and status fetches concurrently (5-10x faster)
+- **IP address caching**: 60-second cache reduces redundant DHCP lease lookups in list operations
+- **Storage volume caching**: Per-call scoped cache eliminates duplicate API requests during template resolution
+- **Concurrent workers**: Container IP fetching uses a pool of 10 workers for batch operations
+
+**Real-time Feedback:**
+- **Progress spinners**: All async operations (create, clone, migrate, start, stop, delete) show visual progress
+- **Exponential backoff**: Task polling starts at 500ms, caps at 5s for efficient resource usage
+- **Clean output**: No redundant messages, clear success/failure indicators
+
+These improvements make Prox fast, forgiving, and informative—whether you're managing a homelab or production cluster.
 
 ## Core Commands
-Config:
+Config (with profile support):
 ```bash
-prox config setup -u user -p pass -l https://host:8006
-prox config read     # masked
-prox config update
-prox config delete
+prox config setup -u user -p pass -l https://host:8006  # Set up default profile
+prox config create <profile> -u user -p pass -l https://host:8006  # Create a new profile
+prox config list                                         # List all profiles
+prox config use <profile>                                # Switch to a different profile
+prox config read                                         # Read current profile (masked)
+prox config update                                       # Update current profile
+prox config delete                                       # Delete current profile
+prox --profile <name> [command]                          # Use specific profile for one command
 ```
 VMs:
 ```bash
@@ -162,8 +259,8 @@ Containers (ct)
 		- prox ct create ci debian:12 --vmid 9002 --cores 2
 
 - list
-	- Flags: -n, --node <node>; -r, --running (only running)
-	- Example: prox ct list --running
+	- Flags: -n, --node <node>; -r, --running (only running); -t, --tag <tag> (filter by tag)
+	- Example: prox ct list --running --tag production
 
 - describe <name|id>
 	- Flags: none
@@ -179,7 +276,7 @@ Containers (ct)
 
 VMs (vm)
 - list
-	- Flags: -n, --node <node>; -r, --running; -i, --ip (show IPs); -d, --detailed (disk info)
+	- Flags: -n, --node <node>; -r, --running; -i, --ip (show IPs); -d, --detailed (disk info); -t, --tag <tag> (filter by tag)
 
 - describe <id|name>
 	- Flags: -n, --node <node> (optional)
@@ -249,8 +346,9 @@ Tip: run any command with --help for full details.
 
 ## Security
 - AES‑256 encryption for stored credentials (system/user bound)
-- Plaintext legacy configs auto‑migrated
-- Secure file perms (600)
+- Plaintext legacy configs auto‑migrated to profile system
+- Profiles stored in `~/.prox/profiles/` with secure file perms (600)
+- Automatic migration from old single-config format to profiles
 - See SECURITY.md for encryption details & migration command
 ```bash
 prox config migrate   # migrate legacy plaintext if present

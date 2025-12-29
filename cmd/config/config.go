@@ -10,9 +10,10 @@ import (
 
 // configCmd represents the config command
 var configCmd = &cobra.Command{
-	Use:   "config",
-	Short: "Set up, read, and delete the configuration file for prox",
-	Long:  ``,
+	Use:     "config",
+	GroupID: "core",
+	Short:   "Set up, read, and delete the configuration file for prox",
+	Long:    ``,
 	Run: func(cmd *cobra.Command, args []string) {
 		cmd.Help()
 	},

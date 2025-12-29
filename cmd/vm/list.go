@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	"os"
+
 	v "github.com/scotty-c/prox/pkg/vm"
 	"github.com/spf13/cobra"
 )
@@ -20,7 +22,18 @@ and --detailed to get accurate disk usage information (both options are slower).
 		running, _ := cmd.Flags().GetBool("running")
 		showIPs, _ := cmd.Flags().GetBool("ip")
 		detailed, _ := cmd.Flags().GetBool("detailed")
-		v.ListVMs(node, running, showIPs, detailed)
+		jsonOutput, _ := cmd.Flags().GetBool("json")
+		tag, _ := cmd.Flags().GetString("tag")
+		if err := v.ListVMs(v.ListVMsOptions{
+			Node:        node,
+			RunningOnly: running,
+			ShowIPs:     showIPs,
+			Detailed:    detailed,
+			JSONOutput:  jsonOutput,
+			Tag:         tag,
+		}); err != nil {
+			os.Exit(1)
+		}
 	},
 }
 
@@ -29,5 +42,7 @@ func init() {
 	listCmd.Flags().BoolP("running", "r", false, "Show only running VMs")
 	listCmd.Flags().BoolP("ip", "i", false, "Show IP addresses (slower, requires additional API calls)")
 	listCmd.Flags().BoolP("detailed", "d", false, "Show detailed disk information (slower, requires additional API calls)")
+	listCmd.Flags().Bool("json", false, "Output as JSON")
+	listCmd.Flags().StringP("tag", "t", "", "Filter by tag (e.g., 'production', 'webserver')")
 	vmCmd.AddCommand(listCmd)
 }

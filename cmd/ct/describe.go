@@ -4,7 +4,9 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/scotty-c/prox/pkg/completion"
 	"github.com/scotty-c/prox/pkg/container"
+	"github.com/scotty-c/prox/pkg/output"
 	"github.com/spf13/cobra"
 )
 
@@ -18,7 +20,7 @@ resource usage, network settings, and runtime status.
 
 Examples:
   prox ct describe mycontainer
-  prox ct describe 100
+  prox ct describe 100 --json
   prox container desc webapp
   prox lxc info 101`,
 	Args: func(cmd *cobra.Command, args []string) error {
@@ -27,18 +29,34 @@ Examples:
 		}
 		return nil
 	},
+	ValidArgsFunction: completion.GetContainerNames,
 	Run: func(cmd *cobra.Command, args []string) {
 		nameOrID := args[0]
+
+		jsonOutput, _ := cmd.Flags().GetBool("json")
+		if jsonOutput {
+			details, err := container.GetContainerDetails(nameOrID)
+			if err != nil {
+				output.UserError("getting container details", err)
+				os.Exit(1)
+			}
+			if err := output.OutputJSON(details); err != nil {
+				output.UserError("outputting JSON", err)
+				os.Exit(1)
+			}
+			return
+		}
 
 		// Describe the container
 		err := container.DescribeContainer(nameOrID)
 		if err != nil {
-			fmt.Printf("❌ Error describing container: %v\n", err)
+			output.UserError("describing container", err)
 			os.Exit(1)
 		}
 	},
 }
 
 func init() {
+	describeCmd.Flags().Bool("json", false, "Output in JSON format")
 	ctCmd.AddCommand(describeCmd)
 }

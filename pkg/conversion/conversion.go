@@ -1,3 +1,5 @@
+// Package conversion provides utility functions for converting between different units
+// and data representations used in Proxmox VE operations, such as byte-to-megabyte conversions.
 package conversion
 
 func ConvertBytesToMB(bytes uint64) float64 {

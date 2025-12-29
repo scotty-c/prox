@@ -7,17 +7,19 @@ import (
 
 	"github.com/jedib0t/go-pretty/v6/table"
 	c "github.com/scotty-c/prox/pkg/client"
+	"github.com/scotty-c/prox/pkg/output"
+	"github.com/scotty-c/prox/pkg/util"
 )
 
 // ListTemplates lists all available container templates
 func ListTemplates(node string) {
 	client, err := c.CreateClient()
 	if err != nil {
-		fmt.Printf("Error creating client: %v\n", err)
+		output.Error("Error creating client: %v\n", err)
 		return
 	}
 
-	fmt.Println("📋 Retrieving container templates...")
+	output.Infoln("Retrieving container templates...")
 
 	// Get all nodes if no specific node is provided
 	nodes := []string{}
@@ -27,7 +29,7 @@ func ListTemplates(node string) {
 		// Get all nodes in the cluster
 		clusterNodes, err := getClusterNodes(client)
 		if err != nil {
-			fmt.Printf("❌ Error getting cluster nodes: %v\n", err)
+			output.Error("Error: Error getting cluster nodes: %v\n", err)
 			return
 		}
 		nodes = clusterNodes
@@ -37,14 +39,14 @@ func ListTemplates(node string) {
 	for _, nodeName := range nodes {
 		templates, err := getNodeTemplates(client, nodeName)
 		if err != nil {
-			fmt.Printf("⚠️  Warning: Could not get templates from node %s: %v\n", nodeName, err)
+			output.Error("WARNING: Warning: Could not get templates from node %s: %v\n", nodeName, err)
 			continue
 		}
 		allTemplates = append(allTemplates, templates...)
 	}
 
 	if len(allTemplates) == 0 {
-		fmt.Println("❌ No container templates found")
+		output.Errorln("Error: No container templates found")
 		return
 	}
 
@@ -53,7 +55,7 @@ func ListTemplates(node string) {
 }
 
 // getNodeTemplates gets templates from a specific node
-func getNodeTemplates(client *c.ProxmoxClient, node string) ([]Template, error) {
+func getNodeTemplates(client c.ProxmoxClientInterface, node string) ([]Template, error) {
 	templates, err := client.GetContainerTemplates(context.Background(), node)
 	if err != nil {
 		return nil, err
@@ -67,7 +69,7 @@ func getNodeTemplates(client *c.ProxmoxClient, node string) ([]Template, error) 
 			Description: parseTemplateDescription(template.VolID),
 			OS:          parseTemplateOS(template.VolID),
 			Version:     parseTemplateVersion(template.VolID),
-			Size:        formatSize(template.Size),
+			Size:        util.FormatSize(template.Size),
 			Node:        node,
 		}
 		result = append(result, tmpl)
@@ -93,61 +95,30 @@ func displayTemplatesTable(templates []Template) {
 	}
 
 	t.SetStyle(table.StyleRounded)
-	fmt.Printf("\n%s\n", t.Render())
-	fmt.Printf("Found %d container template(s)\n", len(templates))
+	output.Result("\n%s\n", t.Render())
+	output.Result("Found %d container template(s)\n", len(templates))
 }
 
 // ResolveTemplate resolves a short template name (e.g., "ubuntu:22.04") to a full template path and node
 func ResolveTemplate(shortName string) (*ResolvedTemplate, error) {
-	// If the template is already in full format, we need to find which node has it
-	if strings.Contains(shortName, ":vztmpl/") {
-		client, err := c.CreateClient()
-		if err != nil {
-			return nil, fmt.Errorf("error creating client: %w", err)
-		}
-
-		// Get all templates from all nodes to find which node has this template
-		nodes, err := getClusterNodes(client)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get cluster nodes: %w", err)
-		}
-
-		for _, node := range nodes {
-			templates, err := getNodeTemplates(client, node)
-			if err != nil {
-				continue // Skip nodes that are not accessible
-			}
-
-			// Check if this node has the template
-			for _, template := range templates {
-				if template.Name == shortName {
-					return &ResolvedTemplate{
-						Template: shortName,
-						Node:     node,
-					}, nil
-				}
-			}
-		}
-
-		return nil, fmt.Errorf("template %s not found on any node", shortName)
-	}
-
-	// Check if it's a short format (os:version)
+	// Check if it's a short format (os:version) without full path
 	if !strings.Contains(shortName, ":") {
 		return nil, fmt.Errorf("template must be in format 'os:version' (e.g., 'ubuntu:22.04') or full format 'storage:vztmpl/template-name'")
 	}
 
+	// Create client once
 	client, err := c.CreateClient()
 	if err != nil {
 		return nil, fmt.Errorf("error creating client: %w", err)
 	}
 
-	// Get all templates from all nodes
+	// Get all nodes once
 	nodes, err := getClusterNodes(client)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get cluster nodes: %w", err)
 	}
 
+	// Get all templates from all nodes once
 	var allTemplates []Template
 	for _, node := range nodes {
 		templates, err := getNodeTemplates(client, node)
@@ -155,6 +126,19 @@ func ResolveTemplate(shortName string) (*ResolvedTemplate, error) {
 			continue // Skip nodes that are not accessible
 		}
 		allTemplates = append(allTemplates, templates...)
+	}
+
+	// If the template is already in full format, find which node has it
+	if strings.Contains(shortName, ":vztmpl/") {
+		for _, template := range allTemplates {
+			if template.Name == shortName {
+				return &ResolvedTemplate{
+					Template: shortName,
+					Node:     template.Node,
+				}, nil
+			}
+		}
+		return nil, fmt.Errorf("template %s not found on any node", shortName)
 	}
 
 	// Parse the short name
@@ -166,17 +150,30 @@ func ResolveTemplate(shortName string) (*ResolvedTemplate, error) {
 	requestedOS := strings.ToLower(parts[0])
 	requestedVersion := parts[1]
 
-	// Find matching templates
-	var matches []Template
+	// Build index map for O(1) exact lookups
+	indexMap := make(map[string][]Template)
 	for _, template := range allTemplates {
-		templateOS := strings.ToLower(template.OS)
-		templateVersion := template.Version
+		key := strings.ToLower(template.OS) + ":" + template.Version
+		indexMap[key] = append(indexMap[key], template)
+	}
 
-		// Match OS (case-insensitive)
-		if templateOS == requestedOS || strings.Contains(templateOS, requestedOS) {
-			// Match version (exact or contains)
-			if templateVersion == requestedVersion || strings.Contains(templateVersion, requestedVersion) {
-				matches = append(matches, template)
+	// Try exact match first (O(1))
+	var matches []Template
+	exactKey := requestedOS + ":" + requestedVersion
+	if exactMatches, found := indexMap[exactKey]; found {
+		matches = exactMatches
+	} else {
+		// Fall back to flexible matching with contains (O(n))
+		for _, template := range allTemplates {
+			templateOS := strings.ToLower(template.OS)
+			templateVersion := template.Version
+
+			// Match OS (case-insensitive)
+			if templateOS == requestedOS || strings.Contains(templateOS, requestedOS) {
+				// Match version (exact or contains)
+				if templateVersion == requestedVersion || strings.Contains(templateVersion, requestedVersion) {
+					matches = append(matches, template)
+				}
 			}
 		}
 	}
@@ -196,10 +193,10 @@ func ResolveTemplate(shortName string) (*ResolvedTemplate, error) {
 				break
 			}
 		}
-		fmt.Printf("💡 Multiple templates found for %s, using: %s on node %s\n", shortName, bestMatch.Name, bestMatch.Node)
+		output.Info("Tip: Multiple templates found for %s, using: %s on node %s\n", shortName, bestMatch.Name, bestMatch.Node)
 	} else {
 		bestMatch = matches[0]
-		fmt.Printf("💡 Resolved %s to: %s on node %s\n", shortName, bestMatch.Name, bestMatch.Node)
+		output.Info("Tip: Resolved %s to: %s on node %s\n", shortName, bestMatch.Name, bestMatch.Node)
 	}
 
 	return &ResolvedTemplate{
@@ -210,14 +207,14 @@ func ResolveTemplate(shortName string) (*ResolvedTemplate, error) {
 
 // ListTemplateShortcuts lists common template shortcuts for user reference
 func ListTemplateShortcuts() {
-	fmt.Println("🔧 Common template shortcuts:")
-	fmt.Println("  ubuntu:22.04    - Ubuntu 22.04 LTS")
-	fmt.Println("  ubuntu:20.04    - Ubuntu 20.04 LTS")
-	fmt.Println("  debian:12       - Debian 12 (Bookworm)")
-	fmt.Println("  debian:11       - Debian 11 (Bullseye)")
-	fmt.Println("  alpine:3.18     - Alpine Linux 3.18")
-	fmt.Println("  centos:8        - CentOS 8")
-	fmt.Println("  fedora:38       - Fedora 38")
-	fmt.Println()
-	fmt.Println("💡 Use 'prox ct templates' to see all available templates")
+	output.Resultln("🔧 Common template shortcuts:")
+	output.Resultln("  ubuntu:22.04    - Ubuntu 22.04 LTS")
+	output.Resultln("  ubuntu:20.04    - Ubuntu 20.04 LTS")
+	output.Resultln("  debian:12       - Debian 12 (Bookworm)")
+	output.Resultln("  debian:11       - Debian 11 (Bullseye)")
+	output.Resultln("  alpine:3.18     - Alpine Linux 3.18")
+	output.Resultln("  centos:8        - CentOS 8")
+	output.Resultln("  fedora:38       - Fedora 38")
+	output.Resultln("")
+	output.Info("Tip: Use 'prox ct templates' to see all available templates\n")
 }

@@ -4,23 +4,35 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 
 	c "github.com/scotty-c/prox/pkg/client"
+	"github.com/scotty-c/prox/pkg/output"
+	"github.com/scotty-c/prox/pkg/util"
 )
 
-// DescribeVM displays detailed VM information in a modern, sectioned format
-func DescribeVM(nameOrID string, node string) error {
+// VMDetails holds all information about a VM for JSON output
+type VMDetails struct {
+	ID     int                    `json:"id"`
+	Name   string                 `json:"name"`
+	Node   string                 `json:"node"`
+	Config map[string]interface{} `json:"config"`
+	Status map[string]interface{} `json:"status"`
+	IP     string                 `json:"ip,omitempty"`
+}
+
+// GetVMDetails fetches detailed VM information
+func GetVMDetails(nameOrID string, node string) (*VMDetails, error) {
+	ctx := context.Background()
 	client, err := c.CreateClient()
 	if err != nil {
-		return fmt.Errorf("error creating client: %w", err)
+		return nil, fmt.Errorf("error creating client: %w", err)
 	}
 
-	fmt.Printf("🔍 Getting VM details for %s...\n", nameOrID)
-
 	// Find the VM by name or ID
-	vm, err := findVM(client, nameOrID)
+	vm, err := FindByNameOrID(ctx, client, nameOrID)
 	if err != nil {
-		return fmt.Errorf("failed to find VM: %w", err)
+		return nil, fmt.Errorf("failed to find VM: %w", err)
 	}
 
 	// Use the discovered node if no node was specified
@@ -28,130 +40,172 @@ func DescribeVM(nameOrID string, node string) error {
 		node = vm.Node
 	}
 
+	// Fetch config and status in parallel
+	var (
+		config               map[string]interface{}
+		status               map[string]interface{}
+		configErr, statusErr error
+		wg                   sync.WaitGroup
+	)
+
+	wg.Add(2)
+
 	// Get VM configuration
-	config, err := client.GetVMConfig(context.Background(), node, vm.ID)
-	if err != nil {
-		return fmt.Errorf("failed to get VM config: %w", err)
-	}
+	go func() {
+		defer wg.Done()
+		config, configErr = client.GetVMConfig(ctx, node, vm.ID)
+	}()
 
 	// Get VM status
-	status, err := client.GetVMStatus(context.Background(), node, vm.ID)
-	if err != nil {
-		return fmt.Errorf("failed to get VM status: %w", err)
+	go func() {
+		defer wg.Done()
+		status, statusErr = client.GetVMStatus(ctx, node, vm.ID)
+	}()
+
+	wg.Wait()
+
+	// Check for errors
+	if configErr != nil {
+		return nil, fmt.Errorf("failed to get VM config: %w", configErr)
+	}
+	if statusErr != nil {
+		return nil, fmt.Errorf("failed to get VM status: %w", statusErr)
 	}
 
-	// Use the VM name from the found VM
-	vmName := vm.Name
+	// Get VM IP if available
+	vmIP := GetIp(ctx, vm.ID, node)
+	if vmIP == "Error getting IP" {
+		vmIP = ""
+	}
+
+	return &VMDetails{
+		ID:     vm.ID,
+		Name:   vm.Name,
+		Node:   node,
+		Config: config,
+		Status: status,
+		IP:     vmIP,
+	}, nil
+}
+
+// DescribeVM displays detailed VM information in a modern, sectioned format
+func DescribeVM(nameOrID string, node string) error {
+	details, err := GetVMDetails(nameOrID, node)
+	if err != nil {
+		return err
+	}
+
+	output.Info("Getting VM details for %s...\n", nameOrID)
 
 	// Display VM information
-	displayVMDetails(vm.ID, vmName, node, config, status)
+	displayVMDetails(details.ID, details.Name, details.Node, details.Config, details.Status, details.IP)
 
 	return nil
 }
 
 // displayVMDetails displays detailed VM information
-func displayVMDetails(id int, name, node string, config, status map[string]interface{}) {
-	fmt.Printf("\n🖥️  Virtual Machine Details\n")
-	fmt.Printf("═══════════════════════════════════════════════════════════════════════════════════════\n")
+func displayVMDetails(id int, name, node string, config, status map[string]interface{}, ip string) {
+	output.Result("\nVirtual Machine Details\n")
+	output.Result("═══════════════════════════════════════════════════════════════════════════════════════\n")
 
 	// Basic Information
-	fmt.Printf("🏷️  Basic Information:\n")
-	fmt.Printf("   Name: %s\n", name)
-	fmt.Printf("   ID: %d\n", id)
-	fmt.Printf("   Node: %s\n", node)
+	output.Result("Basic Information:\n")
+	output.Result("   Name: %s\n", name)
+	output.Result("   ID: %d\n", id)
+	output.Result("   Node: %s\n", node)
 
 	// VM status
 	if vmStatus, ok := status["status"].(string); ok {
-		fmt.Printf("   Status: %s\n", vmStatus)
+		output.Result("   Status: %s\n", vmStatus)
 	}
 
 	// VM agent status
 	if agent, ok := config["agent"].(float64); ok && agent == 1 {
-		fmt.Printf("   QEMU Agent: Enabled\n")
+		output.Result("   QEMU Agent: Enabled\n")
 	} else {
-		fmt.Printf("   QEMU Agent: Disabled\n")
+		output.Result("   QEMU Agent: Disabled\n")
 	}
 
-	fmt.Printf("\n")
+	output.Result("\n")
 
 	// Resource Configuration
-	fmt.Printf("💾 Resource Configuration:\n")
+	output.Result("Resource Configuration:\n")
 
 	// Memory
 	if memory, ok := config["memory"].(float64); ok {
-		fmt.Printf("   Memory: %.0f MB\n", memory)
+		output.Result("   Memory: %.0f MB\n", memory)
 	}
 
 	// Balloon memory
 	if balloon, ok := config["balloon"].(float64); ok {
-		fmt.Printf("   Balloon Memory: %.0f MB\n", balloon)
+		output.Result("   Balloon Memory: %.0f MB\n", balloon)
 	}
 
 	// CPU
 	if sockets, ok := config["sockets"].(float64); ok {
-		fmt.Printf("   CPU Sockets: %.0f\n", sockets)
+		output.Result("   CPU Sockets: %.0f\n", sockets)
 	}
 	if cores, ok := config["cores"].(float64); ok {
-		fmt.Printf("   CPU Cores: %.0f\n", cores)
+		output.Result("   CPU Cores: %.0f\n", cores)
 	}
 	if vcpus, ok := config["vcpus"].(float64); ok {
-		fmt.Printf("   vCPUs: %.0f\n", vcpus)
+		output.Result("   vCPUs: %.0f\n", vcpus)
 	}
 	if cpuType, ok := config["cpu"].(string); ok {
-		fmt.Printf("   CPU Type: %s\n", cpuType)
+		output.Result("   CPU Type: %s\n", cpuType)
 	}
 
-	fmt.Printf("\n")
+	output.Result("\n")
 
 	// Storage Information
-	fmt.Printf("💽 Storage:\n")
+	output.Result("💽 Storage:\n")
 
 	// Display disks
 	diskKeys := []string{"ide0", "ide1", "ide2", "ide3", "sata0", "sata1", "sata2", "sata3", "scsi0", "scsi1", "scsi2", "scsi3", "virtio0", "virtio1", "virtio2", "virtio3"}
 	for _, diskKey := range diskKeys {
 		if disk, ok := config[diskKey].(string); ok {
-			fmt.Printf("   %s: %s\n", strings.ToUpper(diskKey), disk)
+			output.Result("   %s: %s\n", strings.ToUpper(diskKey), disk)
 		}
 	}
 
-	fmt.Printf("\n")
+	output.Result("\n")
 
 	// Network Configuration
-	fmt.Printf("🌐 Network:\n")
+	output.Result("🌐 Network:\n")
 
 	// Display network interfaces
 	for i := 0; i < 10; i++ {
 		netKey := fmt.Sprintf("net%d", i)
 		if net, ok := config[netKey].(string); ok {
-			fmt.Printf("   Network %d: %s\n", i, net)
+			output.Result("   Network %d: %s\n", i, net)
 		}
 	}
 
-	// Get VM IP if available
-	if vmIP := GetIp(id, node); vmIP != "" && vmIP != "Error getting IP" {
-		fmt.Printf("   IP Address: %s\n", vmIP)
+	// Display VM IP if available
+	if ip != "" {
+		output.Result("   IP Address: %s\n", ip)
 	}
 
-	fmt.Printf("\n")
+	output.Result("\n")
 
 	// Runtime Status (if running)
 	if vmStatus, ok := status["status"].(string); ok && vmStatus == "running" {
-		fmt.Printf("📊 Runtime Status:\n")
+		output.Result("📊 Runtime Status:\n")
 
 		if uptime, ok := status["uptime"].(float64); ok {
-			fmt.Printf("   Uptime: %s\n", formatUptime(int64(uptime)))
+			output.Result("   Uptime: %s\n", util.FormatUptime(int64(uptime)))
 		}
 
 		if cpuUsage, ok := status["cpu"].(float64); ok {
-			fmt.Printf("   CPU Usage: %.2f%%\n", cpuUsage*100)
+			output.Result("   CPU Usage: %.2f%%\n", cpuUsage*100)
 		}
 
 		if memUsage, ok := status["mem"].(float64); ok {
 			if memMax, ok := status["maxmem"].(float64); ok {
 				memPercent := (memUsage / memMax) * 100
-				fmt.Printf("   Memory Usage: %s / %s (%.1f%%)\n",
-					formatSize(uint64(memUsage)),
-					formatSize(uint64(memMax)),
+				output.Result("   Memory Usage: %s / %s (%.1f%%)\n",
+					util.FormatSize(uint64(memUsage)),
+					util.FormatSize(uint64(memMax)),
 					memPercent)
 			}
 		}
@@ -179,81 +233,81 @@ func displayVMDetails(id int, name, node string, config, status map[string]inter
 
 		if diskUsageOk && diskMaxOk && diskMax > 0 {
 			diskPercent := (diskUsage / diskMax) * 100
-			fmt.Printf("   Disk Usage: %s / %s (%.1f%%)\n",
-				formatSize(uint64(diskUsage)),
-				formatSize(uint64(diskMax)),
+			output.Result("   Disk Usage: %s / %s (%.1f%%)\n",
+				util.FormatSize(uint64(diskUsage)),
+				util.FormatSize(uint64(diskMax)),
 				diskPercent)
 		}
 
 		if netin, ok := status["netin"].(float64); ok {
-			fmt.Printf("   Network In: %s\n", formatSize(uint64(netin)))
+			output.Result("   Network In: %s\n", util.FormatSize(uint64(netin)))
 		}
 
 		if netout, ok := status["netout"].(float64); ok {
-			fmt.Printf("   Network Out: %s\n", formatSize(uint64(netout)))
+			output.Result("   Network Out: %s\n", util.FormatSize(uint64(netout)))
 		}
 
-		fmt.Printf("\n")
+		output.Result("\n")
 	}
 
 	// Boot Configuration
-	fmt.Printf("🚀 Boot Configuration:\n")
+	output.Result("Boot Configuration:\n")
 
 	if bootOrder, ok := config["boot"].(string); ok {
-		fmt.Printf("   Boot Order: %s (%s)\n", bootOrder, decodeBootOrder(bootOrder))
+		output.Result("   Boot Order: %s (%s)\n", bootOrder, decodeBootOrder(bootOrder))
 	}
 
 	if bios, ok := config["bios"].(string); ok {
-		fmt.Printf("   BIOS: %s\n", bios)
+		output.Result("   BIOS: %s\n", bios)
 	}
 
 	if machine, ok := config["machine"].(string); ok {
-		fmt.Printf("   Machine Type: %s\n", machine)
+		output.Result("   Machine Type: %s\n", machine)
 	}
 
-	fmt.Printf("\n")
+	output.Result("\n")
 
 	// Security Settings
-	fmt.Printf("🔒 Security:\n")
+	output.Result("🔒 Security:\n")
 
 	if protection, ok := config["protection"].(float64); ok {
 		if protection == 1 {
-			fmt.Printf("   Protection: Enabled\n")
+			output.Result("   Protection: Enabled\n")
 		} else {
-			fmt.Printf("   Protection: Disabled\n")
+			output.Result("   Protection: Disabled\n")
 		}
 	}
 
 	if startupPolicy, ok := config["startup"].(string); ok {
-		fmt.Printf("   Startup Policy: %s\n", startupPolicy)
+		output.Result("   Startup Policy: %s\n", startupPolicy)
 	}
 
 	if onboot, ok := config["onboot"].(float64); ok {
 		if onboot == 1 {
-			fmt.Printf("   Start on boot: Yes\n")
+			output.Result("   Start on boot: Yes\n")
 		} else {
-			fmt.Printf("   Start on boot: No\n")
+			output.Result("   Start on boot: No\n")
 		}
 	}
 
-	fmt.Printf("\n")
+	output.Result("\n")
 
 	// Additional Configuration
-	fmt.Printf("⚙️  Additional Configuration:\n")
+	output.Result("Additional Configuration:\n")
 
 	if description, ok := config["description"].(string); ok {
-		fmt.Printf("   Description: %s\n", description)
+		output.Result("   Description: %s\n", description)
 	}
 
 	if tags, ok := config["tags"].(string); ok {
-		fmt.Printf("   Tags: %s\n", tags)
+		output.Result("   Tags: %s\n", tags)
 	}
 
 	if ostype, ok := config["ostype"].(string); ok {
-		fmt.Printf("   OS Type: %s\n", ostype)
+		output.Result("   OS Type: %s\n", ostype)
 	}
 
-	fmt.Printf("\n")
+	output.Result("\n")
 }
 
 // decodeBootOrder converts Proxmox boot order codes to human-readable descriptions

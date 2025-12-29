@@ -8,6 +8,7 @@ import (
 	"syscall"
 
 	"github.com/scotty-c/prox/pkg/container"
+	"github.com/scotty-c/prox/pkg/output"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 )
@@ -24,6 +25,11 @@ The template can be specified in two formats:
 
 The short format will automatically resolve to the full template path.
 
+Storage Configuration:
+- Use --storage to specify where the container rootfs will be stored
+- Defaults to 'local-lvm' if not specified
+- Common storage options: local-lvm, local-zfs, nfs-storage, ceph
+
 SSH Key Options:
 - Use --ssh-keys-file to specify a path to your SSH public key file (e.g., ~/.ssh/id_rsa.pub)
 - Use --ssh-keys-file=- to read SSH keys from stdin
@@ -33,6 +39,7 @@ Examples:
   prox ct create mycontainer ubuntu:22.04
   prox ct create webapp debian:12 --memory 2048 --disk 32
   prox ct create dev-env alpine:3.18 --cores 2 --node node1 --ssh-keys-file ~/.ssh/id_rsa.pub
+  prox ct create mycontainer ubuntu:22.04 --storage local-zfs --disk 16
   prox ct create mycontainer local:vztmpl/ubuntu-22.04-standard_22.04-1_amd64.tar.zst --ssh-keys-file /path/to/keys.pub`,
 	Args: func(cmd *cobra.Command, args []string) error {
 		// Support either positional <name> <template> OR --name/--template flags.
@@ -66,14 +73,14 @@ Examples:
 		if name == "" {
 			name = strings.TrimSpace(nameFlag)
 		} else if strings.TrimSpace(nameFlag) != "" && name != strings.TrimSpace(nameFlag) {
-			fmt.Printf("⚠️  --name \"%s\" ignored; using positional name \"%s\"\n", strings.TrimSpace(nameFlag), name)
+			fmt.Printf("WARNING: --name \"%s\" ignored; using positional name \"%s\"\n", strings.TrimSpace(nameFlag), name)
 		}
 
 		template := posTemplate
 		if template == "" {
 			template = strings.TrimSpace(tmplFlag)
 		} else if strings.TrimSpace(tmplFlag) != "" && template != strings.TrimSpace(tmplFlag) {
-			fmt.Printf("⚠️  --template \"%s\" ignored; using positional template \"%s\"\n", strings.TrimSpace(tmplFlag), template)
+			fmt.Printf("WARNING: --template \"%s\" ignored; using positional template \"%s\"\n", strings.TrimSpace(tmplFlag), template)
 		}
 
 		// Get flags
@@ -85,6 +92,7 @@ Examples:
 		password, _ := cmd.Flags().GetString("password")
 		sshKeysFile, _ := cmd.Flags().GetString("ssh-keys-file")
 		promptPassword, _ := cmd.Flags().GetBool("prompt-password")
+		storage, _ := cmd.Flags().GetString("storage")
 
 		// Parse VMID if provided
 		var vmid int
@@ -92,7 +100,7 @@ Examples:
 			var err error
 			vmid, err = strconv.Atoi(vmidStr)
 			if err != nil {
-				fmt.Printf("❌ Invalid VMID: %s\n", vmidStr)
+				fmt.Printf("Error: Invalid VMID: %s\n", vmidStr)
 				os.Exit(1)
 			}
 		}
@@ -102,7 +110,7 @@ Examples:
 			fmt.Print("Enter password for container: ")
 			passwordBytes, err := term.ReadPassword(int(syscall.Stdin))
 			if err != nil {
-				fmt.Printf("❌ Error reading password: %v\n", err)
+				output.UserError("reading password", err)
 				os.Exit(1)
 			}
 			password = string(passwordBytes)
@@ -133,13 +141,13 @@ Examples:
 				fmt.Printf("🔑 Reading SSH keys from: %s\n", sshKeysFile)
 				keyBytes, err := os.ReadFile(sshKeysFile)
 				if err != nil {
-					fmt.Printf("❌ Error reading SSH keys file '%s': %v\n", sshKeysFile, err)
-					fmt.Println("💡 Make sure the file exists and is readable")
+					output.UserError(fmt.Sprintf("reading SSH keys file '%s'", sshKeysFile), err)
+					fmt.Println("Tip: Make sure the file exists and is readable")
 					os.Exit(1)
 				}
 				sshKeys = strings.TrimSpace(string(keyBytes))
 				if sshKeys == "" {
-					fmt.Printf("⚠️  SSH keys file '%s' is empty\n", sshKeysFile)
+					fmt.Printf("WARNING: SSH keys file '%s' is empty\n", sshKeysFile)
 				} else {
 					keyLines := strings.Split(sshKeys, "\n")
 					nonEmptyLines := 0
@@ -156,22 +164,22 @@ Examples:
 			if sshKeys != "" {
 				validKeys, err := container.ValidateSSHKeys(sshKeys)
 				if err != nil {
-					fmt.Printf("❌ SSH key validation failed: %v\n", err)
-					fmt.Println("💡 Make sure your SSH keys are in the correct format (ssh-rsa, ssh-ed25519, etc.)")
+					fmt.Printf("Error: SSH key validation failed: %v\n", err)
+					fmt.Println("Tip: Make sure your SSH keys are in the correct format (ssh-rsa, ssh-ed25519, etc.)")
 					os.Exit(1)
 				}
 				if validKeys == 0 {
-					fmt.Println("⚠️  No valid SSH keys found")
+					fmt.Println("WARNING: No valid SSH keys found")
 				} else {
-					fmt.Printf("✅ Validated %d SSH key(s)\n", validKeys)
+					fmt.Printf("Validated %d SSH key(s)\n", validKeys)
 				}
 			}
 		}
 
 		// Create the container
-		err := container.CreateContainer(node, name, template, vmid, memory, disk, cores, password, sshKeys)
+		err := container.CreateContainer(node, name, template, vmid, memory, disk, cores, password, sshKeys, storage)
 		if err != nil {
-			fmt.Printf("❌ Error creating container: %v\n", err)
+			output.UserError("creating container", err)
 			os.Exit(1)
 		}
 	},
@@ -191,4 +199,5 @@ func init() {
 	createCmd.Flags().StringP("password", "p", "", "Root password for container")
 	createCmd.Flags().Bool("prompt-password", false, "Prompt for password interactively")
 	createCmd.Flags().String("ssh-keys-file", "", "Path to SSH public key file (e.g., ~/.ssh/id_rsa.pub) or '-' to read from stdin")
+	createCmd.Flags().StringP("storage", "s", "", "Storage location for container rootfs (defaults to local-lvm)")
 }

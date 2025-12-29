@@ -6,49 +6,15 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/briandowns/spinner"
 	c "github.com/scotty-c/prox/pkg/client"
+	"github.com/scotty-c/prox/pkg/util"
 )
 
-// formatSize formats bytes into human-readable size
-func formatSize(sizeBytes uint64) string {
-	const unit = 1024
-	if sizeBytes < unit {
-		return fmt.Sprintf("%d B", sizeBytes)
-	}
-	div, exp := uint64(unit), 0
-	for n := sizeBytes / unit; n >= unit; n /= unit {
-		div *= unit
-		exp++
-	}
-	return fmt.Sprintf("%.1f %cB", float64(sizeBytes)/float64(div), "KMGTPE"[exp])
-}
-
-// formatUptime formats uptime seconds into human-readable format
-func formatUptime(uptimeSeconds int64) string {
-	if uptimeSeconds <= 0 {
-		return "0s"
-	}
-
-	days := uptimeSeconds / 86400
-	hours := (uptimeSeconds % 86400) / 3600
-	minutes := (uptimeSeconds % 3600) / 60
-	seconds := uptimeSeconds % 60
-
-	if days > 0 {
-		return fmt.Sprintf("%dd %dh %dm", days, hours, minutes)
-	} else if hours > 0 {
-		return fmt.Sprintf("%dh %dm %ds", hours, minutes, seconds)
-	} else if minutes > 0 {
-		return fmt.Sprintf("%dm %ds", minutes, seconds)
-	} else {
-		return fmt.Sprintf("%ds", seconds)
-	}
-}
-
-// findVM finds a VM by either name or ID
-func findVM(client *c.ProxmoxClient, nameOrID string) (*VM, error) {
+// FindByNameOrID finds a VM by either name or ID
+func FindByNameOrID(ctx context.Context, client c.ProxmoxClientInterface, nameOrID string) (*VM, error) {
 	// Get cluster resources
-	resources, err := client.GetClusterResources(context.Background())
+	resources, err := client.GetClusterResources(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get cluster resources: %w", err)
 	}
@@ -78,55 +44,86 @@ func findVM(client *c.ProxmoxClient, nameOrID string) (*VM, error) {
 					vm.Disk = uint64(*resource.Disk)
 				}
 				if resource.CPU != nil {
-					vm.CPUs = int(*resource.CPU * 100)
+					vm.CPUs = int(*resource.CPU * c.CPUPercentageMultiplier)
 				}
 				if resource.Uptime != nil {
-					vm.Uptime = formatUptime(int64(*resource.Uptime))
+					vm.Uptime = util.FormatUptime(int64(*resource.Uptime))
 				}
 				return &vm, nil
 			}
 		}
 	}
 
-	// Search by name
+	// Search by name and collect all VM names for suggestions
+	var allVMNames []string
 	for _, resource := range resources {
-		if resource.Type == "qemu" && resource.Name == nameOrID {
-			vm := VM{
-				ID:     int(*resource.VMID),
-				Name:   resource.Name,
-				Status: resource.Status,
-				Node:   resource.Node,
+		if resource.Type == "qemu" {
+			if resource.Name == nameOrID {
+				vm := VM{
+					ID:     int(*resource.VMID),
+					Name:   resource.Name,
+					Status: resource.Status,
+					Node:   resource.Node,
+				}
+				// Add additional resource information if available
+				if resource.MaxMem != nil {
+					vm.MaxMemory = uint64(*resource.MaxMem)
+				}
+				if resource.Mem != nil {
+					vm.Memory = uint64(*resource.Mem)
+				}
+				if resource.MaxDisk != nil {
+					vm.MaxDisk = uint64(*resource.MaxDisk)
+				}
+				if resource.Disk != nil {
+					vm.Disk = uint64(*resource.Disk)
+				}
+				if resource.CPU != nil {
+					vm.CPUs = int(*resource.CPU * 100)
+				}
+				if resource.Uptime != nil {
+					vm.Uptime = util.FormatUptime(int64(*resource.Uptime))
+				}
+				return &vm, nil
 			}
-			// Add additional resource information if available
-			if resource.MaxMem != nil {
-				vm.MaxMemory = uint64(*resource.MaxMem)
+			// Collect VM names for fuzzy matching
+			if resource.Name != "" {
+				allVMNames = append(allVMNames, resource.Name)
 			}
-			if resource.Mem != nil {
-				vm.Memory = uint64(*resource.Mem)
-			}
-			if resource.MaxDisk != nil {
-				vm.MaxDisk = uint64(*resource.MaxDisk)
-			}
-			if resource.Disk != nil {
-				vm.Disk = uint64(*resource.Disk)
-			}
-			if resource.CPU != nil {
-				vm.CPUs = int(*resource.CPU * 100)
-			}
-			if resource.Uptime != nil {
-				vm.Uptime = formatUptime(int64(*resource.Uptime))
-			}
-			return &vm, nil
 		}
 	}
 
-	return nil, fmt.Errorf("VM '%s' not found", nameOrID)
+	// VM not found - provide helpful suggestions
+	errorMsg := fmt.Sprintf("VM '%s' not found", nameOrID)
+
+	// Find similar names using fuzzy matching
+	suggestions := util.FindSimilarStrings(nameOrID, allVMNames, 3)
+	if len(suggestions) > 0 {
+		errorMsg += "\n\nDid you mean one of these?"
+		for _, suggestion := range suggestions {
+			errorMsg += fmt.Sprintf("\n  • %s", suggestion)
+		}
+		errorMsg += "\n\nRun 'prox vm list' to see all available virtual machines"
+	} else if len(allVMNames) > 0 {
+		errorMsg += "\n\nRun 'prox vm list' to see all available virtual machines"
+	}
+
+	return nil, fmt.Errorf(errorMsg)
 }
 
 // waitForTask waits for a Proxmox task to complete
-func waitForTask(client *c.ProxmoxClient, node, taskID string) error {
+func waitForTask(ctx context.Context, client c.ProxmoxClientInterface, node, taskID string) error {
+	s := spinner.New(spinner.CharSets[14], 100*time.Millisecond)
+	s.Suffix = " Processing..."
+	s.Start()
+	defer s.Stop()
+
+	// Exponential backoff configuration
+	backoff := 500 * time.Millisecond // Start at 500ms
+	maxBackoff := 5 * time.Second     // Cap at 5s
+
 	for {
-		task, err := client.GetTaskStatus(context.Background(), node, taskID)
+		task, err := client.GetTaskStatus(ctx, node, taskID)
 		if err != nil {
 			return fmt.Errorf("failed to get task status: %w", err)
 		}
@@ -138,7 +135,16 @@ func waitForTask(client *c.ProxmoxClient, node, taskID string) error {
 			return fmt.Errorf("task failed with exit code: %s", task.ExitCode)
 		}
 
-		// Wait a bit before checking again
-		time.Sleep(2 * time.Second)
+		// Wait with exponential backoff before checking again
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(backoff):
+			// Double the backoff for next iteration, cap at maxBackoff
+			backoff = backoff * 2
+			if backoff > maxBackoff {
+				backoff = maxBackoff
+			}
+		}
 	}
 }
