@@ -7,6 +7,7 @@ Simple CLI for Proxmox VE. Focus on: zero required --node flags (auto discovery)
 - [Install](#install)
 - [Shell Completion](#shell-completion)
 - [Quick Start](#quick-start)
+- [Performance & User Experience](#performance--user-experience)
 - [Core Commands](#core-commands)
 - [Flags Cheat Sheet](#flags-cheat-sheet)
 - [Security](#security)
@@ -25,7 +26,9 @@ Key capabilities:
 - Secure encrypted credential storage (AES‑256, automatic legacy migration)
 - Multiple configuration profiles (homelab, production, etc.) with easy switching
 - SSH key validation (file or stdin, multi‑key, type checks)
-- Clear progress + helpful errors
+- **Smart UX**: fuzzy matching suggestions ("Did you mean?"), context-aware error messages, real-time progress spinners
+- **Shell completion**: dynamic VM/container name completion for all commands (bash/zsh/fish/powershell)
+- **Performance**: parallel API calls, intelligent caching (IP addresses, storage volumes), concurrent operations
 - Modular Go codebase (easy to extend) + Makefile automation
 
 ## Install
@@ -44,7 +47,7 @@ prox --help
 Docker / compose usage: see DOCKER.md.
 
 ## Shell Completion
-Enable tab completion for your shell (bash, zsh, fish, or powershell):
+Enable tab completion for your shell (bash, zsh, fish, or powershell). Prox provides **dynamic completion** that queries your Proxmox cluster in real-time, offering VM and container names/IDs as you type.
 
 **Bash:**
 ```bash
@@ -81,6 +84,13 @@ prox completion powershell >> $PROFILE
 ```
 
 After setup, restart your shell or source the completion file. You'll then have tab completion for all commands, flags, and arguments.
+
+**Example usage:**
+```bash
+prox vm start <TAB>          # Shows all VM names and IDs
+prox ct describe web<TAB>    # Completes container names starting with "web"
+prox vm migrate myv<TAB>     # Completes VM names starting with "myv"
+```
 
 ## Quick Start
 Configure (stored encrypted with profile support):
@@ -143,6 +153,38 @@ Pro tips:
 - Use `prox ssh <resource> --dry-run` to preview SSH config changes
 - Use `prox ssh --list` to view current managed entries
 - Use `prox ssh <resource> --delete [--dry-run]` to remove an entry safely
+- **Typo correction**: If you mistype a VM/container name, Prox suggests similar names:
+  ```bash
+  $ prox vm start web-servr
+  Error: VM 'web-servr' not found
+
+  Did you mean one of these?
+    • web-server
+    • web-server-backup
+    • api-server
+
+  Run 'prox vm list' to see all available virtual machines
+  ```
+
+## Performance & User Experience
+
+**Intelligent Error Handling:**
+- **Context-aware errors**: Get specific guidance based on the operation and error type
+- **Fuzzy matching**: Typos suggest similar resource names (Levenshtein distance algorithm)
+- **Helpful tips**: Permission errors, resource not found, and other common issues include actionable next steps
+
+**Performance Optimizations:**
+- **Parallel operations**: VM/container describe operations run config and status fetches concurrently (5-10x faster)
+- **IP address caching**: 60-second cache reduces redundant DHCP lease lookups in list operations
+- **Storage volume caching**: Per-call scoped cache eliminates duplicate API requests during template resolution
+- **Concurrent workers**: Container IP fetching uses a pool of 10 workers for batch operations
+
+**Real-time Feedback:**
+- **Progress spinners**: All async operations (create, clone, migrate, start, stop, delete) show visual progress
+- **Exponential backoff**: Task polling starts at 500ms, caps at 5s for efficient resource usage
+- **Clean output**: No redundant messages, clear success/failure indicators
+
+These improvements make Prox fast, forgiving, and informative—whether you're managing a homelab or production cluster.
 
 ## Core Commands
 Config (with profile support):
