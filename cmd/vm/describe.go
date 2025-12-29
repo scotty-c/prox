@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/scotty-c/prox/pkg/completion"
 	"github.com/scotty-c/prox/pkg/output"
 	"github.com/scotty-c/prox/pkg/vm"
 	"github.com/spf13/cobra"
@@ -33,6 +34,7 @@ Examples:
 		}
 		return nil
 	},
+	ValidArgsFunction: completion.GetVMNames,
 	Run: func(cmd *cobra.Command, args []string) {
 		// Get VM name or ID from positional argument
 		nameOrID := args[0]

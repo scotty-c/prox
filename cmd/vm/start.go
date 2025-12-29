@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/scotty-c/prox/pkg/completion"
 	"github.com/scotty-c/prox/pkg/vm"
 	"github.com/spf13/cobra"
 )
@@ -19,7 +20,8 @@ Examples:
   prox vm start myvm
   prox vm start 100
   prox vm start web-server`,
-	Args: cobra.ExactArgs(1),
+	Args:              cobra.ExactArgs(1),
+	ValidArgsFunction: completion.GetVMNames,
 	Run: func(cmd *cobra.Command, args []string) {
 		nameOrID := args[0]
 		wait, _ := cmd.Flags().GetBool("wait")
