@@ -294,21 +294,12 @@ func deleteSSHConfigEntry(nameOrID string, dryRun bool) error {
 
 	// Try to resolve to actual resource name to match stored host alias
 	alias := nameOrID
-	var resolved bool
 	if cl, err := client.CreateClient(); err == nil {
 		if vmObj, vmErr := vm.FindByNameOrID(ctx, cl, nameOrID); vmErr == nil {
 			alias = vmObj.Name
-			resolved = true
 		} else if ctObj, ctErr := container.FindByNameOrID(ctx, cl, nameOrID); ctErr == nil {
 			alias = ctObj.Name
-			resolved = true
 		}
-	}
-
-	if resolved {
-		fmt.Printf("Resolved resource to host alias '%s'\n", alias)
-	} else {
-		fmt.Printf("Note: Treating '%s' as host alias (resource not resolved)\n", alias)
 	}
 
 	removed, block, err := removeFromSSHConfig(alias, dryRun)
