@@ -57,12 +57,12 @@ func TestConnection() {
 			output.Errorln("3. This might be an older Proxmox version with limited API support")
 			return
 		}
-		output.Info("✓ Connected to Proxmox version: %s\n", version.Version)
+		output.Info("Connected to Proxmox version: %s\n", version.Version)
 		output.Infoln("WARNING: Nodes endpoint not available, but version endpoint works")
 		return
 	}
 
-	output.Info("✓ Found %d nodes\n", len(nodes))
+	output.Info("Found %d nodes\n", len(nodes))
 	for _, node := range nodes {
 		output.Info("  - Node: %s (Status: %s)\n", node.Node, node.Status)
 	}
@@ -74,7 +74,7 @@ func TestConnection() {
 		output.Error("WARNING: Version endpoint not available: %v\n", err)
 		output.Infoln("This is common with older Proxmox versions")
 	} else {
-		output.Info("✓ Proxmox version: %s\n", version.Version)
+		output.Info("Proxmox version: %s\n", version.Version)
 	}
 
 	// Test cluster resources
@@ -84,7 +84,7 @@ func TestConnection() {
 		output.Error("Error: Error getting cluster resources: %v\n", err)
 		return
 	}
-	output.Info("✓ Found %d resources\n", len(resources))
+	output.Info("Found %d resources\n", len(resources))
 
 	// Count VMs specifically
 	vmCount := 0
@@ -93,7 +93,7 @@ func TestConnection() {
 			vmCount++
 		}
 	}
-	output.Info("✓ Found %d virtual machines\n", vmCount)
+	output.Info("Found %d virtual machines\n", vmCount)
 
-	output.Resultln("\n🎉 Connection test successful!")
+	output.Resultln("\nConnection test successful!")
 }

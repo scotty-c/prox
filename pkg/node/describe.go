@@ -131,7 +131,7 @@ func DescribeNode(name string) error {
 
 	// Storage and Network sections are less applicable for nodes, but show what we can
 	// Network: try to get a primary IP for the node
-	output.Result("🌐 Network:\n")
+	output.Result("Network:\n")
 	if details.IP != "" {
 		output.Result("   IP: %s\n", details.IP)
 	} else {
@@ -141,7 +141,7 @@ func DescribeNode(name string) error {
 	output.Result("\n")
 
 	// Runtime Status
-	output.Result("📊 Runtime Status:\n")
+	output.Result("Runtime Status:\n")
 	if details.CPU != "" {
 		output.Result("   CPU Usage: %s\n", details.CPU)
 	}

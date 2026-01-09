@@ -76,7 +76,7 @@ func EditVM(ctx context.Context, id int, node string, name string, cores int, me
 	}
 	if diskSize > 0 {
 		// For disk resize, we handle it separately as it requires a different API endpoint
-		fmt.Printf("🔧 Detecting disk type for VM %d on node %s...\n", id, node)
+		fmt.Printf("Detecting disk type for VM %d on node %s...\n", id, node)
 
 		// Auto-detect the primary disk type
 		primaryDisk, err := vm.GetPrimaryDisk(ctx)
@@ -86,8 +86,8 @@ func EditVM(ctx context.Context, id int, node string, name string, cores int, me
 		}
 
 		fmt.Printf("Found primary disk: %s\n", primaryDisk)
-		fmt.Printf("🔧 Resizing disk for VM %d on node %s...\n", id, node)
-		fmt.Printf("📝 Increasing disk size by: %d GB\n", diskSize)
+		fmt.Printf("Resizing disk for VM %d on node %s...\n", id, node)
+		fmt.Printf("Increasing disk size by: %d GB\n", diskSize)
 
 		// Call disk resize function with auto-detected disk type
 		err = vm.ResizeDisk(ctx, primaryDisk, fmt.Sprintf("+%dG", diskSize))
@@ -110,7 +110,7 @@ func EditVM(ctx context.Context, id int, node string, name string, cores int, me
 	}
 
 	// Show what changes will be made
-	fmt.Printf("🔧 Updating VM %d configuration on node %s:\n", id, node)
+	fmt.Printf("Updating VM %d configuration on node %s:\n", id, node)
 	if name != "" {
 		fmt.Printf("   • Name: %s\n", name)
 	}

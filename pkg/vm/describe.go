@@ -158,7 +158,7 @@ func displayVMDetails(id int, name, node string, config, status map[string]inter
 	output.Result("\n")
 
 	// Storage Information
-	output.Result("💽 Storage:\n")
+	output.Result("Storage:\n")
 
 	// Display disks
 	diskKeys := []string{"ide0", "ide1", "ide2", "ide3", "sata0", "sata1", "sata2", "sata3", "scsi0", "scsi1", "scsi2", "scsi3", "virtio0", "virtio1", "virtio2", "virtio3"}
@@ -171,7 +171,7 @@ func displayVMDetails(id int, name, node string, config, status map[string]inter
 	output.Result("\n")
 
 	// Network Configuration
-	output.Result("🌐 Network:\n")
+	output.Result("Network:\n")
 
 	// Display network interfaces
 	for i := 0; i < 10; i++ {
@@ -190,7 +190,7 @@ func displayVMDetails(id int, name, node string, config, status map[string]inter
 
 	// Runtime Status (if running)
 	if vmStatus, ok := status["status"].(string); ok && vmStatus == "running" {
-		output.Result("📊 Runtime Status:\n")
+		output.Result("Runtime Status:\n")
 
 		if uptime, ok := status["uptime"].(float64); ok {
 			output.Result("   Uptime: %s\n", util.FormatUptime(int64(uptime)))
@@ -268,7 +268,7 @@ func displayVMDetails(id int, name, node string, config, status map[string]inter
 	output.Result("\n")
 
 	// Security Settings
-	output.Result("🔒 Security:\n")
+	output.Result("Security:\n")
 
 	if protection, ok := config["protection"].(float64); ok {
 		if protection == 1 {

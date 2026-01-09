@@ -207,7 +207,7 @@ func ResolveTemplate(shortName string) (*ResolvedTemplate, error) {
 
 // ListTemplateShortcuts lists common template shortcuts for user reference
 func ListTemplateShortcuts() {
-	output.Resultln("🔧 Common template shortcuts:")
+	output.Resultln("Common template shortcuts:")
 	output.Resultln("  ubuntu:22.04    - Ubuntu 22.04 LTS")
 	output.Resultln("  ubuntu:20.04    - Ubuntu 20.04 LTS")
 	output.Resultln("  debian:12       - Debian 12 (Bookworm)")

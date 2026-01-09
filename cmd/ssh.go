@@ -167,10 +167,10 @@ func setupSSHConfig(nameOrID, username string, port int, keyPath string, dryRun 
 	sshConfigEntry := generateSSHConfigEntry(hostAlias, ip, username, port, keyPath)
 
 	fmt.Printf("IP Address: %s\n", ip)
-	fmt.Printf("👤 SSH Username: %s\n", username)
-	fmt.Printf("🚪 SSH Port: %d\n", port)
+	fmt.Printf("SSH Username: %s\n", username)
+	fmt.Printf("SSH Port: %d\n", port)
 	if keyPath != "" {
-		fmt.Printf("🔑 SSH Key: %s\n", keyPath)
+		fmt.Printf("SSH Key: %s\n", keyPath)
 	}
 
 	if dryRun {
@@ -318,9 +318,9 @@ func deleteSSHConfigEntry(nameOrID string, dryRun bool) error {
 
 	if dryRun {
 		if removed {
-			fmt.Printf("🧪 Dry run: would remove SSH config entry for host '%s':\n\n%s\n", alias, block)
+			fmt.Printf("[Dry run] Would remove SSH config entry for host '%s':\n\n%s\n", alias, block)
 		} else {
-			fmt.Printf("🧪 Dry run: no SSH config entry found for host '%s' (nothing to remove)\n", alias)
+			fmt.Printf("[Dry run] No SSH config entry found for host '%s' (nothing to remove)\n", alias)
 		}
 		return nil
 	}

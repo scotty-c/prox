@@ -22,11 +22,11 @@ var testCmd = &cobra.Command{
 		output.Info("1. Loading configuration... ")
 		user, pass, url, err := client.ReadConfig()
 		if err != nil {
-			output.Errorln("✗ Failed")
+			output.Errorln("FAILED")
 			output.Error("   Error: %v\n", err)
 			os.Exit(1)
 		}
-		output.Resultln("✓ Success")
+		output.Resultln("OK")
 		output.Result("   URL: %s\n", url)
 		output.Result("   User: %s\n", user)
 
@@ -35,7 +35,7 @@ var testCmd = &cobra.Command{
 		// We use NewClient directly instead of CreateClient to avoid caching side effects for a test command
 		// and to ensure we are testing the exact credentials we just read
 		c := client.NewClient(url, user, pass)
-		output.Resultln("✓ Success")
+		output.Resultln("OK")
 
 		// Step 3: Authenticate
 		output.Info("3. Authenticating... ")
@@ -44,32 +44,32 @@ var testCmd = &cobra.Command{
 
 		err = c.Authenticate(ctx)
 		if err != nil {
-			output.Errorln("✗ Failed")
+			output.Errorln("FAILED")
 			output.Error("   Error: %v\n", err)
 			os.Exit(1)
 		}
-		output.Resultln("✓ Success")
+		output.Resultln("OK")
 
 		// Step 4: Check API Version
 		output.Info("4. Checking API version... ")
 		version, err := c.GetVersion(ctx)
 		if err != nil {
-			output.Errorln("✗ Failed")
+			output.Errorln("FAILED")
 			output.Error("   Error: %v\n", err)
 			os.Exit(1)
 		}
-		output.Resultln("✓ Success")
+		output.Resultln("OK")
 		output.Result("   Proxmox VE %s (Release %s)\n", version.Version, version.Release)
 
 		// Step 5: Check Node Access
 		output.Info("5. Checking node access... ")
 		nodes, err := c.GetNodes(ctx)
 		if err != nil {
-			output.Errorln("✗ Failed")
+			output.Errorln("FAILED")
 			output.Error("   Error: %v\n", err)
 			os.Exit(1)
 		}
-		output.Resultln("✓ Success")
+		output.Resultln("OK")
 		output.Result("   Found %d nodes: ", len(nodes))
 		for i, node := range nodes {
 			if i > 0 {

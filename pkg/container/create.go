@@ -46,15 +46,15 @@ func CreateContainer(node, name, template string, vmid int, memory, disk int, co
 			return fmt.Errorf("failed to get next VM ID: %w", err)
 		}
 		vmid = nextID
-		output.Info("🔢 Using VM ID: %d\n", vmid)
+		output.Info("Using VM ID: %d\n", vmid)
 	}
 
 	// Use default storage if not specified
 	if storage == "" {
 		storage = "local-lvm"
-		output.Info("📦 Using default storage: %s\n", storage)
+		output.Info("Using default storage: %s\n", storage)
 	} else {
-		output.Info("📦 Using storage: %s\n", storage)
+		output.Info("Using storage: %s\n", storage)
 	}
 
 	// Prepare container parameters
@@ -82,7 +82,7 @@ func CreateContainer(node, name, template string, vmid int, memory, disk int, co
 		}
 		if validKeys > 0 {
 			params["ssh-public-keys"] = sshKeys
-			output.Info("🔑 Added %d SSH public key(s)\n", validKeys)
+			output.Info("Added %d SSH public key(s)\n", validKeys)
 		}
 	}
 

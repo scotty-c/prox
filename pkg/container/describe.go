@@ -88,7 +88,7 @@ func DescribeContainer(nameOrID string) error {
 
 // displayContainerDetails displays detailed container information
 func displayContainerDetails(container *Container, config map[string]interface{}, status map[string]interface{}) {
-	output.Result("\n📦 Container Details\n")
+	output.Result("\nContainer Details\n")
 	output.Result("═══════════════════════════════════════════════════════════════════════════════════════\n")
 
 	// Basic Information
@@ -131,7 +131,7 @@ func displayContainerDetails(container *Container, config map[string]interface{}
 	output.Result("\n")
 
 	// Storage Information
-	output.Result("💽 Storage:\n")
+	output.Result("Storage:\n")
 	if rootfs, ok := config["rootfs"].(string); ok {
 		output.Result("   Root Filesystem: %s\n", rootfs)
 	}
@@ -148,7 +148,7 @@ func displayContainerDetails(container *Container, config map[string]interface{}
 	output.Result("\n")
 
 	// Network Configuration
-	output.Result("🌐 Network:\n")
+	output.Result("Network:\n")
 	for key, value := range config {
 		if strings.HasPrefix(key, "net") {
 			if netConfig, ok := value.(string); ok {
@@ -161,7 +161,7 @@ func displayContainerDetails(container *Container, config map[string]interface{}
 
 	// Runtime Status (if running)
 	if container.Status == "running" {
-		output.Result("📊 Runtime Status:\n")
+		output.Result("Runtime Status:\n")
 
 		if vmStatus, ok := status["status"].(string); ok {
 			output.Result("   VM Status: %s\n", vmStatus)
@@ -209,7 +209,7 @@ func displayContainerDetails(container *Container, config map[string]interface{}
 	}
 
 	// Security Settings
-	output.Result("🔒 Security:\n")
+	output.Result("Security:\n")
 	if unprivileged, ok := config["unprivileged"].(float64); ok {
 		if unprivileged == 1 {
 			output.Result("   Unprivileged: Yes\n")

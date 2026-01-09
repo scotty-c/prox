@@ -150,9 +150,9 @@ func showStatus() error {
 	// Summary status
 	fmt.Printf("\nStatus: ")
 	if offlineNodes > 0 {
-		fmt.Printf("⚠️  DEGRADED - %d node(s) offline\n", offlineNodes)
+		fmt.Printf("WARNING: DEGRADED - %d node(s) offline\n", offlineNodes)
 	} else {
-		fmt.Printf("✓ HEALTHY - All systems operational\n")
+		fmt.Printf("OK: HEALTHY - All systems operational\n")
 	}
 
 	return nil
