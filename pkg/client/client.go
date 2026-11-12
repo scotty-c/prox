@@ -155,6 +155,7 @@ type ProxmoxClientInterface interface {
 	GetContainerConfig(ctx context.Context, node string, vmid int) (map[string]interface{}, error)
 	GetContainerStatus(ctx context.Context, node string, vmid int) (map[string]interface{}, error)
 	GetContainerTemplates(ctx context.Context, node string) ([]ContainerTemplate, error)
+	GetStorageNames(ctx context.Context, node string, content string) ([]string, error)
 	GetContainerIP(ctx context.Context, node string, vmid int) (string, error)
 	GetContainerIPAlternative(ctx context.Context, node string, vmid int) (string, error)
 	GetContainerNetworkInterfaces(ctx context.Context, node string, vmid int) ([]NetworkInterface, error)
@@ -1223,6 +1224,30 @@ func (c *ProxmoxClient) GetVMConfig(ctx context.Context, node string, vmid int) 
 	path := fmt.Sprintf("/nodes/%s/qemu/%d/config", url.PathEscape(node), vmid)
 
 	return requestData[map[string]interface{}](ctx, c, "GET", path, nil, "VM config")
+}
+
+// GetStorageNames returns the names of the active storages on node that can
+// hold the given content type (e.g. "rootdir" for container root disks)
+func (c *ProxmoxClient) GetStorageNames(ctx context.Context, node string, content string) ([]string, error) {
+	path := fmt.Sprintf("/nodes/%s/storage?enabled=1&content=%s", url.PathEscape(node), url.QueryEscape(content))
+	list, err := requestData[[]interface{}](ctx, c, "GET", path, nil, "storage")
+	if err != nil {
+		return nil, err
+	}
+	var names []string
+	for _, item := range list {
+		storage, ok := item.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		if active, ok := storage["active"].(float64); ok && active == 0 {
+			continue
+		}
+		if name, ok := storage["storage"].(string); ok && name != "" {
+			names = append(names, name)
+		}
+	}
+	return names, nil
 }
 
 // GetContainerTemplates gets available container templates from a node

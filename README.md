@@ -160,6 +160,7 @@ prox ct templates
 prox ct list --tag database   # Filter containers by tag
 # create: prox ct create <name> <template>
 prox ct create web ubuntu:22.04 --ssh-keys-file ~/.ssh/id_rsa.pub --memory 1024 --disk 10
+prox ct create web debian:12 --bridge vmbr1 --vlan 20 --ip 10.0.20.5/24 --gateway 10.0.20.1  # Static IP on a VLAN
 prox ct start web
 prox ct describe web
 prox ssh web          # Add/update SSH config entry for container
