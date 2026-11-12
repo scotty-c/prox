@@ -44,6 +44,6 @@ func init() {
 	editCmd.Flags().StringP("name", "N", "", "VM name")
 	editCmd.Flags().IntP("cpu", "c", 0, "Number of CPU cores")
 	editCmd.Flags().IntP("memory", "m", 0, "Memory size in MB")
-	editCmd.Flags().IntP("disk", "d", 0, "Disk size in GB")
+	editCmd.Flags().IntP("disk", "d", 0, "Increase disk size by this many GB")
 	vmCmd.AddCommand(editCmd)
 }

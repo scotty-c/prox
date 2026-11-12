@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"os"
 
 	c "github.com/scotty-c/prox/pkg/config"
 	"github.com/spf13/cobra"
@@ -19,8 +20,8 @@ var updateCmd = &cobra.Command{
 		url, _ := cmd.Flags().GetString("url")
 
 		if err := c.Update(username, password, url); err != nil {
-			fmt.Printf("Error updating config: %v\n", err)
-			return
+			fmt.Fprintf(os.Stderr, "Error updating config: %v\n", err)
+			os.Exit(1)
 		}
 	},
 }

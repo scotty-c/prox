@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"os"
 
 	c "github.com/scotty-c/prox/pkg/config"
 	"github.com/spf13/cobra"
@@ -15,8 +16,8 @@ var migrateCmd = &cobra.Command{
 	Long:  `This command will detect if your configuration file contains plain text credentials and migrate them to encrypted format for improved security.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		if err := c.MigrateConfig(); err != nil {
-			fmt.Printf("Error migrating config: %v\n", err)
-			return
+			fmt.Fprintf(os.Stderr, "Error migrating config: %v\n", err)
+			os.Exit(1)
 		}
 		fmt.Println("Config migration completed successfully")
 	},

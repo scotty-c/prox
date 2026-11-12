@@ -102,7 +102,7 @@ func ShutdownVMWithWait(ctx context.Context, id int, node string, wait bool, cli
 		duration := time.Since(startTime)
 		output.Result("VM %d shut down successfully in %s\n", id, duration.Round(time.Millisecond))
 	} else {
-		output.Info("Tip: Use 'prox vms list' to check the current status\n")
+		output.Info("Tip: Use 'prox vm list' to check the current status\n")
 	}
 
 	return nil
@@ -175,7 +175,7 @@ func StartVMWithWait(ctx context.Context, id int, node string, wait bool, client
 		duration := time.Since(startTime)
 		output.Result("VM %d started successfully in %s\n", id, duration.Round(time.Millisecond))
 	} else {
-		output.Info("Tip: Use 'prox vms list' to check the current status\n")
+		output.Info("Tip: Use 'prox vm list' to check the current status\n")
 	}
 	return nil
 }
@@ -278,11 +278,10 @@ func (v *VirtualMachine) Delete(ctx context.Context) (*Task, error) {
 }
 
 // DeleteVM deletes a VM by ID and node
-func DeleteVM(ctx context.Context, id int, node string) {
+func DeleteVM(ctx context.Context, id int, node string) error {
 	client, err := c.CreateClient()
 	if err != nil {
-		output.Error("Error creating client: %v\n", err)
-		return
+		return fmt.Errorf("failed to create client: %w", err)
 	}
 
 	// If no node specified, auto-discover it
@@ -290,8 +289,7 @@ func DeleteVM(ctx context.Context, id int, node string) {
 		output.Info("Finding node for VM %d...\n", id)
 		discoveredNode, err := client.GetVMNode(ctx, id)
 		if err != nil {
-			output.Error("Error: Failed to find VM %d: %v\n", id, err)
-			return
+			return fmt.Errorf("failed to find VM %d: %w", id, err)
 		}
 		node = discoveredNode
 		output.Info("Found VM %d on node %s\n", id, node)
@@ -308,13 +306,13 @@ func DeleteVM(ctx context.Context, id int, node string) {
 
 	task, err := vm.Delete(ctx)
 	if err != nil {
-		output.Error("Error: Failed to delete VM %d: %v\n", id, err)
-		return
+		return fmt.Errorf("failed to delete VM %d: %w", id, err)
 	}
 
 	output.Result("VM %d deletion command issued successfully\n", id)
 	output.Result("Task ID: %s\n", task.ID)
-	output.Info("Tip: Use 'prox vms list' to verify the VM has been removed\n")
+	output.Info("Tip: Use 'prox vm list' to verify the VM has been removed\n")
+	return nil
 }
 
 // MigrateVM migrates a VM from one node to another
@@ -456,8 +454,7 @@ func DeleteVMByNameOrID(nameOrID string) error {
 	}
 
 	// Delete the VM
-	DeleteVM(ctx, vm.ID, vm.Node)
-	return nil
+	return DeleteVM(ctx, vm.ID, vm.Node)
 }
 
 // CloneVMByNameOrID clones a VM by name or ID

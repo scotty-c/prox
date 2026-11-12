@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	"os"
+
 	"github.com/scotty-c/prox/pkg/vm"
 	"github.com/spf13/cobra"
 )
@@ -11,7 +13,9 @@ var testCmd = &cobra.Command{
 	Short: "Test connection to Proxmox server",
 	Long:  `Test the connection to your Proxmox server and verify API access.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		vm.TestConnection()
+		if err := vm.TestConnection(); err != nil {
+			os.Exit(1)
+		}
 	},
 }
 

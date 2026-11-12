@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"os"
 
 	c "github.com/scotty-c/prox/pkg/config"
 	"github.com/spf13/cobra"
@@ -15,8 +16,8 @@ var deleteCmd = &cobra.Command{
 	Long:  ``,
 	Run: func(cmd *cobra.Command, args []string) {
 		if err := c.Delete(); err != nil {
-			fmt.Printf("Error deleting config: %v\n", err)
-			return
+			fmt.Fprintf(os.Stderr, "Error deleting config: %v\n", err)
+			os.Exit(1)
 		}
 	},
 }

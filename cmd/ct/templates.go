@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	"os"
+
 	"github.com/scotty-c/prox/pkg/container"
 	"github.com/spf13/cobra"
 )
@@ -13,7 +15,9 @@ var templatesCmd = &cobra.Command{
 	Long:    `List all available LXC container templates on Proxmox VE nodes. This shows the built-in templates that can be used to create new containers.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		node, _ := cmd.Flags().GetString("node")
-		container.ListTemplates(node)
+		if err := container.ListTemplates(node); err != nil {
+			os.Exit(1)
+		}
 	},
 }
 

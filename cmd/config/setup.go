@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"os"
 
 	c "github.com/scotty-c/prox/pkg/config"
 	"github.com/spf13/cobra"
@@ -23,8 +24,8 @@ var setupCmd = &cobra.Command{
 		url, _ := cmd.Flags().GetString("url")
 
 		if err := c.FirstRun(username, password, url); err != nil {
-			fmt.Printf("Error setting up config: %v\n", err)
-			return
+			fmt.Fprintf(os.Stderr, "Error setting up config: %v\n", err)
+			os.Exit(1)
 		}
 		fmt.Println("Config setup completed successfully")
 	},

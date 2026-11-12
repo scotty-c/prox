@@ -12,11 +12,11 @@ import (
 )
 
 // ListTemplates lists all available container templates
-func ListTemplates(node string) {
+func ListTemplates(node string) error {
 	client, err := c.CreateClient()
 	if err != nil {
-		output.Error("Error creating client: %v\n", err)
-		return
+		output.ClientError(err)
+		return fmt.Errorf("failed to create client: %w", err)
 	}
 
 	output.Infoln("Retrieving container templates...")
@@ -30,7 +30,7 @@ func ListTemplates(node string) {
 		clusterNodes, err := getClusterNodes(client)
 		if err != nil {
 			output.Error("Error: Error getting cluster nodes: %v\n", err)
-			return
+			return fmt.Errorf("failed to get cluster nodes: %w", err)
 		}
 		nodes = clusterNodes
 	}
@@ -39,19 +39,20 @@ func ListTemplates(node string) {
 	for _, nodeName := range nodes {
 		templates, err := getNodeTemplates(client, nodeName)
 		if err != nil {
-			output.Error("WARNING: Warning: Could not get templates from node %s: %v\n", nodeName, err)
+			output.Error("WARNING: Could not get templates from node %s: %v\n", nodeName, err)
 			continue
 		}
 		allTemplates = append(allTemplates, templates...)
 	}
 
 	if len(allTemplates) == 0 {
-		output.Errorln("Error: No container templates found")
-		return
+		output.Errorln("No container templates found")
+		return nil
 	}
 
 	// Display templates in a table
 	displayTemplatesTable(allTemplates)
+	return nil
 }
 
 // getNodeTemplates gets templates from a specific node

@@ -2,6 +2,7 @@ package vm
 
 import (
 	"context"
+	"fmt"
 
 	c "github.com/scotty-c/prox/pkg/client"
 	"github.com/scotty-c/prox/pkg/output"
@@ -28,12 +29,12 @@ func GetIp(ctx context.Context, id int, node string) string {
 }
 
 // TestConnection tests the basic connection to Proxmox
-func TestConnection() {
+func TestConnection() error {
 	ctx := context.Background()
 	client, err := c.CreateClient()
 	if err != nil {
 		output.Error("Error creating client: %v\n", err)
-		return
+		return fmt.Errorf("failed to create client: %w", err)
 	}
 
 	output.Infoln("Testing connection to Proxmox server...")
@@ -55,11 +56,11 @@ func TestConnection() {
 			output.Errorln("1. Verify credentials are correct")
 			output.Errorln("2. Check if API access is enabled for the user")
 			output.Errorln("3. This might be an older Proxmox version with limited API support")
-			return
+			return fmt.Errorf("connection test failed: %w", err2)
 		}
 		output.Info("Connected to Proxmox version: %s\n", version.Version)
 		output.Infoln("WARNING: Nodes endpoint not available, but version endpoint works")
-		return
+		return nil
 	}
 
 	output.Info("Found %d nodes\n", len(nodes))
@@ -82,7 +83,7 @@ func TestConnection() {
 	resources, err := client.GetClusterResources(ctx)
 	if err != nil {
 		output.Error("Error: Error getting cluster resources: %v\n", err)
-		return
+		return fmt.Errorf("failed to get cluster resources: %w", err)
 	}
 	output.Info("Found %d resources\n", len(resources))
 
@@ -96,4 +97,5 @@ func TestConnection() {
 	output.Info("Found %d virtual machines\n", vmCount)
 
 	output.Resultln("\nConnection test successful!")
+	return nil
 }

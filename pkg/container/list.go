@@ -214,9 +214,9 @@ func ListContainers(node string, runningOnly bool, jsonOutput bool, tag string) 
 
 	if len(containers) == 0 {
 		if runningOnly {
-			output.Errorln("Error: No running containers found")
+			output.Errorln("No running containers found")
 		} else {
-			output.Errorln("Error: No containers found")
+			output.Errorln("No containers found")
 		}
 		return nil
 	}

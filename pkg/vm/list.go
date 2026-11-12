@@ -111,7 +111,7 @@ func GetVM() {
 	}
 
 	if len(vms) == 0 {
-		output.Errorln("Error: No virtual machines found")
+		output.Errorln("No virtual machines found")
 		return
 	}
 
@@ -345,9 +345,9 @@ func ListVMs(opts ListVMsOptions) error {
 
 	if len(vms) == 0 {
 		if opts.RunningOnly {
-			output.Errorln("Error: No running virtual machines found")
+			output.Errorln("No running virtual machines found")
 		} else {
-			output.Errorln("Error: No virtual machines found")
+			output.Errorln("No virtual machines found")
 		}
 		return nil
 	}

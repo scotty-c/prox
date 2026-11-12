@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"os"
 
 	c "github.com/scotty-c/prox/pkg/config"
 	"github.com/spf13/cobra"
@@ -17,8 +18,8 @@ var useCmd = &cobra.Command{
 		profile := args[0]
 
 		if err := c.SetCurrentProfile(profile); err != nil {
-			fmt.Printf("Error switching profile: %v\n", err)
-			return
+			fmt.Fprintf(os.Stderr, "Error switching profile: %v\n", err)
+			os.Exit(1)
 		}
 
 		fmt.Printf("Switched to profile: %s\n", profile)

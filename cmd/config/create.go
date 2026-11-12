@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"os"
 
 	c "github.com/scotty-c/prox/pkg/config"
 	"github.com/spf13/cobra"
@@ -20,8 +21,8 @@ var createCmd = &cobra.Command{
 		url, _ := cmd.Flags().GetString("url")
 
 		if err := c.CreateProfile(profile, username, password, url); err != nil {
-			fmt.Printf("Error creating profile: %v\n", err)
-			return
+			fmt.Fprintf(os.Stderr, "Error creating profile: %v\n", err)
+			os.Exit(1)
 		}
 
 		fmt.Printf("Profile '%s' created successfully\n", profile)

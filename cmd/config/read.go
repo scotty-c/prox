@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"os"
 
 	c "github.com/scotty-c/prox/pkg/config"
 	"github.com/spf13/cobra"
@@ -16,8 +17,8 @@ var readCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		user, pass, url, err := c.Read()
 		if err != nil {
-			fmt.Printf("Error reading config: %v\n", err)
-			return
+			fmt.Fprintf(os.Stderr, "Error reading config: %v\n", err)
+			os.Exit(1)
 		}
 		fmt.Println("Username: ", user)
 		fmt.Println("Password: ", pass)

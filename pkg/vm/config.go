@@ -32,23 +32,21 @@ func (v *VirtualMachine) Update(ctx context.Context, config map[string]interface
 }
 
 // EditVM edits a VM configuration by ID and node
-func EditVM(ctx context.Context, id int, node string, name string, cores int, mem int, diskSize int, options ...VirtualMachineOption) {
+func EditVM(ctx context.Context, id int, node string, name string, cores int, mem int, diskSize int, options ...VirtualMachineOption) error {
 	client, err := c.CreateClient()
 	if err != nil {
-		fmt.Printf("Error creating client: %v\n", err)
-		return
+		return fmt.Errorf("failed to create client: %w", err)
 	}
 
-	// If no node specified, auto-discovery it
+	// If no node specified, auto-discover it
 	if node == "" {
-		fmt.Printf("Finding node for VM %d...\n", id)
+		output.Info("Finding node for VM %d...\n", id)
 		discoveredNode, err := client.GetVMNode(ctx, id)
 		if err != nil {
-			fmt.Printf("Error: Failed to find VM %d: %v\n", id, err)
-			return
+			return fmt.Errorf("failed to find VM %d: %w", id, err)
 		}
 		node = discoveredNode
-		fmt.Printf("Found VM %d on node %s\n", id, node)
+		output.Info("Found VM %d on node %s\n", id, node)
 	}
 
 	// Create VM instance
@@ -76,74 +74,70 @@ func EditVM(ctx context.Context, id int, node string, name string, cores int, me
 	}
 	if diskSize > 0 {
 		// For disk resize, we handle it separately as it requires a different API endpoint
-		fmt.Printf("Detecting disk type for VM %d on node %s...\n", id, node)
+		output.Info("Detecting disk type for VM %d on node %s...\n", id, node)
 
 		// Auto-detect the primary disk type
 		primaryDisk, err := vm.GetPrimaryDisk(ctx)
 		if err != nil {
-			fmt.Printf("Error: Failed to detect disk type for VM %d: %v\n", id, err)
-			return
+			return fmt.Errorf("failed to detect disk type for VM %d: %w", id, err)
 		}
 
-		fmt.Printf("Found primary disk: %s\n", primaryDisk)
-		fmt.Printf("Resizing disk for VM %d on node %s...\n", id, node)
-		fmt.Printf("Increasing disk size by: %d GB\n", diskSize)
+		output.Info("Found primary disk: %s\n", primaryDisk)
+		output.Info("Resizing disk for VM %d on node %s...\n", id, node)
+		output.Info("Increasing disk size by: %d GB\n", diskSize)
 
 		// Call disk resize function with auto-detected disk type
-		err = vm.ResizeDisk(ctx, primaryDisk, fmt.Sprintf("+%dG", diskSize))
-		if err != nil {
-			fmt.Printf("Error: Failed to resize VM %d disk: %v\n", id, err)
-			return
+		if err := vm.ResizeDisk(ctx, primaryDisk, fmt.Sprintf("+%dG", diskSize)); err != nil {
+			return fmt.Errorf("failed to resize VM %d disk: %w", id, err)
 		}
 
-		fmt.Printf("VM %d disk resize command issued successfully\n", id)
-		fmt.Printf("Tip: Use 'prox vm list' to check the VM status\n")
+		output.Result("VM %d disk resize command issued successfully\n", id)
+		output.Info("Tip: Use 'prox vm list' to check the VM status\n")
 
 		// Mark as having changes for the check, but don't add to config
 		hasChanges = true
 	}
 
 	if !hasChanges {
-		fmt.Printf("WARNING: No changes specified for VM %d\n", id)
-		fmt.Println("� Use flags like --name, --cpu, or --memory to specify changes")
-		return
+		output.Error("WARNING: No changes specified for VM %d\n", id)
+		output.Error("Tip: Use flags like --name, --cpu, --memory, or --disk to specify changes\n")
+		return nil
 	}
 
 	// Show what changes will be made
-	fmt.Printf("Updating VM %d configuration on node %s:\n", id, node)
+	output.Info("Updating VM %d configuration on node %s:\n", id, node)
 	if name != "" {
-		fmt.Printf("   • Name: %s\n", name)
+		output.Info("   • Name: %s\n", name)
 	}
 	if cores > 0 {
-		fmt.Printf("   • CPU cores: %d\n", cores)
+		output.Info("   • CPU cores: %d\n", cores)
 	}
 	if mem > 0 {
-		fmt.Printf("   • Memory: %d MB\n", mem)
+		output.Info("   • Memory: %d MB\n", mem)
 	}
 	if diskSize > 0 {
-		fmt.Printf("   • Disk size: %d GB\n", diskSize)
+		output.Info("   • Disk size increase: %d GB\n", diskSize)
 	}
 
 	// Only proceed with config updates if there are actual config changes (not just disk resize)
-	if len(config) == 0 && diskSize > 0 {
-		// Only disk resize was performed, no other config changes needed
-		return
+	if len(config) == 0 {
+		return nil
 	}
 
 	// Apply the changes
 	task, err := vm.Update(ctx, config)
 	if err != nil {
-		fmt.Printf("Error: Failed to update VM %d: %v\n", id, err)
-		return
+		return fmt.Errorf("failed to update VM %d: %w", id, err)
 	}
 
 	if task != nil {
-		fmt.Printf("VM %d update command issued successfully\n", id)
-		fmt.Printf("� Task ID: %s\n", task.ID)
-		fmt.Println("Tip: Use 'prox vm list' to check the update progress")
+		output.Result("VM %d update command issued successfully\n", id)
+		output.Result("Task ID: %s\n", task.ID)
+		output.Info("Tip: Use 'prox vm list' to check the update progress\n")
 	} else {
-		fmt.Printf("VM %d configuration updated successfully\n", id)
+		output.Result("VM %d configuration updated successfully\n", id)
 	}
+	return nil
 }
 
 // ResizeDisk resizes a VM disk
@@ -229,6 +223,5 @@ func EditVMByNameOrID(nameOrID string, name string, cores int, mem int, diskSize
 	}
 
 	// Edit the VM
-	EditVM(ctx, vm.ID, vm.Node, name, cores, mem, diskSize)
-	return nil
+	return EditVM(ctx, vm.ID, vm.Node, name, cores, mem, diskSize)
 }

@@ -65,6 +65,11 @@ CI/CD Usage:
 
 Use "prox [command] --help" for more information about a command.`,
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
+		// Arguments and flags have been validated by the time this runs, so any
+		// error from here on is a runtime failure. Don't follow it with the full
+		// usage text, which suggests the command was typed incorrectly.
+		cmd.SilenceUsage = true
+
 		// Set quiet mode based on flag
 		quiet, _ := cmd.Flags().GetBool("quiet")
 		output.SetQuiet(quiet)
