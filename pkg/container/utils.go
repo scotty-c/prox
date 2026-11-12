@@ -150,21 +150,34 @@ func FindByNameOrID(ctx context.Context, client c.ProxmoxClientInterface, nameOr
 
 	// Search by name and collect all container names for suggestions
 	var allContainerNames []string
+	var matches []c.Resource
 	for _, resource := range resources {
-		if resource.Type == "lxc" {
+		if resource.Type == "lxc" && resource.VMID != nil {
 			if resource.Name == nameOrID {
-				return &Container{
-					ID:     int(*resource.VMID),
-					Name:   resource.Name,
-					Status: resource.Status,
-					Node:   resource.Node,
-				}, nil
+				matches = append(matches, resource)
 			}
 			// Collect container names for fuzzy matching
 			if resource.Name != "" {
 				allContainerNames = append(allContainerNames, resource.Name)
 			}
 		}
+	}
+	if len(matches) == 1 {
+		return &Container{
+			ID:     *matches[0].VMID,
+			Name:   matches[0].Name,
+			Status: matches[0].Status,
+			Node:   matches[0].Node,
+		}, nil
+	}
+	if len(matches) > 1 {
+		// Proxmox allows duplicate names; don't guess which one was meant
+		errorMsg := fmt.Sprintf("more than one container is named '%s':", nameOrID)
+		for _, m := range matches {
+			errorMsg += fmt.Sprintf("\n  • ID %d on node %s", *m.VMID, m.Node)
+		}
+		errorMsg += "\n\nUse the container ID instead"
+		return nil, errors.New(errorMsg)
 	}
 
 	// Container not found - provide helpful suggestions

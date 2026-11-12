@@ -41,18 +41,31 @@ func FindByNameOrIDOnNode(ctx context.Context, client c.ProxmoxClientInterface, 
 
 	// Search by name and collect all VM names for suggestions
 	var allVMNames []string
+	var matches []c.Resource
 	for _, resource := range resources {
 		if !onNode(resource) {
 			continue
 		}
 		if resource.Name == nameOrID {
-			vm := vmFromResource(resource)
-			return &vm, nil
+			matches = append(matches, resource)
 		}
 		// Collect VM names for fuzzy matching
 		if resource.Name != "" {
 			allVMNames = append(allVMNames, resource.Name)
 		}
+	}
+	if len(matches) == 1 {
+		vm := vmFromResource(matches[0])
+		return &vm, nil
+	}
+	if len(matches) > 1 {
+		// Proxmox allows duplicate names; don't guess which one was meant
+		errorMsg := fmt.Sprintf("more than one VM is named '%s':", nameOrID)
+		for _, m := range matches {
+			errorMsg += fmt.Sprintf("\n  • ID %d on node %s", *m.VMID, m.Node)
+		}
+		errorMsg += "\n\nUse the VM ID instead, or --node to pick the node"
+		return nil, errors.New(errorMsg)
 	}
 
 	// VM not found - provide helpful suggestions

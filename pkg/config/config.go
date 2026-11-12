@@ -50,11 +50,23 @@ func GetProfilePath(profile string) (string, error) {
 	if profile == "" {
 		profile = defaultProfile
 	}
+	if err := validateProfileName(profile); err != nil {
+		return "", err
+	}
 	profilesDir, err := GetProfilesDir()
 	if err != nil {
 		return "", err
 	}
 	return filepath.Join(profilesDir, profile), nil
+}
+
+// validateProfileName rejects names that would point outside the profiles
+// directory, such as "../config" or "a/b"
+func validateProfileName(profile string) error {
+	if profile == "." || profile == ".." || strings.ContainsAny(profile, `/\`) || filepath.Base(profile) != profile {
+		return fmt.Errorf("invalid profile name %q: profile names cannot contain path separators", profile)
+	}
+	return nil
 }
 
 // GetCurrentProfile returns the name of the current active profile
@@ -229,15 +241,31 @@ func DeleteProfile(profile string) error {
 		return fmt.Errorf("failed to delete profile: %w", err)
 	}
 
-	// If this was the current profile, switch to default
-	if GetCurrentProfile() == profile {
+	// If this was the current profile, switch to default. If there is no
+	// default profile, remove the pointer so it doesn't name a deleted profile.
+	if currentProfileSetting() == profile {
 		if err := SetCurrentProfile(defaultProfile); err != nil {
-			// Ignore error if default doesn't exist
-			return nil
+			if path, err := GetCurrentProfilePath(); err == nil {
+				_ = os.Remove(path)
+			}
 		}
 	}
 
 	return nil
+}
+
+// currentProfileSetting returns the profile saved by 'prox config use',
+// ignoring any --profile override
+func currentProfileSetting() string {
+	path, err := GetCurrentProfilePath()
+	if err != nil {
+		return ""
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(data))
 }
 
 // ReadProfile reads a specific profile's configuration

@@ -36,8 +36,8 @@ func TestFindByNameOrIDOnNode(t *testing.T) {
 		wantID   int
 		wantErr  string
 	}{
-		{"web", "", 100, ""},     // no node: first match (existing behaviour)
-		{"web", "pve2", 200, ""}, // node filter picks the VM on that node
+		{"web", "", 0, "more than one VM is named 'web'"}, // ambiguous without --node
+		{"web", "pve2", 200, ""},                          // node filter picks the VM on that node
 		{"200", "pve2", 200, ""},
 		{"200", "pve1", 0, "not found on node 'pve1'"},
 		{"api", "pve1", 0, "not found on node 'pve1'"},

@@ -1,11 +1,14 @@
 package cmd
 
 import (
+	"bufio"
 	"fmt"
 	"os"
+	"strings"
 
 	c "github.com/scotty-c/prox/pkg/config"
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 )
 
 // setupCmd represents the setup command
@@ -36,6 +39,16 @@ Example:
 			return
 		}
 
+		// On a terminal, ask for anything not given as a flag rather than
+		// saving an incomplete profile. Scripts are unaffected.
+		if term.IsTerminal(int(os.Stdin.Fd())) {
+			var err error
+			if username, password, url, err = promptMissing(username, password, url); err != nil {
+				fmt.Fprintf(os.Stderr, "Error reading input: %v\n", err)
+				os.Exit(1)
+			}
+		}
+
 		if err := c.Create(username, password, url); err != nil {
 			fmt.Fprintf(os.Stderr, "Error setting up config: %v\n", err)
 			os.Exit(1)
@@ -43,6 +56,40 @@ Example:
 		saveTLSFlagsOrExit(cmd, c.GetCurrentProfile())
 		fmt.Println("Config setup completed successfully")
 	},
+}
+
+// promptMissing asks for any connection details that are empty
+func promptMissing(username, password, url string) (string, string, string, error) {
+	reader := bufio.NewReader(os.Stdin)
+	ask := func(label, current string) (string, error) {
+		if current != "" {
+			return current, nil
+		}
+		fmt.Printf("%s: ", label)
+		line, err := reader.ReadString('\n')
+		if err != nil && line == "" {
+			return "", err
+		}
+		return strings.TrimSpace(line), nil
+	}
+
+	var err error
+	if url, err = ask("Proxmox URL (e.g. https://pve.example.com:8006)", url); err != nil {
+		return "", "", "", err
+	}
+	if username, err = ask("Username (e.g. root@pam, or token ID user@realm!name)", username); err != nil {
+		return "", "", "", err
+	}
+	if password == "" {
+		fmt.Print("Password (or token secret): ")
+		bytes, err := term.ReadPassword(int(os.Stdin.Fd()))
+		fmt.Println()
+		if err != nil {
+			return "", "", "", err
+		}
+		password = string(bytes)
+	}
+	return username, password, url, nil
 }
 
 func init() {

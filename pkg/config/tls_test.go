@@ -52,3 +52,33 @@ func TestTLSOptionsSurviveProfileUpdates(t *testing.T) {
 		t.Fatalf("settings not removed:\n%s", data)
 	}
 }
+
+func TestProfileNamesCannotEscapeProfilesDir(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	for _, name := range []string{"../config", "a/b", "..", "."} {
+		if _, err := GetProfilePath(name); err == nil {
+			t.Errorf("GetProfilePath(%q) should fail", name)
+		}
+	}
+	for _, name := range []string{"default", "home-lab", "prod.eu", "my_profile"} {
+		if _, err := GetProfilePath(name); err != nil {
+			t.Errorf("GetProfilePath(%q) = %v", name, err)
+		}
+	}
+}
+
+func TestDeletingCurrentProfileWithoutDefault(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	if err := CreateProfile("lab", "u", "p", "https://pve:8006"); err != nil {
+		t.Fatal(err)
+	}
+	if err := SetCurrentProfile("lab"); err != nil {
+		t.Fatal(err)
+	}
+	if err := DeleteProfile("lab"); err != nil {
+		t.Fatal(err)
+	}
+	if got := GetCurrentProfile(); got != defaultProfile {
+		t.Fatalf("current profile after delete = %q, want %q", got, defaultProfile)
+	}
+}

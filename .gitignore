@@ -46,4 +46,4 @@ config.local
 *.log
 
 # Environment files
-test/e2e/config.env
+tests/e2e/config.env

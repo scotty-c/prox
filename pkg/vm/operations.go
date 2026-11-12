@@ -23,11 +23,16 @@ func GetID(ctx context.Context, id int) error {
 		return fmt.Errorf("failed to get cluster resources: %w", err)
 	}
 
+	// VMs and containers share one ID space
 	for _, resource := range resources {
-		if resource.Type == "qemu" && resource.VMID != nil && *resource.VMID == id {
-			output.Error("Error: VM ID %d is already in use on node %s\n", id, resource.Node)
+		if (resource.Type == "qemu" || resource.Type == "lxc") && resource.VMID != nil && *resource.VMID == id {
+			kind := "VM"
+			if resource.Type == "lxc" {
+				kind = "container"
+			}
+			output.Error("Error: ID %d is already in use by %s '%s' on node %s\n", id, kind, resource.Name, resource.Node)
 			output.Info("Tip: Please choose a different VM ID\n")
-			return fmt.Errorf("VM ID %d is already in use on node %s", id, resource.Node)
+			return fmt.Errorf("ID %d is already in use by %s '%s' on node %s", id, kind, resource.Name, resource.Node)
 		}
 	}
 
@@ -392,7 +397,7 @@ func MigrateVM(ctx context.Context, id int, sourceNode, targetNode string, onlin
 
 	duration := time.Since(startTime)
 	output.Result("VM %d migration completed successfully in %s!\n", id, duration.Round(time.Millisecond))
-	output.Result("VM %d is now running on node: %s\n", id, targetNode)
+	output.Result("VM %d is now on node: %s\n", id, targetNode)
 
 	if online {
 		output.Resultln("VM remained online during migration")

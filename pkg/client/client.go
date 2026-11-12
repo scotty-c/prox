@@ -908,6 +908,9 @@ func (c *ProxmoxClient) GetTaskLog(ctx context.Context, node, upid string, start
 	return lines, nil
 }
 
+// warnPartialEnvOnce prints the partial environment warning only once per run
+var warnPartialEnvOnce sync.Once
+
 // ReadConfig reads configuration from environment variables or file
 func ReadConfig() (string, string, string, error) {
 	// Check environment variables first (for CI/CD scenarios)
@@ -918,6 +921,13 @@ func ReadConfig() (string, string, string, error) {
 	// If all environment variables are set, use them
 	if envURL != "" && envUser != "" && envPass != "" {
 		return envUser, envPass, envURL, nil
+	}
+
+	// Some but not all set is almost always a mistake; say why they're ignored
+	if envURL != "" || envUser != "" || envPass != "" {
+		warnPartialEnvOnce.Do(func() {
+			fmt.Fprintln(os.Stderr, "Warning: PROX_URL, PROX_USER and PROX_PASSWORD must all be set to be used; only some are set, so the config file is used instead")
+		})
 	}
 
 	// Fall back to config file
