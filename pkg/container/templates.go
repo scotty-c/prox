@@ -102,6 +102,13 @@ func displayTemplatesTable(templates []Template) {
 
 // ResolveTemplate resolves a short template name (e.g., "ubuntu:22.04") to a full template path and node
 func ResolveTemplate(shortName string) (*ResolvedTemplate, error) {
+	return ResolveTemplateOnNode(shortName, "")
+}
+
+// ResolveTemplateOnNode resolves a template like ResolveTemplate. If preferredNode
+// is not empty and the template is available on that node (for example on shared
+// storage), that node is used; otherwise the first node holding the template is used.
+func ResolveTemplateOnNode(shortName string, preferredNode string) (*ResolvedTemplate, error) {
 	// Check if it's a short format (os:version) without full path
 	if !strings.Contains(shortName, ":") {
 		return nil, fmt.Errorf("template must be in format 'os:version' (e.g., 'ubuntu:22.04') or full format 'storage:vztmpl/template-name'")
@@ -129,17 +136,43 @@ func ResolveTemplate(shortName string) (*ResolvedTemplate, error) {
 		allTemplates = append(allTemplates, templates...)
 	}
 
+	return resolveTemplateFrom(allTemplates, shortName, preferredNode)
+}
+
+// preferNode returns the templates on preferredNode if there are any, otherwise all templates
+func preferNode(templates []Template, preferredNode string) []Template {
+	if preferredNode == "" {
+		return templates
+	}
+	var onNode []Template
+	for _, t := range templates {
+		if t.Node == preferredNode {
+			onNode = append(onNode, t)
+		}
+	}
+	if len(onNode) > 0 {
+		return onNode
+	}
+	return templates
+}
+
+// resolveTemplateFrom picks the template matching shortName from allTemplates
+func resolveTemplateFrom(allTemplates []Template, shortName string, preferredNode string) (*ResolvedTemplate, error) {
 	// If the template is already in full format, find which node has it
 	if strings.Contains(shortName, ":vztmpl/") {
+		var found []Template
 		for _, template := range allTemplates {
 			if template.Name == shortName {
-				return &ResolvedTemplate{
-					Template: shortName,
-					Node:     template.Node,
-				}, nil
+				found = append(found, template)
 			}
 		}
-		return nil, fmt.Errorf("template %s not found on any node", shortName)
+		if len(found) == 0 {
+			return nil, fmt.Errorf("template %s not found on any node", shortName)
+		}
+		return &ResolvedTemplate{
+			Template: shortName,
+			Node:     preferNode(found, preferredNode)[0].Node,
+		}, nil
 	}
 
 	// Parse the short name
@@ -182,6 +215,8 @@ func ResolveTemplate(shortName string) (*ResolvedTemplate, error) {
 	if len(matches) == 0 {
 		return nil, fmt.Errorf("no template found for %s. Use 'prox ct templates' to see available templates", shortName)
 	}
+
+	matches = preferNode(matches, preferredNode)
 
 	// If multiple matches, prefer the most recent or standard one
 	var bestMatch Template

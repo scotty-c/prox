@@ -19,7 +19,7 @@ func CreateContainer(node, name, template string, vmid int, memory, disk int, co
 	output.Info("Creating container %s...\n", name)
 
 	// Resolve template if it's in short format
-	resolvedTemplate, err := ResolveTemplate(template)
+	resolvedTemplate, err := ResolveTemplateOnNode(template, node)
 	if err != nil {
 		return fmt.Errorf("failed to resolve template: %w", err)
 	}
