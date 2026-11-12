@@ -8,11 +8,6 @@ import (
 	"github.com/scotty-c/prox/pkg/output"
 )
 
-// Status gets the status/IP of a virtual machine
-func (v *VirtualMachine) Status(ctx context.Context, id int, targetNode string) (string, error) {
-	return v.Client.GetVMIP(ctx, targetNode, id)
-}
-
 // GetIp gets the IP address of a VM by ID and node
 func GetIp(ctx context.Context, id int, node string) string {
 	client, err := c.CreateClient()

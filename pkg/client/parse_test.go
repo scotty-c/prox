@@ -81,3 +81,22 @@ func TestExtractIPFromInterfaces(t *testing.T) {
 		}
 	}
 }
+
+func TestIPFromCloudInitConfig(t *testing.T) {
+	tests := []struct {
+		name   string
+		config map[string]interface{}
+		want   string
+	}{
+		{"static", map[string]interface{}{"ipconfig0": "ip=192.168.1.100/24,gw=192.168.1.1"}, "192.168.1.100"},
+		{"dhcp then static", map[string]interface{}{"ipconfig0": "ip=dhcp", "ipconfig1": "gw=10.0.0.1,ip=10.0.0.5/16"}, "10.0.0.5"},
+		{"ipv6 only", map[string]interface{}{"ipconfig0": "ip6=auto"}, "N/A"},
+		{"net line is not cloud-init", map[string]interface{}{"net0": "virtio=AA:BB:CC:DD:EE:FF,bridge=vmbr0"}, "N/A"},
+		{"empty", map[string]interface{}{}, "N/A"},
+	}
+	for _, tt := range tests {
+		if got := ipFromCloudInitConfig(tt.config); got != tt.want {
+			t.Errorf("%s: got %q, want %q", tt.name, got, tt.want)
+		}
+	}
+}

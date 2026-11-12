@@ -556,16 +556,6 @@ func Update(username string, password string, url string) error {
 	return nil
 }
 
-// FirstRun creates config if it doesn't exist
-func FirstRun(username string, password string, url string) error {
-	if !Check() {
-		return Create(username, password, url)
-	}
-
-	output.Resultln("Config already exists")
-	return nil
-}
-
 // MigrateConfig migrates an existing plain text config to encrypted format
 func MigrateConfig() error {
 	if !Check() {

@@ -28,9 +28,8 @@ const (
 	ClusterResourcesCacheTTL = 10 // Time-to-live for cluster resources cache (seconds)
 	IPCacheTTL               = 60 // Time-to-live for IP address cache (seconds)
 
-	// Proxmox API boolean values
-	ProxmoxBoolTrue  = 1
-	ProxmoxBoolFalse = 0
+	// Proxmox API boolean value
+	ProxmoxBoolTrue = 1
 
 	// VM name constraints
 	MaxVMNameLength = 15
@@ -44,58 +43,4 @@ const (
 	DefaultContainerMemory = 512 // 512MB
 	DefaultContainerCores  = 1
 	DefaultContainerDisk   = "8G"
-
-	// API paths
-	APIBasePath          = "/api2/json"
-	AuthPath             = "/access/ticket"
-	NodesPath            = "/nodes"
-	ClusterResourcesPath = "/cluster/resources"
-	VersionPath          = "/version"
 )
-
-// Common VM statuses
-var VMStatuses = map[string]string{
-	"running":   "Running",
-	"stopped":   "Stopped",
-	"paused":    "Paused",
-	"suspended": "Suspended",
-}
-
-// Common container statuses
-var ContainerStatuses = map[string]string{
-	"running": "Running",
-	"stopped": "Stopped",
-	"paused":  "Paused",
-}
-
-// Boot order mappings for human-readable display
-var BootOrderMappings = map[string]string{
-	"c":     "Hard Disk",
-	"d":     "CD/DVD",
-	"n":     "Network (PXE)",
-	"a":     "Floppy",
-	"disk":  "Hard Disk",
-	"net":   "Network (PXE)",
-	"cdrom": "CD/DVD",
-}
-
-// Common disk interfaces
-var DiskInterfaces = []string{
-	"virtio0", "virtio1", "virtio2", "virtio3",
-	"scsi0", "scsi1", "scsi2", "scsi3",
-	"ide0", "ide1", "ide2", "ide3",
-	"sata0", "sata1", "sata2", "sata3",
-}
-
-// Container template shortcuts for common distributions
-var ContainerTemplateShortcuts = map[string]string{
-	"ubuntu:20.04": "ubuntu-20.04",
-	"ubuntu:22.04": "ubuntu-22.04",
-	"ubuntu:24.04": "ubuntu-24.04",
-	"debian:11":    "debian-11",
-	"debian:12":    "debian-12",
-	"centos:7":     "centos-7",
-	"centos:8":     "centos-8",
-	"alpine:3.18":  "alpine-3.18",
-	"alpine:3.19":  "alpine-3.19",
-}

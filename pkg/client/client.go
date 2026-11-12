@@ -547,91 +547,53 @@ func (c *ProxmoxClient) GetClusterResources(ctx context.Context) ([]Resource, er
 // StartVM starts a virtual machine
 func (c *ProxmoxClient) StartVM(ctx context.Context, node string, vmid int) (string, error) {
 	path := fmt.Sprintf("/nodes/%s/qemu/%d/status/start", url.PathEscape(node), vmid)
-	body, err := c.makeRequest(ctx, "POST", path, nil)
-	if err != nil {
-		return "", err
-	}
-
-	var resp APIResponse
-	if err := json.Unmarshal(body, &resp); err != nil {
-		return "", fmt.Errorf("failed to parse start VM response: %w", err)
-	}
-
-	if taskID, ok := resp.Data.(string); ok {
-		return taskID, nil
-	}
-
-	return "", fmt.Errorf("unexpected start VM response format")
+	return requestData[string](ctx, c, "POST", path, nil, "start VM")
 }
 
 // StopVM stops a virtual machine
 func (c *ProxmoxClient) StopVM(ctx context.Context, node string, vmid int) (string, error) {
 	path := fmt.Sprintf("/nodes/%s/qemu/%d/status/shutdown", url.PathEscape(node), vmid)
-	body, err := c.makeRequest(ctx, "POST", path, nil)
-	if err != nil {
-		return "", err
-	}
-
-	var resp APIResponse
-	if err := json.Unmarshal(body, &resp); err != nil {
-		return "", fmt.Errorf("failed to parse stop VM response: %w", err)
-	}
-
-	if taskID, ok := resp.Data.(string); ok {
-		return taskID, nil
-	}
-
-	return "", fmt.Errorf("unexpected stop VM response format")
+	return requestData[string](ctx, c, "POST", path, nil, "stop VM")
 }
 
 // ForceStopVM stops a virtual machine immediately, like pulling the power.
 // Use StopVM for a clean ACPI shutdown.
 func (c *ProxmoxClient) ForceStopVM(ctx context.Context, node string, vmid int) (string, error) {
-	return c.postForTask(ctx, fmt.Sprintf("/nodes/%s/qemu/%d/status/stop", url.PathEscape(node), vmid), "force stop VM")
+	return requestData[string](ctx, c, "POST", fmt.Sprintf("/nodes/%s/qemu/%d/status/stop", url.PathEscape(node), vmid), nil, "force stop VM")
 }
 
 // ForceStopContainer stops a container immediately. Use StopContainer for a
 // clean shutdown.
 func (c *ProxmoxClient) ForceStopContainer(ctx context.Context, node string, vmid int) (string, error) {
-	return c.postForTask(ctx, fmt.Sprintf("/nodes/%s/lxc/%d/status/stop", url.PathEscape(node), vmid), "force stop container")
+	return requestData[string](ctx, c, "POST", fmt.Sprintf("/nodes/%s/lxc/%d/status/stop", url.PathEscape(node), vmid), nil, "force stop container")
 }
 
-// postForTask sends a POST with no body and returns the task ID from the response
-func (c *ProxmoxClient) postForTask(ctx context.Context, path, action string) (string, error) {
-	body, err := c.makeRequest(ctx, "POST", path, nil)
+// requestData makes an API request and returns its "data" field as T.
+// Errors read "failed to parse <action> response" if the body isn't JSON and
+// "unexpected <action> response format" if data isn't a T.
+func requestData[T any](ctx context.Context, c *ProxmoxClient, method, path string, body interface{}, action string) (T, error) {
+	var zero T
+	raw, err := c.makeRequest(ctx, method, path, body)
 	if err != nil {
-		return "", err
+		return zero, err
 	}
 
 	var resp APIResponse
-	if err := json.Unmarshal(body, &resp); err != nil {
-		return "", fmt.Errorf("failed to parse %s response: %w", action, err)
+	if err := json.Unmarshal(raw, &resp); err != nil {
+		return zero, fmt.Errorf("failed to parse %s response: %w", action, err)
 	}
 
-	if taskID, ok := resp.Data.(string); ok {
-		return taskID, nil
+	data, ok := resp.Data.(T)
+	if !ok {
+		return zero, fmt.Errorf("unexpected %s response format", action)
 	}
-	return "", fmt.Errorf("unexpected %s response format", action)
+	return data, nil
 }
 
 // DeleteVM deletes a virtual machine
 func (c *ProxmoxClient) DeleteVM(ctx context.Context, node string, vmid int) (string, error) {
 	path := fmt.Sprintf("/nodes/%s/qemu/%d", url.PathEscape(node), vmid)
-	body, err := c.makeRequest(ctx, "DELETE", path, nil)
-	if err != nil {
-		return "", err
-	}
-
-	var resp APIResponse
-	if err := json.Unmarshal(body, &resp); err != nil {
-		return "", fmt.Errorf("failed to parse delete VM response: %w", err)
-	}
-
-	if taskID, ok := resp.Data.(string); ok {
-		return taskID, nil
-	}
-
-	return "", fmt.Errorf("unexpected delete VM response format")
+	return requestData[string](ctx, c, "DELETE", path, nil, "delete VM")
 }
 
 // CloneVM clones a virtual machine
@@ -647,21 +609,7 @@ func (c *ProxmoxClient) CloneVM(ctx context.Context, node string, vmid int, newi
 		reqBody["full"] = ProxmoxBoolTrue
 	}
 
-	body, err := c.makeRequest(ctx, "POST", path, reqBody)
-	if err != nil {
-		return "", err
-	}
-
-	var resp APIResponse
-	if err := json.Unmarshal(body, &resp); err != nil {
-		return "", fmt.Errorf("failed to parse clone VM response: %w", err)
-	}
-
-	if taskID, ok := resp.Data.(string); ok {
-		return taskID, nil
-	}
-
-	return "", fmt.Errorf("unexpected clone VM response format")
+	return requestData[string](ctx, c, "POST", path, reqBody, "clone VM")
 }
 
 // CreateContainer creates a new LXC container
@@ -671,121 +619,37 @@ func (c *ProxmoxClient) CreateContainer(ctx context.Context, node string, vmid i
 	// Ensure vmid is included in the request
 	params["vmid"] = vmid
 
-	body, err := c.makeRequest(ctx, "POST", path, params)
-	if err != nil {
-		return "", err
-	}
-
-	var resp APIResponse
-	if err := json.Unmarshal(body, &resp); err != nil {
-		return "", fmt.Errorf("failed to parse create container response: %w", err)
-	}
-
-	if taskID, ok := resp.Data.(string); ok {
-		return taskID, nil
-	}
-
-	return "", fmt.Errorf("unexpected create container response format")
+	return requestData[string](ctx, c, "POST", path, params, "create container")
 }
 
 // StartContainer starts an LXC container
 func (c *ProxmoxClient) StartContainer(ctx context.Context, node string, vmid int) (string, error) {
 	path := fmt.Sprintf("/nodes/%s/lxc/%d/status/start", url.PathEscape(node), vmid)
-	body, err := c.makeRequest(ctx, "POST", path, nil)
-	if err != nil {
-		return "", err
-	}
-
-	var resp APIResponse
-	if err := json.Unmarshal(body, &resp); err != nil {
-		return "", fmt.Errorf("failed to parse start container response: %w", err)
-	}
-
-	if taskID, ok := resp.Data.(string); ok {
-		return taskID, nil
-	}
-
-	return "", fmt.Errorf("unexpected start container response format")
+	return requestData[string](ctx, c, "POST", path, nil, "start container")
 }
 
 // StopContainer stops an LXC container
 func (c *ProxmoxClient) StopContainer(ctx context.Context, node string, vmid int) (string, error) {
 	path := fmt.Sprintf("/nodes/%s/lxc/%d/status/shutdown", url.PathEscape(node), vmid)
-	body, err := c.makeRequest(ctx, "POST", path, nil)
-	if err != nil {
-		return "", err
-	}
-
-	var resp APIResponse
-	if err := json.Unmarshal(body, &resp); err != nil {
-		return "", fmt.Errorf("failed to parse stop container response: %w", err)
-	}
-
-	if taskID, ok := resp.Data.(string); ok {
-		return taskID, nil
-	}
-
-	return "", fmt.Errorf("unexpected stop container response format")
+	return requestData[string](ctx, c, "POST", path, nil, "stop container")
 }
 
 // DeleteContainer deletes a container
 func (c *ProxmoxClient) DeleteContainer(ctx context.Context, node string, vmid int) (string, error) {
 	path := fmt.Sprintf("/nodes/%s/lxc/%d", url.PathEscape(node), vmid)
-	body, err := c.makeRequest(ctx, "DELETE", path, nil)
-	if err != nil {
-		return "", err
-	}
-
-	var resp APIResponse
-	if err := json.Unmarshal(body, &resp); err != nil {
-		return "", fmt.Errorf("failed to parse delete container response: %w", err)
-	}
-
-	if taskID, ok := resp.Data.(string); ok {
-		return taskID, nil
-	}
-
-	return "", fmt.Errorf("unexpected delete container response format")
+	return requestData[string](ctx, c, "DELETE", path, nil, "delete container")
 }
 
 // GetContainerConfig gets the configuration of an LXC container
 func (c *ProxmoxClient) GetContainerConfig(ctx context.Context, node string, vmid int) (map[string]interface{}, error) {
 	path := fmt.Sprintf("/nodes/%s/lxc/%d/config", url.PathEscape(node), vmid)
-	body, err := c.makeRequest(ctx, "GET", path, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	var resp APIResponse
-	if err := json.Unmarshal(body, &resp); err != nil {
-		return nil, fmt.Errorf("failed to parse container config response: %w", err)
-	}
-
-	if config, ok := resp.Data.(map[string]interface{}); ok {
-		return config, nil
-	}
-
-	return nil, fmt.Errorf("unexpected container config response format")
+	return requestData[map[string]interface{}](ctx, c, "GET", path, nil, "container config")
 }
 
 // GetContainerStatus gets the status of an LXC container
 func (c *ProxmoxClient) GetContainerStatus(ctx context.Context, node string, vmid int) (map[string]interface{}, error) {
 	path := fmt.Sprintf("/nodes/%s/lxc/%d/status/current", url.PathEscape(node), vmid)
-	body, err := c.makeRequest(ctx, "GET", path, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	var resp APIResponse
-	if err := json.Unmarshal(body, &resp); err != nil {
-		return nil, fmt.Errorf("failed to parse container status response: %w", err)
-	}
-
-	if status, ok := resp.Data.(map[string]interface{}); ok {
-		return status, nil
-	}
-
-	return nil, fmt.Errorf("unexpected container status response format")
+	return requestData[map[string]interface{}](ctx, c, "GET", path, nil, "container status")
 }
 
 // GetNextVMID gets the next available VM/container ID
@@ -1053,26 +917,8 @@ func (c *ProxmoxClient) GetVMIP(ctx context.Context, node string, vmid int) (str
 		return ip, nil
 	}
 
-	// Method 2: Try to get IP from VM network configuration
+	// Method 2: Use the static IP configured with cloud-init, if any
 	if ip := c.getVMIPFromConfig(ctx, node, vmid); ip != "N/A" {
-		c.setCachedIP(node, vmid, ip)
-		return ip, nil
-	}
-
-	// Method 3: Try to get IP from VM status/config
-	if ip := c.getVMIPFromStatus(ctx, node, vmid); ip != "N/A" {
-		c.setCachedIP(node, vmid, ip)
-		return ip, nil
-	}
-
-	// Method 4: Try to get IP from network interfaces
-	if ip := c.getVMIPFromInterfaces(ctx, node, vmid); ip != "N/A" {
-		c.setCachedIP(node, vmid, ip)
-		return ip, nil
-	}
-
-	// Method 5: Fallback - try getting IP from cluster resources or other sources
-	if ip := c.getVMIPFromClusterResources(ctx, vmid); ip != "N/A" {
 		c.setCachedIP(node, vmid, ip)
 		return ip, nil
 	}
@@ -1171,94 +1017,6 @@ func (c *ProxmoxClient) getVMIPFromGuestAgent(ctx context.Context, node string, 
 	}
 
 	return extractIPFromInterfaces(interfaces)
-}
-
-// getVMIPFromStatus tries to get IP from VM status
-func (c *ProxmoxClient) getVMIPFromStatus(ctx context.Context, node string, vmid int) string {
-	status, err := c.GetVMStatus(ctx, node, vmid)
-	if err != nil {
-		return "N/A"
-	}
-
-	// Check if there's network information in the status
-	if net, exists := status["net"]; exists {
-		if netMap, ok := net.(map[string]interface{}); ok {
-			for _, netInfo := range netMap {
-				if netStr, ok := netInfo.(string); ok {
-					// Parse network info - format might vary
-					if strings.Contains(netStr, "ip=") {
-						parts := strings.Split(netStr, "ip=")
-						if len(parts) > 1 {
-							ip := strings.Split(parts[1], ",")[0]
-							if ip != "" && ip != "127.0.0.1" {
-								return ip
-							}
-						}
-					}
-				}
-			}
-		}
-	}
-
-	return "N/A"
-}
-
-// getVMIPFromInterfaces tries to get IP from network interfaces endpoint
-func (c *ProxmoxClient) getVMIPFromInterfaces(ctx context.Context, node string, vmid int) string {
-	path := fmt.Sprintf("/nodes/%s/qemu/%d/interfaces", url.PathEscape(node), vmid)
-	body, err := c.makeRequest(ctx, "GET", path, nil)
-	if err != nil {
-		return "N/A"
-	}
-
-	var resp APIResponse
-	if err := json.Unmarshal(body, &resp); err != nil {
-		return "N/A"
-	}
-
-	if interfaces, ok := resp.Data.([]interface{}); ok {
-		for _, iface := range interfaces {
-			if ifaceMap, ok := iface.(map[string]interface{}); ok {
-				if inet, exists := ifaceMap["inet"]; exists {
-					if inetStr, ok := inet.(string); ok && inetStr != "" {
-						// Parse IP from CIDR notation if needed
-						if strings.Contains(inetStr, "/") {
-							parts := strings.Split(inetStr, "/")
-							if len(parts) > 0 && parts[0] != "127.0.0.1" {
-								return parts[0]
-							}
-						} else if inetStr != "127.0.0.1" {
-							return inetStr
-						}
-					}
-				}
-			}
-		}
-	}
-
-	return "N/A"
-}
-
-// getVMIPFromClusterResources tries to get IP from cluster resources (if available)
-func (c *ProxmoxClient) getVMIPFromClusterResources(ctx context.Context, vmid int) string {
-	resources, err := c.GetClusterResources(ctx)
-	if err != nil {
-		return "N/A"
-	}
-
-	for _, resource := range resources {
-		if resource.Type == "qemu" && resource.VMID != nil && *resource.VMID == vmid {
-			// Some Proxmox setups might include IP information in cluster resources
-			// This is not standard but worth checking
-			if resource.Name != "" {
-				// Try to see if there's any IP-like pattern in the resource data
-				// This is a very basic fallback
-				return "N/A"
-			}
-		}
-	}
-
-	return "N/A"
 }
 
 // GetContainerIP gets the IP address of a container using multiple methods
@@ -1457,42 +1215,14 @@ func (c *ProxmoxClient) ResizeDisk(ctx context.Context, node string, vmid int, d
 		"size": size,
 	}
 
-	body, err := c.makeRequest(ctx, "PUT", path, reqBody)
-	if err != nil {
-		return "", err
-	}
-
-	var resp APIResponse
-	if err := json.Unmarshal(body, &resp); err != nil {
-		return "", fmt.Errorf("failed to parse resize disk response: %w", err)
-	}
-
-	if taskID, ok := resp.Data.(string); ok {
-		return taskID, nil
-	}
-
-	return "", fmt.Errorf("unexpected resize disk response format")
+	return requestData[string](ctx, c, "PUT", path, reqBody, "resize disk")
 }
 
 // GetVMConfig gets the configuration of a virtual machine
 func (c *ProxmoxClient) GetVMConfig(ctx context.Context, node string, vmid int) (map[string]interface{}, error) {
 	path := fmt.Sprintf("/nodes/%s/qemu/%d/config", url.PathEscape(node), vmid)
 
-	body, err := c.makeRequest(ctx, "GET", path, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	var resp APIResponse
-	if err := json.Unmarshal(body, &resp); err != nil {
-		return nil, fmt.Errorf("failed to parse VM config response: %w", err)
-	}
-
-	if config, ok := resp.Data.(map[string]interface{}); ok {
-		return config, nil
-	}
-
-	return nil, fmt.Errorf("unexpected VM config response format")
+	return requestData[map[string]interface{}](ctx, c, "GET", path, nil, "VM config")
 }
 
 // GetContainerTemplates gets available container templates from a node
@@ -1599,21 +1329,7 @@ func (c *ProxmoxClient) getStorageTemplates(ctx context.Context, node, storage s
 // GetVMStatus gets the current status of a virtual machine
 func (c *ProxmoxClient) GetVMStatus(ctx context.Context, node string, vmid int) (map[string]interface{}, error) {
 	path := fmt.Sprintf("/nodes/%s/qemu/%d/status/current", url.PathEscape(node), vmid)
-	body, err := c.makeRequest(ctx, "GET", path, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	var resp APIResponse
-	if err := json.Unmarshal(body, &resp); err != nil {
-		return nil, fmt.Errorf("failed to parse VM status response: %w", err)
-	}
-
-	if status, ok := resp.Data.(map[string]interface{}); ok {
-		return status, nil
-	}
-
-	return nil, fmt.Errorf("unexpected VM status response format")
+	return requestData[map[string]interface{}](ctx, c, "GET", path, nil, "VM status")
 }
 
 // GetVMDiskInfo gets more detailed disk information from VM configuration
@@ -1838,39 +1554,35 @@ func parseDiskSize(sizeStr string) uint64 {
 	}
 }
 
-// getVMIPFromConfig tries to get IP from VM network configuration
+// getVMIPFromConfig returns a static IPv4 address configured with cloud-init
+// (ipconfig0, ipconfig1, ...), e.g. "ip=192.168.1.100/24,gw=192.168.1.1".
 func (c *ProxmoxClient) getVMIPFromConfig(ctx context.Context, node string, vmid int) string {
 	config, err := c.GetVMConfig(ctx, node, vmid)
 	if err != nil {
 		return "N/A"
 	}
+	return ipFromCloudInitConfig(config)
+}
 
-	// Check network configuration for static IP settings
-	// Look for network interfaces (net0, net1, etc.)
-	for key, value := range config {
-		if strings.HasPrefix(key, "net") {
-			if netConfig, ok := value.(string); ok {
-				// Parse network configuration string
-				// Example: "virtio=12:34:56:78:90:AB,bridge=vmbr0,ip=192.168.1.100/24"
-				if strings.Contains(netConfig, "ip=") {
-					parts := strings.Split(netConfig, ",")
-					for _, part := range parts {
-						if strings.HasPrefix(part, "ip=") {
-							ipWithMask := strings.TrimPrefix(part, "ip=")
-							// Remove subnet mask if present
-							if strings.Contains(ipWithMask, "/") {
-								ip := strings.Split(ipWithMask, "/")[0]
-								if ip != "" && ip != "dhcp" && ip != "127.0.0.1" {
-									return ip
-								}
-							}
-						}
-					}
-				}
+// ipFromCloudInitConfig picks the static IPv4 address from the lowest numbered
+// ipconfigN entry that has one
+func ipFromCloudInitConfig(config map[string]interface{}) string {
+	for i := 0; i < 32; i++ {
+		value, ok := config[fmt.Sprintf("ipconfig%d", i)].(string)
+		if !ok {
+			continue
+		}
+		for _, part := range strings.Split(value, ",") {
+			ipWithMask, found := strings.CutPrefix(strings.TrimSpace(part), "ip=")
+			if !found {
+				continue
+			}
+			ip, _, _ := strings.Cut(ipWithMask, "/")
+			if ip != "" && ip != "dhcp" && ip != "127.0.0.1" {
+				return ip
 			}
 		}
 	}
-
 	return "N/A"
 }
 
@@ -1888,19 +1600,5 @@ func (c *ProxmoxClient) MigrateVM(ctx context.Context, node string, vmid int, ta
 		reqBody[key] = value
 	}
 
-	body, err := c.makeRequest(ctx, "POST", path, reqBody)
-	if err != nil {
-		return "", err
-	}
-
-	var resp APIResponse
-	if err := json.Unmarshal(body, &resp); err != nil {
-		return "", fmt.Errorf("failed to parse migrate VM response: %w", err)
-	}
-
-	if taskID, ok := resp.Data.(string); ok {
-		return taskID, nil
-	}
-
-	return "", fmt.Errorf("unexpected migrate VM response format")
+	return requestData[string](ctx, c, "POST", path, reqBody, "migrate VM")
 }

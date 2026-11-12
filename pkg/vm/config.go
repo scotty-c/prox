@@ -8,13 +8,6 @@ import (
 	"github.com/scotty-c/prox/pkg/output"
 )
 
-// Config configures a virtual machine (placeholder for future implementation)
-func (v *VirtualMachine) Config(ctx context.Context, options ...VirtualMachineOption) (*Task, error) {
-	// Note: This functionality would need to be implemented in the ProxmoxClient
-	// For now, return an error indicating it's not implemented
-	return nil, fmt.Errorf("VM configuration update not implemented in the new client")
-}
-
 // Update updates the VM configuration
 func (v *VirtualMachine) Update(ctx context.Context, config map[string]interface{}) (*Task, error) {
 	taskID, err := v.Client.UpdateVM(ctx, v.Node, v.ID, config)
