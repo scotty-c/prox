@@ -131,7 +131,7 @@ func resolveSSHTarget(ctx context.Context, nameOrID string, info io.Writer) (*ss
 	vmObj, vmErr := vm.FindByNameOrID(ctx, cl, nameOrID)
 	if vmErr == nil {
 		t.Type, t.Name, t.ID, t.Node = "VM", vmObj.Name, vmObj.ID, vmObj.Node
-		fmt.Fprintf(info, "Found %s: %s (ID: %d) on node %s\n", t.Type, t.Name, t.ID, t.Node)
+		_, _ = fmt.Fprintf(info, "Found %s: %s (ID: %d) on node %s\n", t.Type, t.Name, t.ID, t.Node)
 		if t.IP, err = cl.GetVMIP(ctx, t.Node, t.ID); err != nil {
 			return nil, fmt.Errorf("failed to get VM IP: %w", err)
 		}
@@ -141,7 +141,7 @@ func resolveSSHTarget(ctx context.Context, nameOrID string, info io.Writer) (*ss
 			return nil, fmt.Errorf("resource '%s' not found as VM or container. VM error: %v, Container error: %v", nameOrID, vmErr, ctErr)
 		}
 		t.Type, t.Name, t.ID, t.Node = "Container", ctObj.Name, ctObj.ID, ctObj.Node
-		fmt.Fprintf(info, "Found %s: %s (ID: %d) on node %s\n", t.Type, t.Name, t.ID, t.Node)
+		_, _ = fmt.Fprintf(info, "Found %s: %s (ID: %d) on node %s\n", t.Type, t.Name, t.ID, t.Node)
 		if t.IP, err = cl.GetContainerIP(ctx, t.Node, t.ID); err != nil {
 			return nil, fmt.Errorf("failed to get container IP: %w", err)
 		}
