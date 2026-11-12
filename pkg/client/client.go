@@ -146,6 +146,12 @@ type ProxmoxClientInterface interface {
 	IsVMRunning(ctx context.Context, vmid int) (bool, error)
 	MigrateVM(ctx context.Context, node string, vmid int, targetNode string, options map[string]interface{}) (string, error)
 
+	// Snapshot operations (guestType is GuestVM or GuestContainer)
+	ListSnapshots(ctx context.Context, node, guestType string, vmid int) ([]Snapshot, error)
+	CreateSnapshot(ctx context.Context, node, guestType string, vmid int, name, description string, vmState bool) (string, error)
+	RollbackSnapshot(ctx context.Context, node, guestType string, vmid int, name string) (string, error)
+	DeleteSnapshot(ctx context.Context, node, guestType string, vmid int, name string) (string, error)
+
 	// Container operations
 	CreateContainer(ctx context.Context, node string, vmid int, params map[string]interface{}) (string, error)
 	StartContainer(ctx context.Context, node string, vmid int) (string, error)
