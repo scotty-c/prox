@@ -50,6 +50,12 @@ func StartContainer(nameOrID string) error {
 
 // StopContainer stops a container by name or ID
 func StopContainer(nameOrID string) error {
+	return StopContainerWithOptions(nameOrID, false)
+}
+
+// StopContainerWithOptions stops a container by name or ID. With force, the
+// container is stopped immediately instead of being shut down cleanly.
+func StopContainerWithOptions(nameOrID string, force bool) error {
 	ctx := context.Background()
 	client, err := c.CreateClient()
 	if err != nil {
@@ -71,7 +77,12 @@ func StopContainer(nameOrID string) error {
 	}
 
 	// Stop the container
-	taskID, err := client.StopContainer(ctx, container.Node, container.ID)
+	stop := client.StopContainer
+	if force {
+		output.Info("Force stopping container %s...\n", nameOrID)
+		stop = client.ForceStopContainer
+	}
+	taskID, err := stop(ctx, container.Node, container.ID)
 	if err != nil {
 		return fmt.Errorf("failed to stop container: %w", err)
 	}

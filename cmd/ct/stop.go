@@ -21,7 +21,8 @@ Examples:
   prox ct stop mycontainer
   prox ct stop 100
   prox container shutdown webapp
-  prox lxc stop 101`,
+  prox lxc stop 101
+  prox ct stop mycontainer --force   # stop immediately`,
 	Args: func(cmd *cobra.Command, args []string) error {
 		if len(args) != 1 {
 			return fmt.Errorf("requires exactly 1 argument: <name|id>")
@@ -32,8 +33,10 @@ Examples:
 	Run: func(cmd *cobra.Command, args []string) {
 		nameOrID := args[0]
 
+		force, _ := cmd.Flags().GetBool("force")
+
 		// Stop the container
-		err := container.StopContainer(nameOrID)
+		err := container.StopContainerWithOptions(nameOrID, force)
 		if err != nil {
 			output.UserError("stopping container", err)
 			os.Exit(1)
@@ -42,5 +45,6 @@ Examples:
 }
 
 func init() {
+	stopCmd.Flags().BoolP("force", "f", false, "Stop immediately instead of shutting down cleanly (like pulling the power)")
 	ctCmd.AddCommand(stopCmd)
 }

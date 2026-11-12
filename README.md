@@ -151,6 +151,7 @@ prox ssh 100 --delete         # Remove SSH entry for VM 100
 prox vm clone 100 101 clone-101 --full
 prox vm migrate 100 node2 --online
 prox vm shutdown 100
+prox vm stop 100 --force      # Hard stop a VM that ignores ACPI shutdown
 prox vm delete 101
 ```
 Container workflow:
@@ -317,7 +318,7 @@ VMs (vm)
 	- Flags: -n, --node <node> (optional)
 
 - start <id> | shutdown <id>
-	- Flags: -n, --node <node> (optional)
+	- Flags: -n, --node <node> (optional); -w, --wait; shutdown: -f, --force (hard stop)
 
 - edit <id>
 	- Flags:

@@ -130,6 +130,7 @@ type ProxmoxClientInterface interface {
 	// VM operations
 	StartVM(ctx context.Context, node string, vmid int) (string, error)
 	StopVM(ctx context.Context, node string, vmid int) (string, error)
+	ForceStopVM(ctx context.Context, node string, vmid int) (string, error)
 	DeleteVM(ctx context.Context, node string, vmid int) (string, error)
 	CloneVM(ctx context.Context, node string, vmid int, newid int, name string, full bool) (string, error)
 	UpdateVM(ctx context.Context, node string, vmid int, config map[string]interface{}) (string, error)
@@ -147,6 +148,7 @@ type ProxmoxClientInterface interface {
 	CreateContainer(ctx context.Context, node string, vmid int, params map[string]interface{}) (string, error)
 	StartContainer(ctx context.Context, node string, vmid int) (string, error)
 	StopContainer(ctx context.Context, node string, vmid int) (string, error)
+	ForceStopContainer(ctx context.Context, node string, vmid int) (string, error)
 	DeleteContainer(ctx context.Context, node string, vmid int) (string, error)
 	GetContainerConfig(ctx context.Context, node string, vmid int) (map[string]interface{}, error)
 	GetContainerStatus(ctx context.Context, node string, vmid int) (map[string]interface{}, error)
@@ -481,6 +483,36 @@ func (c *ProxmoxClient) StopVM(ctx context.Context, node string, vmid int) (stri
 	}
 
 	return "", fmt.Errorf("unexpected stop VM response format")
+}
+
+// ForceStopVM stops a virtual machine immediately, like pulling the power.
+// Use StopVM for a clean ACPI shutdown.
+func (c *ProxmoxClient) ForceStopVM(ctx context.Context, node string, vmid int) (string, error) {
+	return c.postForTask(ctx, fmt.Sprintf("/nodes/%s/qemu/%d/status/stop", node, vmid), "force stop VM")
+}
+
+// ForceStopContainer stops a container immediately. Use StopContainer for a
+// clean shutdown.
+func (c *ProxmoxClient) ForceStopContainer(ctx context.Context, node string, vmid int) (string, error) {
+	return c.postForTask(ctx, fmt.Sprintf("/nodes/%s/lxc/%d/status/stop", node, vmid), "force stop container")
+}
+
+// postForTask sends a POST with no body and returns the task ID from the response
+func (c *ProxmoxClient) postForTask(ctx context.Context, path, action string) (string, error) {
+	body, err := c.makeRequest(ctx, "POST", path, nil)
+	if err != nil {
+		return "", err
+	}
+
+	var resp APIResponse
+	if err := json.Unmarshal(body, &resp); err != nil {
+		return "", fmt.Errorf("failed to parse %s response: %w", action, err)
+	}
+
+	if taskID, ok := resp.Data.(string); ok {
+		return taskID, nil
+	}
+	return "", fmt.Errorf("unexpected %s response format", action)
 }
 
 // DeleteVM deletes a virtual machine

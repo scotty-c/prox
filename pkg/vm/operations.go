@@ -53,6 +53,12 @@ func ShutdownVM(ctx context.Context, id int, node string) error {
 
 // ShutdownVMWithWait shuts down a VM by ID and node with optional wait
 func ShutdownVMWithWait(ctx context.Context, id int, node string, wait bool, client c.ProxmoxClientInterface) error {
+	return ShutdownVMWithOptions(ctx, id, node, wait, false, client)
+}
+
+// ShutdownVMWithOptions shuts down a VM by ID and node. With force, the VM is
+// stopped immediately instead of being asked to shut down cleanly.
+func ShutdownVMWithOptions(ctx context.Context, id int, node string, wait bool, force bool, client c.ProxmoxClientInterface) error {
 	if client == nil {
 		var err error
 		client, err = c.CreateClient()
@@ -74,8 +80,6 @@ func ShutdownVMWithWait(ctx context.Context, id int, node string, wait bool, cli
 		output.Info("Found VM %d on node %s\n", id, node)
 	}
 
-	output.Info("Shutting down VM %d on node %s...\n", id, node)
-
 	vm := &VirtualMachine{
 		ID:     id,
 		Node:   node,
@@ -83,13 +87,27 @@ func ShutdownVMWithWait(ctx context.Context, id int, node string, wait bool, cli
 	}
 
 	startTime := time.Now()
-	task, err := vm.Shutdown(ctx)
+	var task *Task
+	var err error
+	if force {
+		output.Info("Force stopping VM %d on node %s...\n", id, node)
+		var upid string
+		upid, err = client.ForceStopVM(ctx, node, id)
+		task = NewTask(upid)
+	} else {
+		output.Info("Shutting down VM %d on node %s...\n", id, node)
+		task, err = vm.Shutdown(ctx)
+	}
 	if err != nil {
 		output.Error("Error: Failed to shutdown VM %d: %v\n", id, err)
 		return fmt.Errorf("failed to shutdown VM %d: %w", id, err)
 	}
 
-	output.Result("VM %d shutdown command issued successfully\n", id)
+	if force {
+		output.Result("VM %d force stop command issued successfully\n", id)
+	} else {
+		output.Result("VM %d shutdown command issued successfully\n", id)
+	}
 	output.Result("Task ID: %s\n", task.ID)
 
 	if wait {
@@ -420,6 +438,12 @@ func ShutdownVMByNameOrID(nameOrID string) error {
 // ShutdownVMByNameOrIDWithWait shuts down a VM by name or ID with optional wait.
 // If node is not empty, only VMs on that node are considered.
 func ShutdownVMByNameOrIDWithWait(nameOrID string, node string, wait bool) error {
+	return ShutdownVMByNameOrIDWithOptions(nameOrID, node, wait, false)
+}
+
+// ShutdownVMByNameOrIDWithOptions shuts down a VM by name or ID. With force,
+// the VM is stopped immediately instead of being asked to shut down cleanly.
+func ShutdownVMByNameOrIDWithOptions(nameOrID string, node string, wait bool, force bool) error {
 	ctx := context.Background()
 	client, err := c.CreateClient()
 	if err != nil {
@@ -434,7 +458,7 @@ func ShutdownVMByNameOrIDWithWait(nameOrID string, node string, wait bool) error
 	}
 
 	// Shutdown the VM
-	if err := ShutdownVMWithWait(ctx, vm.ID, vm.Node, wait, client); err != nil {
+	if err := ShutdownVMWithOptions(ctx, vm.ID, vm.Node, wait, force, client); err != nil {
 		return fmt.Errorf("failed to shutdown VM: %w", err)
 	}
 	return nil
