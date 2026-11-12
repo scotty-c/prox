@@ -13,6 +13,7 @@ import (
 	"os"
 	"os/user"
 	"runtime"
+	"strings"
 )
 
 const (
@@ -46,6 +47,17 @@ func generateKey() ([]byte, error) {
 	return hash[:], nil
 }
 
+// encryptedPrefix marks a value as encrypted. Decrypt accepts it, but Encrypt
+// does not write it yet so that config files stay readable by older versions.
+const encryptedPrefix = "enc:v1:"
+
+// minCiphertextSize is the smallest possible AES-GCM output: nonce plus tag
+const minCiphertextSize = nonceSize + 16
+
+// ErrWrongKey is returned when a value was encrypted with a different key,
+// for example after the hostname or username changed.
+var ErrWrongKey = errors.New("failed to decrypt credentials: they were encrypted with a different key (the hostname or username may have changed)")
+
 // Encrypt encrypts plaintext using AES-GCM
 func Encrypt(plaintext string) (string, error) {
 	if plaintext == "" {
@@ -56,7 +68,10 @@ func Encrypt(plaintext string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to generate key: %w", err)
 	}
+	return encryptWithKey(key, plaintext)
+}
 
+func encryptWithKey(key []byte, plaintext string) (string, error) {
 	block, err := aes.NewCipher(key)
 	if err != nil {
 		return "", fmt.Errorf("failed to create cipher: %w", err)
@@ -76,31 +91,33 @@ func Encrypt(plaintext string) (string, error) {
 	return base64.StdEncoding.EncodeToString(ciphertext), nil
 }
 
-// Decrypt decrypts ciphertext using AES-GCM
+// Decrypt decrypts ciphertext using AES-GCM.
+//
+// Values that do not look like ciphertext are returned unchanged, so plain
+// text values from older config files keep working. A value that looks like
+// ciphertext but fails to decrypt returns ErrWrongKey.
 func Decrypt(ciphertext string) (string, error) {
 	if ciphertext == "" {
 		return "", nil
-	}
-
-	// Check if this looks like encrypted data (base64)
-	if !isBase64(ciphertext) {
-		// Assume it's plain text (backward compatibility)
-		return ciphertext, nil
 	}
 
 	key, err := generateKey()
 	if err != nil {
 		return "", fmt.Errorf("failed to generate key: %w", err)
 	}
+	return decryptWithKey(key, ciphertext)
+}
 
-	data, err := base64.StdEncoding.DecodeString(ciphertext)
-	if err != nil {
-		// If base64 decode fails, assume it's plain text
+func decryptWithKey(key []byte, ciphertext string) (string, error) {
+	value, prefixed := strings.CutPrefix(ciphertext, encryptedPrefix)
+
+	data, err := base64.StdEncoding.DecodeString(value)
+	if err != nil || len(data) < minCiphertextSize {
+		if prefixed {
+			return "", errors.New("failed to decrypt credentials: encrypted value is malformed")
+		}
+		// Not ciphertext: assume plain text (backward compatibility)
 		return ciphertext, nil
-	}
-
-	if len(data) < nonceSize {
-		return "", errors.New("ciphertext too short")
 	}
 
 	block, err := aes.NewCipher(key)
@@ -113,22 +130,12 @@ func Decrypt(ciphertext string) (string, error) {
 		return "", fmt.Errorf("failed to create GCM: %w", err)
 	}
 
-	nonce := data[:nonceSize]
-	ciphertext_bytes := data[nonceSize:]
-
-	plaintext, err := gcm.Open(nil, nonce, ciphertext_bytes, nil)
+	plaintext, err := gcm.Open(nil, data[:nonceSize], data[nonceSize:], nil)
 	if err != nil {
-		// If decryption fails, assume it's plain text (backward compatibility)
-		return string(data), nil
+		return "", ErrWrongKey
 	}
 
 	return string(plaintext), nil
-}
-
-// isBase64 checks if a string is valid base64
-func isBase64(s string) bool {
-	_, err := base64.StdEncoding.DecodeString(s)
-	return err == nil
 }
 
 // MigrateToEncrypted encrypts plain text values if they aren't already encrypted
@@ -137,10 +144,12 @@ func MigrateToEncrypted(value string) (string, bool, error) {
 		return "", false, nil
 	}
 
-	// Try to decrypt - if it works, it's already encrypted
-	_, err := Decrypt(value)
-	if err == nil && isBase64(value) {
-		// Successfully decrypted, so it was already encrypted
+	// If it decrypts to something different, it's already encrypted
+	plain, err := Decrypt(value)
+	if err != nil {
+		return "", false, err
+	}
+	if plain != value {
 		return value, false, nil
 	}
 

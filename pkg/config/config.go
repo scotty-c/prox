@@ -2,6 +2,7 @@ package config
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -188,7 +189,7 @@ func CreateProfile(profile, username, password, url string) error {
 
 	// Add a marker to indicate this config uses encryption
 	fingerprint, _ := crypto.GetKeyFingerprint()
-	fmt.Fprintf(file, "# Encrypted config - key fingerprint: %s\n", fingerprint)
+	fmt.Fprintf(file, "%s %s\n", fingerprintComment, fingerprint)
 
 	return nil
 }
@@ -238,10 +239,14 @@ func ReadProfile(profile string) (string, string, string, error) {
 
 	// Read the file line by line to handle comments and parse key=value pairs
 	scanner := bufio.NewScanner(file)
-	var username, password, url string
+	var username, password, url, fingerprint string
 
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
+		if fp, ok := strings.CutPrefix(line, fingerprintComment); ok {
+			fingerprint = strings.TrimSpace(fp)
+			continue
+		}
 		if line == "" || strings.HasPrefix(line, "#") {
 			continue
 		}
@@ -271,15 +276,30 @@ func ReadProfile(profile string) (string, string, string, error) {
 	// Decrypt sensitive data
 	decryptedUsername, err := crypto.Decrypt(username)
 	if err != nil {
-		return "", "", "", fmt.Errorf("failed to decrypt username: %w", err)
+		return "", "", "", decryptError(profile, fingerprint, err)
 	}
 
 	decryptedPassword, err := crypto.Decrypt(password)
 	if err != nil {
-		return "", "", "", fmt.Errorf("failed to decrypt password: %w", err)
+		return "", "", "", decryptError(profile, fingerprint, err)
 	}
 
 	return decryptedUsername, decryptedPassword, url, nil
+}
+
+// fingerprintComment is the comment written to profile files recording the key fingerprint
+const fingerprintComment = "# Encrypted config - key fingerprint:"
+
+// decryptError explains a failure to decrypt a profile and how to fix it
+func decryptError(profile, storedFingerprint string, err error) error {
+	if !errors.Is(err, crypto.ErrWrongKey) {
+		return fmt.Errorf("failed to decrypt profile '%s': %w", profile, err)
+	}
+	detail := ""
+	if current, fpErr := crypto.GetKeyFingerprint(); fpErr == nil && storedFingerprint != "" && storedFingerprint != current {
+		detail = fmt.Sprintf(" (profile key fingerprint %s, current %s)", storedFingerprint, current)
+	}
+	return fmt.Errorf("%w%s. Re-enter your credentials with: prox config create %s -u <user> -p <password> -l <url>", err, detail, profile)
 }
 
 // MigrateToProfiles migrates the old single config file to the new profile system

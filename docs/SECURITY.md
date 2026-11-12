@@ -44,5 +44,28 @@ url=https://192.168.1.230:8006
 - No manual key export/import yet (future feature)
 - Keep filesystem permissions intact
 
+### What this protects against
+The encryption key is derived from your user ID, username, hostname and OS. It is
+not protected by a password, so treat this as **obfuscation at rest**, not as a
+secret store:
+
+- It stops credentials being read by casual inspection, from backups, or from a
+  config file copied to another machine.
+- It does **not** protect against anything that can run code as your user on
+  this machine, because that can derive the same key.
+
+For automation, prefer environment variables (`PROX_URL`, `PROX_USER`,
+`PROX_PASSWORD`) supplied by your CI secret store.
+
+### If decryption fails
+Because the key includes the hostname, renaming the machine (or macOS changing
+its hostname on a new network) makes saved credentials unreadable. prox reports
+this with the stored and current key fingerprints. Re-enter your credentials to
+fix it:
+
+```bash
+prox config create <profile> -u root@pam -p secret -l https://your-proxmox:8006
+```
+
 ---
 For architecture context see ARCHITECTURE.md.

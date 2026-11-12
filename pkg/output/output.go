@@ -81,7 +81,9 @@ func ClientError(err error) {
 	// Check for common error patterns and provide specific advice
 	errMsg := strings.ToLower(err.Error())
 
-	if strings.Contains(errMsg, "config file does not exist") || strings.Contains(errMsg, "failed to read config") {
+	if strings.Contains(errMsg, "decrypt") || strings.Contains(errMsg, "encryption") {
+		fmt.Fprintf(os.Stderr, "\nTip: Saved credentials could not be decrypted. Re-create the profile with 'prox config create <profile> -u <user> -p <password> -l <url>'\n")
+	} else if strings.Contains(errMsg, "config file does not exist") || strings.Contains(errMsg, "failed to read config") {
 		fmt.Fprintf(os.Stderr, "\nTip: No configuration found. Run 'prox config setup' to configure your connection\n")
 	} else if strings.Contains(errMsg, "authentication") || strings.Contains(errMsg, "401") || strings.Contains(errMsg, "unauthorized") {
 		fmt.Fprintf(os.Stderr, "\nTip: Authentication failed. Check your credentials with 'prox config setup'\n")
@@ -92,8 +94,6 @@ func ClientError(err error) {
 		fmt.Fprintf(os.Stderr, "  • Network connectivity\n")
 	} else if strings.Contains(errMsg, "certificate") || strings.Contains(errMsg, "tls") || strings.Contains(errMsg, "ssl") {
 		fmt.Fprintf(os.Stderr, "\nTip: TLS/SSL certificate issue. Verify the server URL is correct\n")
-	} else if strings.Contains(errMsg, "decrypt") || strings.Contains(errMsg, "encryption") {
-		fmt.Fprintf(os.Stderr, "\nTip: Configuration decryption failed. Run 'prox config setup' to reconfigure\n")
 	} else {
 		fmt.Fprintf(os.Stderr, "\nTip: Run 'prox config setup' to verify your configuration\n")
 	}
