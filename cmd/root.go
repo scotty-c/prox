@@ -35,8 +35,8 @@ Configuration:
 
   Environment variables for CI/CD and automation:
     PROX_URL      - Proxmox server URL (e.g., https://proxmox.example.com:8006)
-    PROX_USER     - Username (e.g., root@pam)
-    PROX_PASSWORD - Password
+    PROX_USER     - Username (e.g., root@pam) or API token ID (e.g., automation@pve!ci)
+    PROX_PASSWORD - Password, or the token secret when PROX_USER is a token ID
     PROX_INSECURE - Set to true to skip TLS certificate verification
     PROX_CA_CERT  - Path to a PEM file with the Proxmox CA certificate
 
@@ -62,8 +62,8 @@ Examples:
 
 CI/CD Usage:
   export PROX_URL=https://proxmox.example.com:8006
-  export PROX_USER=automation@pve
-  export PROX_PASSWORD=your-password
+  export PROX_USER='automation@pve!ci'   # API token ID
+  export PROX_PASSWORD=your-token-secret
   prox vm list                        # Works without config file
 
 Use "prox [command] --help" for more information about a command.`,

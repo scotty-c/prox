@@ -211,8 +211,28 @@ func NewClientWithTLS(baseURL, username, password string, opts TLSOptions) (*Pro
 	}, nil
 }
 
-// Authenticate authenticates with Proxmox and stores the ticket
+// IsAPIToken reports whether username is a Proxmox API token ID
+// (user@realm!tokenname). Normal usernames cannot contain '!'.
+func IsAPIToken(username string) bool {
+	return strings.Contains(username, "!")
+}
+
+// usesAPIToken reports whether this client authenticates with an API token
+func (c *ProxmoxClient) usesAPIToken() bool {
+	return IsAPIToken(c.Username)
+}
+
+// Authenticate authenticates with Proxmox and stores the ticket.
+// With an API token there is no ticket; the token is checked by calling the
+// version endpoint instead.
 func (c *ProxmoxClient) Authenticate(ctx context.Context) error {
+	if c.usesAPIToken() {
+		if _, err := c.GetVersion(ctx); err != nil {
+			return fmt.Errorf("authentication failed: API token rejected: %w", err)
+		}
+		return nil
+	}
+
 	authURL := fmt.Sprintf("%s/api2/json/access/ticket", c.BaseURL)
 
 	data := url.Values{}
@@ -254,8 +274,8 @@ func (c *ProxmoxClient) Authenticate(ctx context.Context) error {
 
 // makeRequest makes an authenticated request to the Proxmox API
 func (c *ProxmoxClient) makeRequest(ctx context.Context, method, path string, body interface{}) ([]byte, error) {
-	// Ensure we're authenticated
-	if c.ticket == "" {
+	// Ensure we're authenticated (API tokens are sent with every request)
+	if !c.usesAPIToken() && c.ticket == "" {
 		if err := c.Authenticate(ctx); err != nil {
 			return nil, fmt.Errorf("authentication failed: %w", err)
 		}
@@ -278,9 +298,14 @@ func (c *ProxmoxClient) makeRequest(ctx context.Context, method, path string, bo
 	}
 
 	// Set authentication headers
-	req.Header.Set("Cookie", fmt.Sprintf("PVEAuthCookie=%s", c.ticket))
-	if method != "GET" && method != "HEAD" {
-		req.Header.Set("CSRFPreventionToken", c.csrfToken)
+	if c.usesAPIToken() {
+		// Token requests don't need a ticket or CSRF token
+		req.Header.Set("Authorization", fmt.Sprintf("PVEAPIToken=%s=%s", c.Username, c.Password))
+	} else {
+		req.Header.Set("Cookie", fmt.Sprintf("PVEAuthCookie=%s", c.ticket))
+		if method != "GET" && method != "HEAD" {
+			req.Header.Set("CSRFPreventionToken", c.csrfToken)
+		}
 	}
 
 	if body != nil {

@@ -105,6 +105,7 @@ func AuthError(err error) {
 	fmt.Fprintf(os.Stderr, "Details: %v\n", err)
 	fmt.Fprintf(os.Stderr, "\nTip: Check your credentials:\n")
 	fmt.Fprintf(os.Stderr, "  • Username should include realm (e.g., root@pam)\n")
+	fmt.Fprintf(os.Stderr, "  • For API tokens, use the token ID (user@realm!name) as the username and the secret as the password\n")
 	fmt.Fprintf(os.Stderr, "  • Password must be correct\n")
 	fmt.Fprintf(os.Stderr, "  • Run 'prox config setup' to update credentials\n")
 }

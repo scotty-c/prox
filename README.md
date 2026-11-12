@@ -7,6 +7,8 @@ Simple CLI for Proxmox VE. Focus on: zero required --node flags (auto discovery)
 - [Install](#install)
 - [Shell Completion](#shell-completion)
 - [Quick Start](#quick-start)
+  - [API tokens](#api-tokens)
+  - [TLS certificates](#tls-certificates)
 - [Performance & User Experience](#performance--user-experience)
 - [Core Commands](#core-commands)
 - [Flags Cheat Sheet](#flags-cheat-sheet)
@@ -105,6 +107,19 @@ prox config list                    # List all profiles
 prox config use homelab             # Switch to homelab profile
 prox --profile production vm list   # Use specific profile for one command
 ```
+
+### API tokens
+API tokens are recommended for automation: they can be scoped, revoked, and work
+for accounts with two-factor authentication. Create one in the Proxmox UI under
+*Datacenter → Permissions → API Tokens*, then use the token ID as the username
+and the token secret as the password:
+```bash
+prox config create ci -u 'automation@pve!ci' -p <token-secret> -l https://proxmox.example.com:8006
+# or
+export PROX_USER='automation@pve!ci' PROX_PASSWORD=<token-secret> PROX_URL=https://proxmox.example.com:8006
+```
+Quote the token ID so your shell doesn't interpret the `!`. If privilege
+separation is enabled for the token, give the token itself the permissions it needs.
 
 ### TLS certificates
 prox verifies the Proxmox server's TLS certificate. A default Proxmox install uses a
