@@ -23,7 +23,7 @@ Examples:
   prox vm rm 100
   prox vm delete web-server --force`,
 	Args:              cobra.ExactArgs(1),
-	ValidArgsFunction: completion.GetVMNames,
+	ValidArgsFunction: completion.FirstArgOnly(completion.GetVMNames),
 	Run: func(cmd *cobra.Command, args []string) {
 		nameOrID := args[0]
 
@@ -51,4 +51,5 @@ func init() {
 	delCmd.Flags().StringP("node", "n", "", "Only match VMs on this node (optional - auto-discovered if not specified)")
 	delCmd.Flags().BoolP("force", "f", false, "Skip confirmation prompt (use with caution)")
 	vmCmd.AddCommand(delCmd)
+	completion.RegisterNodeFlag(delCmd, "node")
 }

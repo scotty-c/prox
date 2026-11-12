@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"github.com/scotty-c/prox/pkg/completion"
 	"os"
 
 	"github.com/scotty-c/prox/pkg/output"
@@ -23,6 +24,15 @@ Examples:
   prox vm migrate 100 node2 --online            # Online migration (VM stays running)
   prox vm migrate web-server node2 --with-local-disks # Include local disks in migration
   prox vm migrate myvm node2 --source node1     # Specify source node explicitly`,
+	ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		switch len(args) {
+		case 0:
+			return completion.GetVMNames(cmd, args, toComplete)
+		case 1:
+			return completion.GetNodeNames(cmd, args, toComplete)
+		}
+		return nil, cobra.ShellCompDirectiveNoFileComp
+	},
 	Args: cobra.ExactArgs(2),
 	Run: func(cmd *cobra.Command, args []string) {
 		nameOrID := args[0]
@@ -52,4 +62,5 @@ func init() {
 	migrateCmd.Flags().Bool("online", false, "Perform online migration (VM continues running)")
 	migrateCmd.Flags().Bool("with-local-disks", false, "Include local disks in migration")
 	vmCmd.AddCommand(migrateCmd)
+	completion.RegisterNodeFlag(migrateCmd, "source")
 }

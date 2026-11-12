@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"github.com/scotty-c/prox/pkg/completion"
 	"os"
 
 	"github.com/scotty-c/prox/pkg/container"
@@ -24,4 +25,5 @@ var templatesCmd = &cobra.Command{
 func init() {
 	templatesCmd.Flags().StringP("node", "n", "", "Proxmox node name (optional - will show templates from all nodes if not specified)")
 	ctCmd.AddCommand(templatesCmd)
+	completion.RegisterNodeFlag(templatesCmd, "node")
 }

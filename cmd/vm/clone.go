@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"github.com/scotty-c/prox/pkg/completion"
 	"os"
 	"strconv"
 
@@ -24,7 +25,8 @@ Examples:
   prox vm clone myvm 200 newvm
   prox vm clone 100 200 newvm --full
   prox vm clone web-server 300 web-clone`,
-	Args: cobra.MinimumNArgs(2),
+	ValidArgsFunction: completion.FirstArgOnly(completion.GetVMNames),
+	Args:              cobra.MinimumNArgs(2),
 	Run: func(cmd *cobra.Command, args []string) {
 		sourceNameOrID := args[0]
 
@@ -73,4 +75,5 @@ func init() {
 	cloneCmd.Flags().BoolP("full", "f", false, "Create a full clone instead of linked clone (copies all disk data, required for some storage types like SMB/NFS)")
 	cloneCmd.Flags().Bool("no-wait", false, "Don't wait for clone to complete (default is to wait and show duration)")
 	vmCmd.AddCommand(cloneCmd)
+	completion.RegisterNodeFlag(cloneCmd, "node")
 }

@@ -21,7 +21,7 @@ Examples:
   prox vm edit 100 --cpu 4 --memory 4096
   prox vm edit web-server --disk 50`,
 	Args:              cobra.ExactArgs(1),
-	ValidArgsFunction: completion.GetVMNames,
+	ValidArgsFunction: completion.FirstArgOnly(completion.GetVMNames),
 	Run: func(cmd *cobra.Command, args []string) {
 		nameOrID := args[0]
 
@@ -47,4 +47,5 @@ func init() {
 	editCmd.Flags().IntP("memory", "m", 0, "Memory size in MB")
 	editCmd.Flags().IntP("disk", "d", 0, "Increase disk size by this many GB")
 	vmCmd.AddCommand(editCmd)
+	completion.RegisterNodeFlag(editCmd, "node")
 }

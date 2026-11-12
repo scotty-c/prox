@@ -2,6 +2,7 @@ package node
 
 import (
 	"fmt"
+	"github.com/scotty-c/prox/pkg/completion"
 	"os"
 
 	"github.com/scotty-c/prox/pkg/node"
@@ -10,10 +11,11 @@ import (
 )
 
 var describeCmd = &cobra.Command{
-	Use:     "describe <node_name>",
-	Aliases: []string{"info"},
-	Short:   "Show detailed information about a Proxmox node",
-	Args:    cobra.ExactArgs(1),
+	Use:               "describe <node_name>",
+	Aliases:           []string{"info"},
+	Short:             "Show detailed information about a Proxmox node",
+	ValidArgsFunction: completion.FirstArgOnly(completion.GetNodeNames),
+	Args:              cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		name := args[0]
 

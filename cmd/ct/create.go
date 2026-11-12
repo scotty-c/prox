@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"github.com/scotty-c/prox/pkg/completion"
 	"os"
 	"strconv"
 	"strings"
@@ -198,4 +199,5 @@ func init() {
 	createCmd.Flags().Bool("prompt-password", false, "Prompt for password interactively")
 	createCmd.Flags().String("ssh-keys-file", "", "Path to SSH public key file (e.g., ~/.ssh/id_rsa.pub) or '-' to read from stdin")
 	createCmd.Flags().StringP("storage", "s", "", "Storage location for container rootfs (defaults to local-lvm)")
+	completion.RegisterNodeFlag(createCmd, "node")
 }

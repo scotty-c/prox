@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"github.com/scotty-c/prox/pkg/completion"
 	"os"
 
 	"github.com/scotty-c/prox/pkg/container"
@@ -30,4 +31,5 @@ func init() {
 	listCmd.Flags().Bool("json", false, "Output as JSON")
 	listCmd.Flags().StringP("tag", "t", "", "Filter by tag (e.g., 'production', 'database')")
 	ctCmd.AddCommand(listCmd)
+	completion.RegisterNodeFlag(listCmd, "node")
 }

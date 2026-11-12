@@ -34,7 +34,7 @@ Examples:
 		}
 		return nil
 	},
-	ValidArgsFunction: completion.GetVMNames,
+	ValidArgsFunction: completion.FirstArgOnly(completion.GetVMNames),
 	Run: func(cmd *cobra.Command, args []string) {
 		// Get VM name or ID from positional argument
 		nameOrID := args[0]
@@ -69,4 +69,5 @@ func init() {
 	describeCmd.Flags().StringP("node", "n", "", "Proxmox node name (optional - will be auto-discovered if not specified)")
 	describeCmd.Flags().Bool("json", false, "Output in JSON format")
 	vmCmd.AddCommand(describeCmd)
+	completion.RegisterNodeFlag(describeCmd, "node")
 }

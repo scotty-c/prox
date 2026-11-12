@@ -29,7 +29,7 @@ Examples:
 		}
 		return nil
 	},
-	ValidArgsFunction: completion.GetContainerNames,
+	ValidArgsFunction: completion.FirstArgOnly(completion.GetContainerNames),
 	Run: func(cmd *cobra.Command, args []string) {
 		nameOrID := args[0]
 

@@ -4,6 +4,7 @@ Copyright © 2024 prox contributors
 package cmd
 
 import (
+	"github.com/scotty-c/prox/pkg/completion"
 	"os"
 
 	"github.com/scotty-c/prox/cmd/node"
@@ -103,6 +104,7 @@ func init() {
 	// Add persistent flags available to all commands
 	RootCmd.PersistentFlags().BoolP("quiet", "q", false, "Suppress non-essential output (for scripting)")
 	RootCmd.PersistentFlags().String("profile", "", "Use a specific configuration profile")
+	_ = RootCmd.RegisterFlagCompletionFunc("profile", completion.GetProfileNames)
 	RootCmd.PersistentFlags().Bool("insecure", false, "Skip TLS certificate verification (for self-signed certificates)")
 	RootCmd.PersistentFlags().String("ca-cert", "", "Trust the CA certificate(s) in this PEM file (e.g. a copy of /etc/pve/pve-root-ca.pem)")
 

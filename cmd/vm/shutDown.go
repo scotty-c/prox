@@ -22,7 +22,7 @@ Examples:
   prox vm stop 100
   prox vm shutdown web-server`,
 	Args:              cobra.ExactArgs(1),
-	ValidArgsFunction: completion.GetVMNames,
+	ValidArgsFunction: completion.FirstArgOnly(completion.GetVMNames),
 	Run: func(cmd *cobra.Command, args []string) {
 		nameOrID := args[0]
 		wait, _ := cmd.Flags().GetBool("wait")
@@ -40,4 +40,5 @@ func init() {
 	sdCmd.Flags().StringP("node", "n", "", "Only match VMs on this node (optional - auto-discovered if not specified)")
 	sdCmd.Flags().BoolP("wait", "w", false, "Wait for the operation to complete and show duration")
 	vmCmd.AddCommand(sdCmd)
+	completion.RegisterNodeFlag(sdCmd, "node")
 }

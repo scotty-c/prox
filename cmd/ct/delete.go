@@ -17,7 +17,7 @@ var deleteCmd = &cobra.Command{
 	Short:             "Delete a container",
 	Long:              `Delete a container from the Proxmox VE server by providing the container ID or name. The node will be automatically discovered.`,
 	Args:              cobra.ExactArgs(1),
-	ValidArgsFunction: completion.GetContainerNames,
+	ValidArgsFunction: completion.FirstArgOnly(completion.GetContainerNames),
 	Run: func(cmd *cobra.Command, args []string) {
 		nameOrID := args[0]
 		force, _ := cmd.Flags().GetBool("force")

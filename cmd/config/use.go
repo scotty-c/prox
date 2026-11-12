@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"github.com/scotty-c/prox/pkg/completion"
 	"os"
 
 	c "github.com/scotty-c/prox/pkg/config"
@@ -10,10 +11,11 @@ import (
 
 // useCmd represents the use command to switch active profile
 var useCmd = &cobra.Command{
-	Use:   "use <profile>",
-	Short: "Switch to a different configuration profile",
-	Long:  `Switch the active configuration profile. The specified profile must already exist.`,
-	Args:  cobra.ExactArgs(1),
+	Use:               "use <profile>",
+	Short:             "Switch to a different configuration profile",
+	Long:              `Switch the active configuration profile. The specified profile must already exist.`,
+	ValidArgsFunction: completion.FirstArgOnly(completion.GetProfileNames),
+	Args:              cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		profile := args[0]
 

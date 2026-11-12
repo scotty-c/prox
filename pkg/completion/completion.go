@@ -5,6 +5,7 @@ import (
 	"strconv"
 
 	c "github.com/scotty-c/prox/pkg/client"
+	"github.com/scotty-c/prox/pkg/config"
 	"github.com/spf13/cobra"
 )
 
@@ -93,7 +94,28 @@ func GetNodeNames(cmd *cobra.Command, args []string, toComplete string) ([]strin
 
 // GetProfileNames returns a list of configuration profile names for shell completion
 func GetProfileNames(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-	// This would require reading from config directory
-	// For now, return no completions
-	return nil, cobra.ShellCompDirectiveNoFileComp
+	profiles, err := config.ListProfiles()
+	if err != nil {
+		return nil, cobra.ShellCompDirectiveError
+	}
+	return profiles, cobra.ShellCompDirectiveNoFileComp
+}
+
+// CompletionFunc is the signature cobra uses for argument completion
+type CompletionFunc = func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective)
+
+// FirstArgOnly wraps a completion function so it only completes the first
+// positional argument, e.g. "prox vm clone <TAB>" but not "prox vm clone web <TAB>".
+func FirstArgOnly(fn CompletionFunc) CompletionFunc {
+	return func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		if len(args) > 0 {
+			return nil, cobra.ShellCompDirectiveNoFileComp
+		}
+		return fn(cmd, args, toComplete)
+	}
+}
+
+// RegisterNodeFlag adds node name completion to a command's flag
+func RegisterNodeFlag(cmd *cobra.Command, flag string) {
+	_ = cmd.RegisterFlagCompletionFunc(flag, GetNodeNames)
 }
