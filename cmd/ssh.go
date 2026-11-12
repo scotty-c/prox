@@ -241,9 +241,10 @@ func sshCommandArgs(ip, username string, port int, keyPath string, skipHostKeyCh
 
 // shellQuote quotes s for a POSIX shell when it contains special characters
 func shellQuote(s string) string {
-	if s != "" && strings.IndexFunc(s, func(r rune) bool {
-		return !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || strings.ContainsRune("@%+=:,./_-~[]", r))
-	}) == -1 {
+	isSafe := func(r rune) bool {
+		return r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || strings.ContainsRune("@%+=:,./_-~[]", r)
+	}
+	if s != "" && strings.IndexFunc(s, func(r rune) bool { return !isSafe(r) }) == -1 {
 		return s
 	}
 	return "'" + strings.ReplaceAll(s, "'", `'"'"'`) + "'"
