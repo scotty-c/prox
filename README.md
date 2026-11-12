@@ -153,6 +153,7 @@ Pro tips:
 - Use `prox ssh <resource> --dry-run` to preview SSH config changes
 - Use `prox ssh --list` to view current managed entries
 - Use `prox ssh <resource> --delete [--dry-run]` to remove an entry safely
+- New SSH entries use OpenSSH's normal host key checking; add `--no-host-key-check` for disposable VMs whose keys change on every rebuild
 - **Typo correction**: If you mistype a VM/container name, Prox suggests similar names:
   ```bash
   $ prox vm start web-servr
@@ -336,7 +337,7 @@ Nodes (node)
 
 SSH (manage ~/.ssh/config entries)
 - prox ssh <vm-or-ct name|id>
-	- Flags: -u, --user <name>; -p, --port <num>; -k, --key <path>; --dry-run; --list; --delete
+	- Flags: -u, --user <name>; -p, --port <num>; -k, --key <path>; --no-host-key-check; --dry-run; --list; --delete
 	- Notes: --list and --delete are mutually exclusive with add/update mode
 
 Global config

@@ -63,8 +63,9 @@ Examples:
 		username, _ := cmd.Flags().GetString("user")
 		port, _ := cmd.Flags().GetInt("port")
 		keyPath, _ := cmd.Flags().GetString("key")
+		skipHostKeyCheck, _ := cmd.Flags().GetBool("no-host-key-check")
 
-		return setupSSHConfig(nameOrID, username, port, keyPath, dryRun)
+		return setupSSHConfig(nameOrID, username, port, keyPath, dryRun, skipHostKeyCheck)
 	},
 }
 
@@ -72,6 +73,7 @@ func init() {
 	sshCmd.Flags().StringP("user", "u", "", "SSH username (if not specified, uses the resource name)")
 	sshCmd.Flags().IntP("port", "p", 22, "SSH port")
 	sshCmd.Flags().StringP("key", "k", "", "Path to SSH private key (optional)")
+	sshCmd.Flags().Bool("no-host-key-check", false, "Disable SSH host key checking for this entry (for disposable VMs whose keys change on rebuild)")
 	sshCmd.Flags().Bool("dry-run", false, "Show what would be added to SSH config without actually modifying it")
 	sshCmd.Flags().Bool("delete", false, "Delete SSH config entry for the given VM or container")
 	sshCmd.Flags().Bool("list", false, "List SSH config host entries")
@@ -79,7 +81,7 @@ func init() {
 	RootCmd.AddCommand(sshCmd)
 }
 
-func setupSSHConfig(nameOrID, username string, port int, keyPath string, dryRun bool) error {
+func setupSSHConfig(nameOrID, username string, port int, keyPath string, dryRun bool, skipHostKeyCheck bool) error {
 	ctx := context.Background()
 
 	// Validate input
@@ -165,7 +167,7 @@ func setupSSHConfig(nameOrID, username string, port int, keyPath string, dryRun 
 
 	// Generate SSH config entry
 	hostAlias := resourceName
-	sshConfigEntry := generateSSHConfigEntry(hostAlias, ip, username, port, keyPath)
+	sshConfigEntry := generateSSHConfigEntry(hostAlias, ip, username, port, keyPath, skipHostKeyCheck)
 
 	fmt.Printf("IP Address: %s\n", ip)
 	fmt.Printf("SSH Username: %s\n", username)
@@ -196,7 +198,7 @@ func isValidIP(ip string) bool {
 	return net.ParseIP(ip) != nil
 }
 
-func generateSSHConfigEntry(host, hostname, user string, port int, keyPath string) string {
+func generateSSHConfigEntry(host, hostname, user string, port int, keyPath string, skipHostKeyCheck bool) string {
 	var config strings.Builder
 
 	config.WriteString(fmt.Sprintf("Host %s\n", host))
@@ -211,8 +213,11 @@ func generateSSHConfigEntry(host, hostname, user string, port int, keyPath strin
 		config.WriteString(fmt.Sprintf("    IdentityFile %s\n", keyPath))
 	}
 
-	config.WriteString("    StrictHostKeyChecking no\n")
-	config.WriteString("    UserKnownHostsFile /dev/null\n")
+	if skipHostKeyCheck {
+		// Opt-in for disposable VMs whose host keys change on every rebuild
+		config.WriteString("    StrictHostKeyChecking no\n")
+		config.WriteString("    UserKnownHostsFile /dev/null\n")
+	}
 
 	return config.String()
 }
