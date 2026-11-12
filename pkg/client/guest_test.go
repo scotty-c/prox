@@ -80,3 +80,31 @@ func TestAvailableTemplates(t *testing.T) {
 		t.Fatalf("download request = %+v, want %+v", requests[1], want)
 	}
 }
+
+func TestGetNodeAddress(t *testing.T) {
+	clusterStatus := `{"data":[{"type":"cluster","name":"lab"},{"type":"node","name":"pve1","ip":"10.0.0.11"},{"type":"node","name":"pve2","ip":"10.0.0.12"}]}`
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api2/json/cluster/status":
+			w.Write([]byte(clusterStatus))
+		case "/api2/json/nodes/pve3/network":
+			w.Write([]byte(`{"data":[{"iface":"vmbr0","address":"192.168.1.13","cidr":"192.168.1.13/24"}]}`))
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer srv.Close()
+	c, _ := NewClientWithTLS(srv.URL, "root@pam!t", "s", TLSOptions{Insecure: true})
+	ctx := context.Background()
+
+	if ip, err := c.GetNodeAddress(ctx, "pve2"); err != nil || ip != "10.0.0.12" {
+		t.Fatalf("from cluster status: %q, %v", ip, err)
+	}
+	// Not in cluster status: fall back to the node's interfaces
+	if ip, err := c.GetNodeAddress(ctx, "pve3"); err != nil || ip != "192.168.1.13" {
+		t.Fatalf("fallback: %q, %v", ip, err)
+	}
+	if _, err := c.GetNodeAddress(ctx, "missing"); err == nil {
+		t.Fatal("expected error for unknown node")
+	}
+}

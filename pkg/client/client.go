@@ -180,6 +180,7 @@ type ProxmoxClientInterface interface {
 
 	// Node operations
 	GetNodeIP(ctx context.Context, node string) (string, error)
+	GetNodeAddress(ctx context.Context, node string) (string, error)
 
 	// Task operations
 	GetNextVMID(ctx context.Context) (int, error)

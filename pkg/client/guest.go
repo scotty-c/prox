@@ -114,3 +114,35 @@ func (c *ProxmoxClient) DownloadTemplate(ctx context.Context, node, storage, tem
 	body := map[string]interface{}{"storage": storage, "template": template}
 	return requestData[string](ctx, c, "POST", fmt.Sprintf("/nodes/%s/aplinfo", url.PathEscape(node)), body, "download template")
 }
+
+// GetNodeAddress returns the address other nodes use to reach node, from
+// /cluster/status. It falls back to the first address on the node's network
+// interfaces (GetNodeIP) if the cluster status doesn't list one.
+func (c *ProxmoxClient) GetNodeAddress(ctx context.Context, node string) (string, error) {
+	raw, err := c.makeRequest(ctx, "GET", "/cluster/status", nil)
+	if err == nil {
+		var resp struct {
+			Data []struct {
+				Type string `json:"type"`
+				Name string `json:"name"`
+				IP   string `json:"ip"`
+			} `json:"data"`
+		}
+		if json.Unmarshal(raw, &resp) == nil {
+			for _, entry := range resp.Data {
+				if entry.Type == "node" && entry.Name == node && entry.IP != "" {
+					return entry.IP, nil
+				}
+			}
+		}
+	}
+
+	ip, err := c.GetNodeIP(ctx, node)
+	if err != nil {
+		return "", err
+	}
+	if ip == "" || ip == "N/A" {
+		return "", fmt.Errorf("no address found for node %s", node)
+	}
+	return ip, nil
+}
