@@ -2,11 +2,16 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io"
 	"net"
 	"os"
+	"os/exec"
+	"os/signal"
 	"os/user"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/jedib0t/go-pretty/v6/table"
@@ -34,7 +39,9 @@ Examples:
   prox ssh web-server                 # Setup SSH for VM/container named 'web-server'
   prox ssh mycontainer --user root    # Setup SSH with specific username
   prox ssh myvm --delete              # Delete SSH config entry for 'myvm'
-  prox ssh --list                     # List SSH config host entries`,
+  prox ssh --list                     # List SSH config host entries
+  prox ssh myvm --connect             # Connect now without editing ~/.ssh/config
+  prox ssh myvm --print               # Print the ssh command, e.g. for scripts`,
 	Args: cobra.ArbitraryArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		listFlag, _ := cmd.Flags().GetBool("list")
@@ -56,6 +63,17 @@ Examples:
 
 		nameOrID := args[0]
 
+		printFlag, _ := cmd.Flags().GetBool("print")
+		connectFlag, _ := cmd.Flags().GetBool("connect")
+		if printFlag || connectFlag {
+			if printFlag && connectFlag {
+				return fmt.Errorf("--print and --connect cannot be used together")
+			}
+			if deleteFlag || dryRun {
+				return fmt.Errorf("--print and --connect cannot be combined with --delete or --dry-run")
+			}
+		}
+
 		if deleteFlag {
 			return deleteSSHConfigEntry(nameOrID, dryRun)
 		}
@@ -66,6 +84,9 @@ Examples:
 		keyPath, _ := cmd.Flags().GetString("key")
 		skipHostKeyCheck, _ := cmd.Flags().GetBool("no-host-key-check")
 
+		if printFlag || connectFlag {
+			return runSSH(nameOrID, username, port, keyPath, skipHostKeyCheck, connectFlag)
+		}
 		return setupSSHConfig(nameOrID, username, port, keyPath, dryRun, skipHostKeyCheck)
 	},
 }
@@ -78,96 +99,97 @@ func init() {
 	sshCmd.Flags().Bool("dry-run", false, "Show what would be added to SSH config without actually modifying it")
 	sshCmd.Flags().Bool("delete", false, "Delete SSH config entry for the given VM or container")
 	sshCmd.Flags().Bool("list", false, "List SSH config host entries")
+	sshCmd.Flags().Bool("connect", false, "Connect now with ssh instead of editing ~/.ssh/config")
+	sshCmd.Flags().Bool("print", false, "Print the ssh command instead of editing ~/.ssh/config")
 
 	RootCmd.AddCommand(sshCmd)
 }
 
-func setupSSHConfig(nameOrID, username string, port int, keyPath string, dryRun bool, skipHostKeyCheck bool) error {
-	ctx := context.Background()
+// sshTarget is a VM or container to connect to
+type sshTarget struct {
+	Type string // "VM" or "Container"
+	Name string
+	ID   int
+	Node string
+	IP   string
+}
 
-	// Validate input
+// resolveSSHTarget finds a VM or container by name or ID and looks up its IP.
+// Progress messages go to info.
+func resolveSSHTarget(ctx context.Context, nameOrID string, info io.Writer) (*sshTarget, error) {
 	if nameOrID == "" {
-		return fmt.Errorf("VM or container name/ID cannot be empty")
+		return nil, fmt.Errorf("VM or container name/ID cannot be empty")
 	}
 
-	if port <= 0 || port > 65535 {
-		return fmt.Errorf("port must be between 1 and 65535")
-	}
-
-	// Create client
-	client, err := client.CreateClient()
+	cl, err := client.CreateClient()
 	if err != nil {
-		return fmt.Errorf("failed to create Proxmox client: %w", err)
+		return nil, fmt.Errorf("failed to create Proxmox client: %w", err)
 	}
 
 	// Try to find as VM first, then as container
-	var ip, resourceName, resourceType, node string
-	var resourceID int
-
-	vm, vmErr := vm.FindByNameOrID(ctx, client, nameOrID)
+	t := &sshTarget{}
+	vmObj, vmErr := vm.FindByNameOrID(ctx, cl, nameOrID)
 	if vmErr == nil {
-		// Found as VM
-		resourceType = "VM"
-		resourceName = vm.Name
-		resourceID = vm.ID
-		node = vm.Node
-
-		fmt.Printf("Found %s: %s (ID: %d) on node %s\n", resourceType, resourceName, resourceID, node)
-
-		// Get VM IP
-		ip, err = client.GetVMIP(ctx, node, resourceID)
-		if err != nil {
-			return fmt.Errorf("failed to get VM IP: %w", err)
+		t.Type, t.Name, t.ID, t.Node = "VM", vmObj.Name, vmObj.ID, vmObj.Node
+		fmt.Fprintf(info, "Found %s: %s (ID: %d) on node %s\n", t.Type, t.Name, t.ID, t.Node)
+		if t.IP, err = cl.GetVMIP(ctx, t.Node, t.ID); err != nil {
+			return nil, fmt.Errorf("failed to get VM IP: %w", err)
 		}
 	} else {
-		// Try as container
-		container, ctErr := container.FindByNameOrID(ctx, client, nameOrID)
+		ctObj, ctErr := container.FindByNameOrID(ctx, cl, nameOrID)
 		if ctErr != nil {
-			return fmt.Errorf("resource '%s' not found as VM or container. VM error: %v, Container error: %v", nameOrID, vmErr, ctErr)
+			return nil, fmt.Errorf("resource '%s' not found as VM or container. VM error: %v, Container error: %v", nameOrID, vmErr, ctErr)
 		}
-
-		resourceType = "Container"
-		resourceName = container.Name
-		resourceID = container.ID
-		node = container.Node
-
-		fmt.Printf("Found %s: %s (ID: %d) on node %s\n", resourceType, resourceName, resourceID, node)
-
-		// Get Container IP
-		ip, err = client.GetContainerIP(ctx, node, resourceID)
-		if err != nil {
-			return fmt.Errorf("failed to get container IP: %w", err)
+		t.Type, t.Name, t.ID, t.Node = "Container", ctObj.Name, ctObj.ID, ctObj.Node
+		fmt.Fprintf(info, "Found %s: %s (ID: %d) on node %s\n", t.Type, t.Name, t.ID, t.Node)
+		if t.IP, err = cl.GetContainerIP(ctx, t.Node, t.ID); err != nil {
+			return nil, fmt.Errorf("failed to get container IP: %w", err)
 		}
 	}
 
-	if ip == "" || ip == "N/A" {
-		return fmt.Errorf("no IP address found for %s '%s' (ID: %d). Make sure the resource is running and has an IP assigned", resourceType, resourceName, resourceID)
+	if t.IP == "" || t.IP == "N/A" {
+		return nil, fmt.Errorf("no IP address found for %s '%s' (ID: %d). Make sure the resource is running and has an IP assigned", t.Type, t.Name, t.ID)
 	}
 
 	// Clean IP address (remove CIDR notation if present)
-	if strings.Contains(ip, "/") {
-		ip = strings.Split(ip, "/")[0]
+	t.IP, _, _ = strings.Cut(t.IP, "/")
+	if !isValidIP(t.IP) {
+		return nil, fmt.Errorf("invalid IP address: %s", t.IP)
+	}
+	return t, nil
+}
+
+// validateSSHOptions checks the port and key file
+func validateSSHOptions(port int, keyPath string) error {
+	if port <= 0 || port > 65535 {
+		return fmt.Errorf("port must be between 1 and 65535")
+	}
+	if keyPath != "" {
+		if _, err := os.Stat(keyPath); os.IsNotExist(err) {
+			return fmt.Errorf("SSH key file does not exist: %s", keyPath)
+		}
+	}
+	return nil
+}
+
+func setupSSHConfig(nameOrID, username string, port int, keyPath string, dryRun bool, skipHostKeyCheck bool) error {
+	if err := validateSSHOptions(port, keyPath); err != nil {
+		return err
 	}
 
-	// Validate IP address
-	if !isValidIP(ip) {
-		return fmt.Errorf("invalid IP address: %s", ip)
+	target, err := resolveSSHTarget(context.Background(), nameOrID, os.Stdout)
+	if err != nil {
+		return err
 	}
+	ip := target.IP
 
 	// Default to the local username, as plain ssh does
 	if username == "" {
 		username = localUsername()
 	}
 
-	// Validate SSH key path if provided
-	if keyPath != "" {
-		if _, err := os.Stat(keyPath); os.IsNotExist(err) {
-			return fmt.Errorf("SSH key file does not exist: %s", keyPath)
-		}
-	}
-
 	// Generate SSH config entry
-	hostAlias := resourceName
+	hostAlias := target.Name
 	sshConfigEntry := generateSSHConfigEntry(hostAlias, ip, username, port, keyPath, skipHostKeyCheck)
 
 	fmt.Printf("IP Address: %s\n", ip)
@@ -194,6 +216,79 @@ func setupSSHConfig(nameOrID, username string, port int, keyPath string, dryRun 
 	fmt.Printf("\nSSH configuration updated successfully!\n")
 	fmt.Printf("Tip: You can now connect with: ssh %s\n", hostAlias)
 
+	return nil
+}
+
+// sshCommandArgs returns the ssh command line for target (including "ssh")
+func sshCommandArgs(ip, username string, port int, keyPath string, skipHostKeyCheck bool) []string {
+	args := []string{"ssh"}
+	if port != 22 {
+		args = append(args, "-p", strconv.Itoa(port))
+	}
+	if keyPath != "" {
+		args = append(args, "-i", keyPath)
+	}
+	if skipHostKeyCheck {
+		args = append(args, "-o", "StrictHostKeyChecking=no", "-o", "UserKnownHostsFile=/dev/null")
+	}
+	// ssh accepts bare IPv4 and IPv6 addresses as the destination
+	dest := ip
+	if username != "" {
+		dest = username + "@" + dest
+	}
+	return append(args, dest)
+}
+
+// shellQuote quotes s for a POSIX shell when it contains special characters
+func shellQuote(s string) string {
+	if s != "" && strings.IndexFunc(s, func(r rune) bool {
+		return !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || strings.ContainsRune("@%+=:,./_-~[]", r))
+	}) == -1 {
+		return s
+	}
+	return "'" + strings.ReplaceAll(s, "'", `'"'"'`) + "'"
+}
+
+// runSSH prints or runs an ssh command for a VM or container without
+// touching ~/.ssh/config
+func runSSH(nameOrID, username string, port int, keyPath string, skipHostKeyCheck, connect bool) error {
+	if err := validateSSHOptions(port, keyPath); err != nil {
+		return err
+	}
+	// Status messages go to stderr so --print output can be used directly
+	target, err := resolveSSHTarget(context.Background(), nameOrID, os.Stderr)
+	if err != nil {
+		return err
+	}
+	if username == "" {
+		username = localUsername()
+	}
+	args := sshCommandArgs(target.IP, username, port, keyPath, skipHostKeyCheck)
+
+	if !connect {
+		quoted := make([]string, len(args))
+		for i, a := range args {
+			quoted[i] = shellQuote(a)
+		}
+		fmt.Println(strings.Join(quoted, " "))
+		return nil
+	}
+
+	sshPath, err := exec.LookPath("ssh")
+	if err != nil {
+		return fmt.Errorf("ssh client not found in PATH: %w", err)
+	}
+	c := exec.Command(sshPath, args[1:]...)
+	c.Stdin, c.Stdout, c.Stderr = os.Stdin, os.Stdout, os.Stderr
+	// Let ssh handle Ctrl-C itself
+	signal.Ignore(os.Interrupt)
+	if err := c.Run(); err != nil {
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
+			os.Exit(exitErr.ExitCode())
+		}
+		return fmt.Errorf("failed to run ssh: %w", err)
+	}
 	return nil
 }
 
