@@ -25,9 +25,6 @@ const (
 	DiskUsageDivisorRunning = 5  // Estimate 20% usage (1/5) for running VMs
 	DiskUsageDivisorStopped = 10 // Estimate 10% usage (1/10) for stopped VMs
 
-	// Task polling
-	TaskPollIntervalSeconds = 2 // Interval for polling task status
-
 	// Worker pool
 	MaxConcurrentIPLookups = 10 // Maximum concurrent IP lookup workers
 

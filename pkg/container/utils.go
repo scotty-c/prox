@@ -134,42 +134,14 @@ func autoDetectNode(client *c.ProxmoxClient) (string, error) {
 	return "", fmt.Errorf("no online nodes found")
 }
 
-// waitForTask waits for a Proxmox task to complete
+// waitForTask waits for a Proxmox task to complete, showing a spinner
 func waitForTask(ctx context.Context, client c.ProxmoxClientInterface, node, taskID string) error {
 	s := spinner.New(spinner.CharSets[14], 100*time.Millisecond)
 	s.Suffix = " Processing..."
 	s.Start()
 	defer s.Stop()
 
-	// Exponential backoff configuration
-	backoff := 500 * time.Millisecond // Start at 500ms
-	maxBackoff := 5 * time.Second     // Cap at 5s
-
-	for {
-		task, err := client.GetTaskStatus(ctx, node, taskID)
-		if err != nil {
-			return fmt.Errorf("failed to get task status: %w", err)
-		}
-
-		if task.Status == "stopped" {
-			if task.ExitCode == "OK" {
-				return nil
-			}
-			return fmt.Errorf("task failed with exit code: %s", task.ExitCode)
-		}
-
-		// Wait with exponential backoff before checking again
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-time.After(backoff):
-			// Double the backoff for next iteration, cap at maxBackoff
-			backoff = backoff * 2
-			if backoff > maxBackoff {
-				backoff = maxBackoff
-			}
-		}
-	}
+	return c.WaitForTaskSuccess(ctx, client, node, taskID)
 }
 
 // FindByNameOrID finds a container by name or ID
