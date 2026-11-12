@@ -1496,48 +1496,79 @@ func (c *ProxmoxClient) GetVMDiskInfo(ctx context.Context, node string, vmid int
 		}
 	}
 
-	// Try multiple methods to get disk usage information
-	// Method 1: Try to get from VM status (though this is often not accurate)
+	// Disk usage: Proxmox only reports it for some setups, so fall back to the
+	// QEMU guest agent. If neither is available, usage is unknown and 0 is
+	// returned; callers must show that as unknown rather than as empty.
 	status, err := c.GetVMStatus(ctx, node, vmid)
 	if err == nil {
-		if diskUsed, exists := status["disk"]; exists {
-			if diskUsedFloat, ok := diskUsed.(float64); ok {
-				usedSize = uint64(diskUsedFloat)
-			}
+		if diskUsed, ok := status["disk"].(float64); ok {
+			usedSize = uint64(diskUsed)
 		}
 
 		// If we still don't have total size, try to get it from status
 		if totalSize == 0 {
-			if diskMax, exists := status["maxdisk"]; exists {
-				if diskMaxFloat, ok := diskMax.(float64); ok {
-					totalSize = uint64(diskMaxFloat)
-				}
+			if diskMax, ok := status["maxdisk"].(float64); ok {
+				totalSize = uint64(diskMax)
 			}
 		}
-	}
 
-	// Method 2: Try to get from RRD (Resource Round Database) for more accurate usage
-	if usedSize == 0 {
-		rrdUsed, err := c.getVMDiskUsageFromRRD(ctx, node, vmid)
-		if err == nil && rrdUsed > 0 {
-			usedSize = rrdUsed
-		}
-	}
-
-	// Method 3: If still no usage data, estimate based on typical VM usage patterns
-	// This is a fallback and not ideal, but better than showing 0
-	if usedSize == 0 && totalSize > 0 {
-		// For running VMs, estimate 15-30% usage; for stopped VMs, estimate 10%
-		if status != nil {
-			if vmStatus, exists := status["status"]; exists && vmStatus == "running" {
-				usedSize = totalSize / 5 // Estimate 20% usage for running VMs
-			} else {
-				usedSize = totalSize / 10 // Estimate 10% usage for stopped VMs
+		if usedSize == 0 && status["status"] == "running" {
+			if agentUsed, err := c.getVMDiskUsageFromGuestAgent(ctx, node, vmid); err == nil {
+				usedSize = agentUsed
 			}
 		}
 	}
 
 	return totalSize, usedSize, nil
+}
+
+// getVMDiskUsageFromGuestAgent returns the space used on the VM's disk-backed
+// filesystems as reported by the QEMU guest agent.
+func (c *ProxmoxClient) getVMDiskUsageFromGuestAgent(ctx context.Context, node string, vmid int) (uint64, error) {
+	path := fmt.Sprintf("/nodes/%s/qemu/%d/agent/get-fsinfo", node, vmid)
+	body, err := c.makeRequest(ctx, "GET", path, nil)
+	if err != nil {
+		return 0, err
+	}
+
+	var resp struct {
+		Data struct {
+			Result []guestFilesystem `json:"result"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(body, &resp); err != nil {
+		return 0, fmt.Errorf("failed to parse guest agent fsinfo: %w", err)
+	}
+
+	used, ok := sumGuestFilesystemUsage(resp.Data.Result)
+	if !ok {
+		return 0, fmt.Errorf("guest agent reported no disk usage")
+	}
+	return used, nil
+}
+
+// guestFilesystem is one entry from the guest agent's get-fsinfo command
+type guestFilesystem struct {
+	Name      string            `json:"name"`
+	UsedBytes *uint64           `json:"used-bytes"`
+	Disk      []json.RawMessage `json:"disk"`
+}
+
+// sumGuestFilesystemUsage adds up used bytes for filesystems backed by a disk,
+// counting each filesystem once (bind mounts report the same filesystem again).
+func sumGuestFilesystemUsage(filesystems []guestFilesystem) (uint64, bool) {
+	var total uint64
+	found := false
+	seen := make(map[string]bool)
+	for _, fs := range filesystems {
+		if fs.UsedBytes == nil || len(fs.Disk) == 0 || seen[fs.Name] {
+			continue
+		}
+		seen[fs.Name] = true
+		total += *fs.UsedBytes
+		found = true
+	}
+	return total, found
 }
 
 // getStorageVolumeSize attempts to get the size of a storage volume
@@ -1627,44 +1658,6 @@ func (c *ProxmoxClient) getStorageVolumeSizeWithCache(ctx context.Context, node,
 	}
 
 	return 0, fmt.Errorf("volume not found in storage")
-}
-
-// getVMDiskUsageFromRRD attempts to get disk usage from RRD data
-func (c *ProxmoxClient) getVMDiskUsageFromRRD(ctx context.Context, node string, vmid int) (uint64, error) {
-	// Try to get recent RRD data for disk usage
-	path := fmt.Sprintf("/nodes/%s/qemu/%d/rrd", node, vmid)
-
-	// Get data for the last hour with 5-minute resolution
-	params := url.Values{}
-	params.Add("timeframe", "hour")
-	params.Add("cf", "AVERAGE")
-
-	body, err := c.makeRequest(ctx, "GET", path+"?"+params.Encode(), nil)
-	if err != nil {
-		return 0, err
-	}
-
-	var resp APIResponse
-	if err := json.Unmarshal(body, &resp); err != nil {
-		return 0, err
-	}
-
-	if data, ok := resp.Data.(map[string]interface{}); ok {
-		if dataArray, ok := data["data"].([]interface{}); ok && len(dataArray) > 0 {
-			// Get the most recent data point
-			if recent, ok := dataArray[len(dataArray)-1].(map[string]interface{}); ok {
-				if diskWrite, exists := recent["diskwrite"]; exists {
-					if diskWriteFloat, ok := diskWrite.(float64); ok && diskWriteFloat > 0 {
-						// RRD gives us disk write rate, we need to estimate usage
-						// This is not perfect but better than 0
-						return uint64(diskWriteFloat * 3600), nil // Rough estimate
-					}
-				}
-			}
-		}
-	}
-
-	return 0, fmt.Errorf("no RRD disk data available")
 }
 
 // parseDiskSize parses disk size strings like "32G", "1024M", "2T"

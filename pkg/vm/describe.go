@@ -214,7 +214,7 @@ func displayVMDetails(id int, name, node string, config, status map[string]inter
 		diskUsage, diskUsageOk := status["disk"].(float64)
 		diskMax, diskMaxOk := status["maxdisk"].(float64)
 
-		if !diskUsageOk || !diskMaxOk || diskMax == 0 {
+		if !diskUsageOk || !diskMaxOk || diskMax == 0 || diskUsage == 0 {
 			// Use improved disk info method
 			diskClient, err := c.CreateClient()
 			if err == nil {
@@ -231,12 +231,17 @@ func displayVMDetails(id int, name, node string, config, status map[string]inter
 			}
 		}
 
-		if diskUsageOk && diskMaxOk && diskMax > 0 {
-			diskPercent := (diskUsage / diskMax) * 100
-			output.Result("   Disk Usage: %s / %s (%.1f%%)\n",
-				util.FormatSize(uint64(diskUsage)),
-				util.FormatSize(uint64(diskMax)),
-				diskPercent)
+		if diskMaxOk && diskMax > 0 {
+			if diskUsageOk && diskUsage > 0 {
+				diskPercent := (diskUsage / diskMax) * 100
+				output.Result("   Disk Usage: %s / %s (%.1f%%)\n",
+					util.FormatSize(uint64(diskUsage)),
+					util.FormatSize(uint64(diskMax)),
+					diskPercent)
+			} else {
+				output.Result("   Disk Usage: N/A / %s (install the QEMU guest agent to report usage)\n",
+					util.FormatSize(uint64(diskMax)))
+			}
 		}
 
 		if netin, ok := status["netin"].(float64); ok {

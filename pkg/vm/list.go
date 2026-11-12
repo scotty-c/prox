@@ -293,15 +293,6 @@ func ListVMs(opts ListVMsOptions) error {
 			vm.Disk = uint64(*resource.Disk)
 		}
 
-		// Estimate disk usage if we have max but no usage info
-		if vm.MaxDisk > 0 && vm.Disk == 0 {
-			if resource.Status == "running" {
-				vm.Disk = vm.MaxDisk / c.DiskUsageDivisorRunning // Estimate 20% usage for running VMs
-			} else {
-				vm.Disk = vm.MaxDisk / c.DiskUsageDivisorStopped // Estimate 10% usage for stopped VMs
-			}
-		}
-
 		// Use detailed disk info if requested (slower but more accurate)
 		if opts.Detailed && (vm.MaxDisk == 0 || vm.Disk == 0) {
 			if maxDisk, usedDisk, err := client.GetVMDiskInfo(context.Background(), resource.Node, int(*resource.VMID)); err == nil {
@@ -311,14 +302,6 @@ func ListVMs(opts ListVMsOptions) error {
 				if usedDisk > 0 {
 					vm.Disk = usedDisk
 				}
-			}
-		}
-
-		// Only make expensive calls if we have no disk info at all and not using detailed mode
-		if !opts.Detailed && vm.MaxDisk == 0 && vm.Disk == 0 {
-			// Quick fallback: assume VM has disks if it's a normal VM (not a template)
-			if !strings.Contains(strings.ToLower(resource.Name), "template") && !strings.Contains(strings.ToLower(resource.Name), "tpl") {
-				vm.MaxDisk = 1 // Set to 1 to indicate disk presence
 			}
 		}
 
@@ -357,6 +340,20 @@ func ListVMs(opts ListVMsOptions) error {
 	return nil
 }
 
+// formatDiskUsage formats disk usage for display. A used value of 0 means
+// Proxmox did not report usage (it usually doesn't for VMs), so it is shown
+// as N/A rather than as an empty disk.
+func formatDiskUsage(used, max uint64) string {
+	switch {
+	case max == 0:
+		return "N/A"
+	case used == 0:
+		return fmt.Sprintf("N/A/%s", util.FormatSize(max))
+	default:
+		return fmt.Sprintf("%s/%s (%.1f%%)", util.FormatSize(used), util.FormatSize(max), float64(used)/float64(max)*100)
+	}
+}
+
 // displayVMsTable displays VMs in a formatted table
 func displayVMsTable(vms []VM, runningOnly bool, showIPs bool, showDisk bool) {
 	t := table.NewWriter()
@@ -393,17 +390,7 @@ func displayVMsTable(vms []VM, runningOnly bool, showIPs bool, showDisk bool) {
 		// Format disk usage (only if showing disk column)
 		var diskStr string
 		if showDisk {
-			if vm.MaxDisk > 1 {
-				diskUsed := util.FormatSize(vm.Disk)
-				diskMax := util.FormatSize(vm.MaxDisk)
-				diskPercent := float64(vm.Disk) / float64(vm.MaxDisk) * 100
-				diskStr = fmt.Sprintf("%s/%s (%.1f%%)", diskUsed, diskMax, diskPercent)
-			} else if vm.MaxDisk == 1 {
-				// VM has disks but size info not available
-				diskStr = "Configured"
-			} else {
-				diskStr = "N/A"
-			}
+			diskStr = formatDiskUsage(vm.Disk, vm.MaxDisk)
 		}
 
 		// Format CPU usage
