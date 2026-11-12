@@ -575,3 +575,38 @@ func MigrateVMByNameOrIDWithWait(nameOrID string, sourceNode, targetNode string,
 	// Migrate the VM
 	return MigrateVMWithWait(ctx, vm.ID, sourceNode, targetNode, online, withLocalDisks, wait)
 }
+
+// RebootVMByNameOrID reboots a running VM cleanly (ACPI or guest agent).
+// If node is not empty, only VMs on that node are considered.
+func RebootVMByNameOrID(nameOrID, node string, wait bool) error {
+	ctx := context.Background()
+	client, err := c.CreateClient()
+	if err != nil {
+		output.ClientError(err)
+		return fmt.Errorf("failed to create client: %w", err)
+	}
+	vm, err := FindByNameOrIDOnNode(ctx, client, nameOrID, node)
+	if err != nil {
+		return fmt.Errorf("failed to find VM: %w", err)
+	}
+	if vm.Status != "running" {
+		return fmt.Errorf("VM %s is not running (status: %s); use 'prox vm start %s'", vm.Name, vm.Status, vm.Name)
+	}
+
+	output.Info("Rebooting VM %s (ID: %d) on node %s...\n", vm.Name, vm.ID, vm.Node)
+	start := time.Now()
+	taskID, err := client.RebootGuest(ctx, vm.Node, c.GuestVM, vm.ID)
+	if err != nil {
+		return fmt.Errorf("failed to reboot VM %d: %w", vm.ID, err)
+	}
+	output.Result("Task started: %s\n", taskID)
+	if !wait {
+		output.Info("Tip: Follow progress with 'prox logs --follow %s'\n", taskID)
+		return nil
+	}
+	if err := waitForTask(ctx, client, vm.Node, taskID); err != nil {
+		return fmt.Errorf("reboot failed: %w", err)
+	}
+	output.Result("VM %s rebooted in %s\n", vm.Name, time.Since(start).Round(time.Millisecond))
+	return nil
+}

@@ -22,8 +22,8 @@ Simple CLI for Proxmox VE. Focus on: zero required --node flags (auto discovery)
 ## Why Prox?
 Key capabilities:
 - Auto node discovery (omit --node 99% of the time)
-- VM: list | start | shutdown | clone (full/linked) | migrate (online/offline, local disks) | edit | describe | delete | snapshot
-- Container (LXC): create (template shortcuts + SSH key injection), list, start/stop, describe, snapshot
+- VM: list | start | shutdown | reboot | clone (full/linked) | migrate (online/offline, local disks) | edit | describe | delete | snapshot
+- Container (LXC): create (template shortcuts + SSH key injection), list, start/stop, reboot, clone, migrate, edit, describe, snapshot
 - Rich describe output: IP discovery (guest agent / DHCP / static), disks, resources, uptime
 - Secure encrypted credential storage (AES‑256, automatic legacy migration)
 - Multiple configuration profiles (homelab, production, etc.) with easy switching
@@ -171,6 +171,9 @@ prox ct start web
 prox ct describe web
 prox ssh web          # Add/update SSH config entry for container
 prox ct stop web
+prox ct edit web --cpu 2 --memory 2048   # Change resources (--disk 10 grows the root disk)
+prox ct clone web 201 web-copy --full    # Clone (linked clones need a template source)
+prox ct migrate web node2 --restart      # Move a running container to another node
 ```
 Advanced examples:
 ```bash
