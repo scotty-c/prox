@@ -122,7 +122,7 @@ func waitForTask(ctx context.Context, client c.ProxmoxClientInterface, node, tas
 	stop := output.StartSpinner(" Processing...")
 	defer stop()
 
-	return c.WaitForTaskSuccess(ctx, client, node, taskID)
+	return c.WaitForTaskInteractive(ctx, client, node, taskID)
 }
 
 // FindByNameOrID finds a container by name or ID

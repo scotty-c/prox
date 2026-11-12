@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"github.com/scotty-c/prox/pkg/cmdutil"
 	"os"
 
 	"github.com/scotty-c/prox/pkg/completion"
@@ -19,6 +20,7 @@ var deleteCmd = &cobra.Command{
 	Args:              cobra.ExactArgs(1),
 	ValidArgsFunction: completion.FirstArgOnly(completion.GetContainerNames),
 	Run: func(cmd *cobra.Command, args []string) {
+		wait := cmdutil.ResolveWait(cmd, true)
 		nameOrID := args[0]
 		force, _ := cmd.Flags().GetBool("force")
 
@@ -30,7 +32,7 @@ var deleteCmd = &cobra.Command{
 			}
 		}
 
-		err := container.DeleteContainer(nameOrID)
+		err := container.DeleteContainerWithWait(nameOrID, wait)
 		if err != nil {
 			output.UserError("deleting container", err)
 			os.Exit(1)
@@ -39,6 +41,7 @@ var deleteCmd = &cobra.Command{
 }
 
 func init() {
+	cmdutil.AddWaitFlags(deleteCmd, true)
 	deleteCmd.Flags().BoolP("force", "f", false, "Skip confirmation prompt (use with caution)")
 	ctCmd.AddCommand(deleteCmd)
 }

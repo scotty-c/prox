@@ -377,7 +377,11 @@ SSH (manage ~/.ssh/config entries)
 
 Global config
 - prox config setup -u/--username -p/--password -l/--url [--ca-cert <pem>] [--insecure]
-- Global flags: --profile <name>; --ca-cert <pem>; --insecure; -q/--quiet
+- Global flags: --profile <name>; --ca-cert <pem>; --insecure; --timeout <duration>; -q/--quiet
+
+Waiting for tasks
+- Commands that start a Proxmox task accept both -w/--wait and --no-wait. Defaults are unchanged: vm start, shutdown and delete return immediately; vm clone, vm migrate and the ct commands wait.
+- --timeout 10m stops waiting after 10 minutes; Ctrl-C also stops waiting. The task keeps running on the server, and prox prints the 'prox logs --follow' command to watch it.
 
 Tip: run any command with --help for full details.
 

@@ -2,6 +2,7 @@ package client
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 )
@@ -40,5 +41,21 @@ func TestPollTaskRespectsContext(t *testing.T) {
 	defer cancel()
 	if _, err := PollTask(ctx, running, "pve", "UPID"); err == nil {
 		t.Fatal("expected context error")
+	}
+}
+
+func TestWaitForTaskInteractiveTimeout(t *testing.T) {
+	SetWaitTimeout(50 * time.Millisecond)
+	defer SetWaitTimeout(0)
+
+	running := &fakeTasks{statuses: []Task{{Status: "running"}}}
+	err := WaitForTaskInteractive(context.Background(), running, "pve", "UPID:pve:1")
+	if err == nil {
+		t.Fatal("expected timeout error")
+	}
+	for _, want := range []string{"timed out after 50ms", "still running", "prox logs --follow UPID:pve:1"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error %q missing %q", err, want)
+		}
 	}
 }

@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"github.com/scotty-c/prox/pkg/cmdutil"
 	"github.com/scotty-c/prox/pkg/completion"
 	"os"
 	"strconv"
@@ -59,6 +60,7 @@ Examples:
 		return fmt.Errorf("requires <name> <template> (2 args) or use --name and --template flags")
 	},
 	Run: func(cmd *cobra.Command, args []string) {
+		wait := cmdutil.ResolveWait(cmd, true)
 		// Resolve name/template from positional or flags with precedence to positional.
 		posName := ""
 		posTemplate := ""
@@ -176,7 +178,7 @@ Examples:
 		}
 
 		// Create the container
-		err := container.CreateContainer(node, name, template, vmid, memory, disk, cores, password, sshKeys, storage)
+		err := container.CreateContainerWithWait(node, name, template, vmid, memory, disk, cores, password, sshKeys, storage, wait)
 		if err != nil {
 			output.UserError("creating container", err)
 			os.Exit(1)
@@ -185,6 +187,7 @@ Examples:
 }
 
 func init() {
+	cmdutil.AddWaitFlags(createCmd, true)
 	ctCmd.AddCommand(createCmd)
 
 	// Add flags

@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"github.com/scotty-c/prox/pkg/cmdutil"
 	"os"
 
 	"github.com/scotty-c/prox/pkg/completion"
@@ -31,12 +32,13 @@ Examples:
 	},
 	ValidArgsFunction: completion.FirstArgOnly(completion.GetContainerNames),
 	Run: func(cmd *cobra.Command, args []string) {
+		wait := cmdutil.ResolveWait(cmd, true)
 		nameOrID := args[0]
 
 		force, _ := cmd.Flags().GetBool("force")
 
 		// Stop the container
-		err := container.StopContainerWithOptions(nameOrID, force)
+		err := container.StopContainerWithOptions(nameOrID, force, wait)
 		if err != nil {
 			output.UserError("stopping container", err)
 			os.Exit(1)
@@ -45,6 +47,7 @@ Examples:
 }
 
 func init() {
+	cmdutil.AddWaitFlags(stopCmd, true)
 	stopCmd.Flags().BoolP("force", "f", false, "Stop immediately instead of shutting down cleanly (like pulling the power)")
 	ctCmd.AddCommand(stopCmd)
 }

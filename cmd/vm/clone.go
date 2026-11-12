@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"github.com/scotty-c/prox/pkg/cmdutil"
 	"github.com/scotty-c/prox/pkg/completion"
 	"os"
 	"strconv"
@@ -40,7 +41,7 @@ Examples:
 		// Get flags
 		flagName, _ := cmd.Flags().GetString("name")
 		full, _ := cmd.Flags().GetBool("full")
-		noWait, _ := cmd.Flags().GetBool("no-wait")
+		wait := cmdutil.ResolveWait(cmd, true)
 		node, _ := cmd.Flags().GetString("node")
 
 		// Optional positional name support; precedence to positional when provided
@@ -61,7 +62,6 @@ Examples:
 			os.Exit(1)
 		}
 
-		wait := !noWait // Invert: default is to wait
 		if err := vm.CloneVMByNameOrIDWithWait(sourceNameOrID, node, name, newID, full, wait); err != nil {
 			output.VMError("clone", err)
 			os.Exit(1)
@@ -70,10 +70,10 @@ Examples:
 }
 
 func init() {
+	cmdutil.AddWaitFlags(cloneCmd, true)
 	cloneCmd.Flags().StringP("node", "n", "", "Only match source VMs on this node (optional - auto-discovered if not specified)")
 	cloneCmd.Flags().StringP("name", "N", "", "Name for the new virtual machine (alternative to positional NAME)")
 	cloneCmd.Flags().BoolP("full", "f", false, "Create a full clone instead of linked clone (copies all disk data, required for some storage types like SMB/NFS)")
-	cloneCmd.Flags().Bool("no-wait", false, "Don't wait for clone to complete (default is to wait and show duration)")
 	vmCmd.AddCommand(cloneCmd)
 	completion.RegisterNodeFlag(cloneCmd, "node")
 }

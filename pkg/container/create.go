@@ -8,8 +8,14 @@ import (
 	"github.com/scotty-c/prox/pkg/output"
 )
 
-// CreateContainer creates a new LXC container
+// CreateContainer creates a new LXC container and waits for it to be created
 func CreateContainer(node, name, template string, vmid int, memory, disk int, cores int, password, sshKeys, storage string) error {
+	return CreateContainerWithWait(node, name, template, vmid, memory, disk, cores, password, sshKeys, storage, true)
+}
+
+// CreateContainerWithWait creates a new LXC container, optionally returning as
+// soon as the creation task has started
+func CreateContainerWithWait(node, name, template string, vmid int, memory, disk int, cores int, password, sshKeys, storage string, wait bool) error {
 	ctx := context.Background()
 	client, err := c.CreateClient()
 	if err != nil {
@@ -93,6 +99,10 @@ func CreateContainer(node, name, template string, vmid int, memory, disk int, co
 	}
 
 	output.Result("Task started: %s\n", taskID)
+	if !wait {
+		output.Info("Tip: Follow progress with 'prox logs --follow %s'\n", taskID)
+		return nil
+	}
 
 	// Wait for task completion
 	err = waitForTask(ctx, client, node, taskID)

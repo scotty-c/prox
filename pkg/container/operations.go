@@ -8,8 +8,13 @@ import (
 	"github.com/scotty-c/prox/pkg/output"
 )
 
-// StartContainer starts a container by name or ID
+// StartContainer starts a container by name or ID and waits for it to start
 func StartContainer(nameOrID string) error {
+	return StartContainerWithWait(nameOrID, true)
+}
+
+// StartContainerWithWait starts a container, optionally without waiting
+func StartContainerWithWait(nameOrID string, wait bool) error {
 	ctx := context.Background()
 	client, err := c.CreateClient()
 	if err != nil {
@@ -37,6 +42,10 @@ func StartContainer(nameOrID string) error {
 	}
 
 	output.Result("Task started: %s\n", taskID)
+	if !wait {
+		output.Info("Tip: Follow progress with 'prox logs --follow %s'\n", taskID)
+		return nil
+	}
 
 	// Wait for task completion
 	err = waitForTask(ctx, client, container.Node, taskID)
@@ -50,12 +59,13 @@ func StartContainer(nameOrID string) error {
 
 // StopContainer stops a container by name or ID
 func StopContainer(nameOrID string) error {
-	return StopContainerWithOptions(nameOrID, false)
+	return StopContainerWithOptions(nameOrID, false, true)
 }
 
 // StopContainerWithOptions stops a container by name or ID. With force, the
 // container is stopped immediately instead of being shut down cleanly.
-func StopContainerWithOptions(nameOrID string, force bool) error {
+// Without wait it returns as soon as the task has started.
+func StopContainerWithOptions(nameOrID string, force bool, wait bool) error {
 	ctx := context.Background()
 	client, err := c.CreateClient()
 	if err != nil {
@@ -88,6 +98,10 @@ func StopContainerWithOptions(nameOrID string, force bool) error {
 	}
 
 	output.Result("Task started: %s\n", taskID)
+	if !wait {
+		output.Info("Tip: Follow progress with 'prox logs --follow %s'\n", taskID)
+		return nil
+	}
 
 	// Wait for task completion
 	err = waitForTask(ctx, client, container.Node, taskID)
@@ -99,8 +113,13 @@ func StopContainerWithOptions(nameOrID string, force bool) error {
 	return nil
 }
 
-// DeleteContainer deletes a container by name or ID
+// DeleteContainer deletes a container by name or ID and waits for it to finish
 func DeleteContainer(nameOrID string) error {
+	return DeleteContainerWithWait(nameOrID, true)
+}
+
+// DeleteContainerWithWait deletes a container, optionally without waiting
+func DeleteContainerWithWait(nameOrID string, wait bool) error {
 	ctx := context.Background()
 	client, err := c.CreateClient()
 	if err != nil {
@@ -123,6 +142,10 @@ func DeleteContainer(nameOrID string) error {
 	}
 
 	output.Result("Task started: %s\n", taskID)
+	if !wait {
+		output.Info("Tip: Follow progress with 'prox logs --follow %s'\n", taskID)
+		return nil
+	}
 
 	// Wait for task completion
 	err = waitForTask(ctx, client, container.Node, taskID)

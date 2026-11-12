@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"github.com/scotty-c/prox/pkg/cmdutil"
 	"os"
 
 	"github.com/scotty-c/prox/pkg/completion"
@@ -26,7 +27,7 @@ Examples:
 	ValidArgsFunction: completion.FirstArgOnly(completion.GetVMNames),
 	Run: func(cmd *cobra.Command, args []string) {
 		nameOrID := args[0]
-		wait, _ := cmd.Flags().GetBool("wait")
+		wait := cmdutil.ResolveWait(cmd, false)
 		force, _ := cmd.Flags().GetBool("force")
 		node, _ := cmd.Flags().GetString("node")
 
@@ -39,9 +40,9 @@ Examples:
 }
 
 func init() {
+	cmdutil.AddWaitFlags(sdCmd, false)
 	sdCmd.Flags().StringP("node", "n", "", "Only match VMs on this node (optional - auto-discovered if not specified)")
 	sdCmd.Flags().BoolP("force", "f", false, "Stop immediately instead of an ACPI shutdown (like pulling the power)")
-	sdCmd.Flags().BoolP("wait", "w", false, "Wait for the operation to complete and show duration")
 	vmCmd.AddCommand(sdCmd)
 	completion.RegisterNodeFlag(sdCmd, "node")
 }

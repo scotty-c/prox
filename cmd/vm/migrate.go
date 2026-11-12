@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"github.com/scotty-c/prox/pkg/cmdutil"
 	"github.com/scotty-c/prox/pkg/completion"
 	"os"
 
@@ -35,6 +36,7 @@ Examples:
 	},
 	Args: cobra.ExactArgs(2),
 	Run: func(cmd *cobra.Command, args []string) {
+		wait := cmdutil.ResolveWait(cmd, true)
 		nameOrID := args[0]
 		targetNode := args[1]
 
@@ -50,7 +52,7 @@ Examples:
 		}
 
 		// Perform the migration
-		if err := vm.MigrateVMByNameOrID(nameOrID, sourceNode, targetNode, online, withLocalDisks); err != nil {
+		if err := vm.MigrateVMByNameOrIDWithWait(nameOrID, sourceNode, targetNode, online, withLocalDisks, wait); err != nil {
 			output.VMError("migrate", err)
 			os.Exit(1)
 		}
@@ -58,6 +60,7 @@ Examples:
 }
 
 func init() {
+	cmdutil.AddWaitFlags(migrateCmd, true)
 	migrateCmd.Flags().StringP("source", "s", "", "Source node name (auto-discovered if not specified)")
 	migrateCmd.Flags().Bool("online", false, "Perform online migration (VM continues running)")
 	migrateCmd.Flags().Bool("with-local-disks", false, "Include local disks in migration")

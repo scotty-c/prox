@@ -300,8 +300,14 @@ func (v *VirtualMachine) Delete(ctx context.Context) (*Task, error) {
 	return task, nil
 }
 
-// DeleteVM deletes a VM by ID and node
+// DeleteVM deletes a VM by ID and node without waiting for it to finish
 func DeleteVM(ctx context.Context, id int, node string) error {
+	return DeleteVMWithWait(ctx, id, node, false)
+}
+
+// DeleteVMWithWait deletes a VM by ID and node, optionally waiting for the
+// deletion to finish
+func DeleteVMWithWait(ctx context.Context, id int, node string, wait bool) error {
 	client, err := c.CreateClient()
 	if err != nil {
 		return fmt.Errorf("failed to create client: %w", err)
@@ -334,12 +340,28 @@ func DeleteVM(ctx context.Context, id int, node string) error {
 
 	output.Result("VM %d deletion command issued successfully\n", id)
 	output.Result("Task ID: %s\n", task.ID)
+
+	if wait {
+		output.Infoln("Waiting for deletion to complete...")
+		if err := waitForTask(ctx, client, node, task.ID); err != nil {
+			return fmt.Errorf("deletion failed: %w", err)
+		}
+		output.Result("VM %d deleted\n", id)
+		return nil
+	}
+
 	output.Info("Tip: Use 'prox vm list' to verify the VM has been removed\n")
 	return nil
 }
 
 // MigrateVM migrates a VM from one node to another
 func MigrateVM(ctx context.Context, id int, sourceNode, targetNode string, online bool, withLocalDisks bool) error {
+	return MigrateVMWithWait(ctx, id, sourceNode, targetNode, online, withLocalDisks, true)
+}
+
+// MigrateVMWithWait migrates a VM, optionally returning as soon as the
+// migration task has started
+func MigrateVMWithWait(ctx context.Context, id int, sourceNode, targetNode string, online bool, withLocalDisks bool, wait bool) error {
 	client, err := c.CreateClient()
 	if err != nil {
 		output.Error("Error: Error creating client: %v\n", err)
@@ -386,6 +408,10 @@ func MigrateVM(ctx context.Context, id int, sourceNode, targetNode string, onlin
 	}
 
 	output.Result("Migration task started: %s\n", taskID)
+	if !wait {
+		output.Info("Tip: Follow progress with 'prox logs --follow %s'\n", taskID)
+		return nil
+	}
 	output.Infoln("Waiting for migration to complete...")
 
 	// Wait for the migration task to complete
@@ -472,6 +498,12 @@ func ShutdownVMByNameOrIDWithOptions(nameOrID string, node string, wait bool, fo
 // DeleteVMByNameOrID deletes a VM by name or ID.
 // If node is not empty, only VMs on that node are considered.
 func DeleteVMByNameOrID(nameOrID string, node string) error {
+	return DeleteVMByNameOrIDWithWait(nameOrID, node, false)
+}
+
+// DeleteVMByNameOrIDWithWait deletes a VM by name or ID, optionally waiting
+// for the deletion to finish
+func DeleteVMByNameOrIDWithWait(nameOrID string, node string, wait bool) error {
 	ctx := context.Background()
 	client, err := c.CreateClient()
 	if err != nil {
@@ -486,7 +518,7 @@ func DeleteVMByNameOrID(nameOrID string, node string) error {
 	}
 
 	// Delete the VM
-	return DeleteVM(ctx, vm.ID, vm.Node)
+	return DeleteVMWithWait(ctx, vm.ID, vm.Node, wait)
 }
 
 // CloneVMByNameOrID clones a VM by name or ID
@@ -514,8 +546,14 @@ func CloneVMByNameOrIDWithWait(sourceNameOrID string, node string, name string, 
 	return CloneVMWithWait(ctx, vm.ID, vm.Node, name, newID, full, wait)
 }
 
-// MigrateVMByNameOrID migrates a VM by name or ID
+// MigrateVMByNameOrID migrates a VM by name or ID and waits for it to finish
 func MigrateVMByNameOrID(nameOrID string, sourceNode, targetNode string, online bool, withLocalDisks bool) error {
+	return MigrateVMByNameOrIDWithWait(nameOrID, sourceNode, targetNode, online, withLocalDisks, true)
+}
+
+// MigrateVMByNameOrIDWithWait migrates a VM by name or ID, optionally without
+// waiting for the migration to finish
+func MigrateVMByNameOrIDWithWait(nameOrID string, sourceNode, targetNode string, online bool, withLocalDisks bool, wait bool) error {
 	ctx := context.Background()
 	client, err := c.CreateClient()
 	if err != nil {
@@ -535,5 +573,5 @@ func MigrateVMByNameOrID(nameOrID string, sourceNode, targetNode string, online 
 	}
 
 	// Migrate the VM
-	return MigrateVM(ctx, vm.ID, sourceNode, targetNode, online, withLocalDisks)
+	return MigrateVMWithWait(ctx, vm.ID, sourceNode, targetNode, online, withLocalDisks, wait)
 }

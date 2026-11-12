@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"github.com/scotty-c/prox/pkg/cmdutil"
 	"os"
 
 	"github.com/scotty-c/prox/pkg/completion"
@@ -25,6 +26,7 @@ Examples:
 	Args:              cobra.ExactArgs(1),
 	ValidArgsFunction: completion.FirstArgOnly(completion.GetVMNames),
 	Run: func(cmd *cobra.Command, args []string) {
+		wait := cmdutil.ResolveWait(cmd, false)
 		nameOrID := args[0]
 
 		// Get flags
@@ -40,7 +42,7 @@ Examples:
 		}
 
 		// Delete the VM
-		if err := vm.DeleteVMByNameOrID(nameOrID, node); err != nil {
+		if err := vm.DeleteVMByNameOrIDWithWait(nameOrID, node, wait); err != nil {
 			output.VMError("delete", err)
 			os.Exit(1)
 		}
@@ -48,6 +50,7 @@ Examples:
 }
 
 func init() {
+	cmdutil.AddWaitFlags(delCmd, false)
 	delCmd.Flags().StringP("node", "n", "", "Only match VMs on this node (optional - auto-discovered if not specified)")
 	delCmd.Flags().BoolP("force", "f", false, "Skip confirmation prompt (use with caution)")
 	vmCmd.AddCommand(delCmd)

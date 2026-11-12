@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"github.com/scotty-c/prox/pkg/cmdutil"
 	"os"
 
 	"github.com/scotty-c/prox/pkg/completion"
@@ -29,10 +30,11 @@ Examples:
 	},
 	ValidArgsFunction: completion.FirstArgOnly(completion.GetContainerNames),
 	Run: func(cmd *cobra.Command, args []string) {
+		wait := cmdutil.ResolveWait(cmd, true)
 		nameOrID := args[0]
 
 		// Start the container
-		err := container.StartContainer(nameOrID)
+		err := container.StartContainerWithWait(nameOrID, wait)
 		if err != nil {
 			output.UserError("starting container", err)
 			os.Exit(1)
@@ -41,5 +43,6 @@ Examples:
 }
 
 func init() {
+	cmdutil.AddWaitFlags(startCmd, true)
 	ctCmd.AddCommand(startCmd)
 }

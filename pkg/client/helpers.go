@@ -2,7 +2,10 @@ package client
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"os"
+	"os/signal"
 	"time"
 )
 
@@ -70,6 +73,37 @@ func PollTask(ctx context.Context, client TaskStatusGetter, node, taskID string)
 			}
 		}
 	}
+}
+
+// waitTimeout limits how long WaitForTaskInteractive waits; 0 means no limit
+var waitTimeout time.Duration
+
+// SetWaitTimeout sets the limit used by WaitForTaskInteractive (from --timeout)
+func SetWaitTimeout(d time.Duration) {
+	waitTimeout = d
+}
+
+// WaitForTaskInteractive waits like WaitForTaskSuccess, but stops waiting on
+// Ctrl-C or after the --timeout limit. Stopping only stops prox from waiting;
+// the task keeps running on the server, and the error says how to follow it.
+func WaitForTaskInteractive(ctx context.Context, client TaskStatusGetter, node, taskID string) error {
+	ctx, stop := signal.NotifyContext(ctx, os.Interrupt)
+	defer stop()
+	if waitTimeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, waitTimeout)
+		defer cancel()
+	}
+
+	err := WaitForTaskSuccess(ctx, client, node, taskID)
+	if err != nil && ctx.Err() != nil {
+		reason := "interrupted"
+		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			reason = fmt.Sprintf("timed out after %s", waitTimeout)
+		}
+		return fmt.Errorf("stopped waiting (%s); the task is still running on the server. Follow it with: prox logs --follow %s", reason, taskID)
+	}
+	return err
 }
 
 // WaitForTaskSuccess waits for a task to finish and returns an error if it
