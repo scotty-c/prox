@@ -73,14 +73,14 @@ Examples:
 		if name == "" {
 			name = strings.TrimSpace(nameFlag)
 		} else if strings.TrimSpace(nameFlag) != "" && name != strings.TrimSpace(nameFlag) {
-			fmt.Printf("WARNING: --name \"%s\" ignored; using positional name \"%s\"\n", strings.TrimSpace(nameFlag), name)
+			fmt.Fprintf(os.Stderr, "WARNING: --name \"%s\" ignored; using positional name \"%s\"\n", strings.TrimSpace(nameFlag), name)
 		}
 
 		template := posTemplate
 		if template == "" {
 			template = strings.TrimSpace(tmplFlag)
 		} else if strings.TrimSpace(tmplFlag) != "" && template != strings.TrimSpace(tmplFlag) {
-			fmt.Printf("WARNING: --template \"%s\" ignored; using positional template \"%s\"\n", strings.TrimSpace(tmplFlag), template)
+			fmt.Fprintf(os.Stderr, "WARNING: --template \"%s\" ignored; using positional template \"%s\"\n", strings.TrimSpace(tmplFlag), template)
 		}
 
 		// Get flags
@@ -100,7 +100,7 @@ Examples:
 			var err error
 			vmid, err = strconv.Atoi(vmidStr)
 			if err != nil {
-				fmt.Printf("Error: Invalid VMID: %s\n", vmidStr)
+				fmt.Fprintf(os.Stderr, "Error: Invalid VMID: %s\n", vmidStr)
 				os.Exit(1)
 			}
 		}
@@ -140,12 +140,12 @@ Examples:
 				keyBytes, err := os.ReadFile(sshKeysFile)
 				if err != nil {
 					output.UserError(fmt.Sprintf("reading SSH keys file '%s'", sshKeysFile), err)
-					fmt.Println("Tip: Make sure the file exists and is readable")
+					fmt.Fprintln(os.Stderr, "Tip: Make sure the file exists and is readable")
 					os.Exit(1)
 				}
 				sshKeys = strings.TrimSpace(string(keyBytes))
 				if sshKeys == "" {
-					fmt.Printf("WARNING: SSH keys file '%s' is empty\n", sshKeysFile)
+					fmt.Fprintf(os.Stderr, "WARNING: SSH keys file '%s' is empty\n", sshKeysFile)
 				} else {
 					keyLines := strings.Split(sshKeys, "\n")
 					nonEmptyLines := 0
@@ -162,12 +162,12 @@ Examples:
 			if sshKeys != "" {
 				validKeys, err := container.ValidateSSHKeys(sshKeys)
 				if err != nil {
-					fmt.Printf("Error: SSH key validation failed: %v\n", err)
-					fmt.Println("Tip: Make sure your SSH keys are in the correct format (ssh-rsa, ssh-ed25519, etc.)")
+					fmt.Fprintf(os.Stderr, "Error: SSH key validation failed: %v\n", err)
+					fmt.Fprintln(os.Stderr, "Tip: Make sure your SSH keys are in the correct format (ssh-rsa, ssh-ed25519, etc.)")
 					os.Exit(1)
 				}
 				if validKeys == 0 {
-					fmt.Println("WARNING: No valid SSH keys found")
+					fmt.Fprintln(os.Stderr, "WARNING: No valid SSH keys found")
 				} else {
 					fmt.Printf("Validated %d SSH key(s)\n", validKeys)
 				}

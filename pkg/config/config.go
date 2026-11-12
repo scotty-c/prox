@@ -367,8 +367,10 @@ func MigrateToProfiles() error {
 		return fmt.Errorf("failed to backup old config: %w", err)
 	}
 
-	output.Resultln("Migrated configuration to profile system")
-	output.Resultln("Old config backed up to: " + backupFile)
+	// Report on stderr: this can run in the middle of any command, including
+	// ones whose stdout is JSON
+	output.Errorln("Migrated configuration to profile system")
+	output.Errorln("Old config backed up to: " + backupFile)
 
 	return nil
 }

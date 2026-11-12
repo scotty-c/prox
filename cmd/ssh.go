@@ -289,7 +289,7 @@ func deleteSSHConfigEntry(nameOrID string, dryRun bool) error {
 	if removed {
 		fmt.Printf("Removed SSH config entry for host '%s'\n", alias)
 	} else {
-		fmt.Printf("WARNING: No SSH config entry found for host '%s'\n", alias)
+		fmt.Fprintf(os.Stderr, "WARNING: No SSH config entry found for host '%s'\n", alias)
 	}
 	return nil
 }

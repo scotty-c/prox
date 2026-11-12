@@ -6,6 +6,10 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
+
+	"github.com/briandowns/spinner"
+	"golang.org/x/term"
 )
 
 // QuietMode indicates whether to suppress non-essential output
@@ -43,6 +47,19 @@ func Error(format string, a ...interface{}) {
 // Errorln prints error messages to stderr with newline (always shown)
 func Errorln(a ...interface{}) {
 	fmt.Fprintln(os.Stderr, a...)
+}
+
+// StartSpinner shows a progress spinner on stderr and returns a function that
+// stops it. Nothing is shown in quiet mode or when stderr is not a terminal,
+// so piped and scripted output stays clean.
+func StartSpinner(suffix string) func() {
+	if QuietMode || !term.IsTerminal(int(os.Stderr.Fd())) {
+		return func() {}
+	}
+	s := spinner.New(spinner.CharSets[14], 100*time.Millisecond, spinner.WithWriter(os.Stderr))
+	s.Suffix = suffix
+	s.Start()
+	return s.Stop
 }
 
 // SetQuiet enables or disables quiet mode

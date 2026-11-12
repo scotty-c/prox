@@ -35,7 +35,7 @@ Examples:
 
 		// Validate target node is not empty
 		if targetNode == "" {
-			fmt.Println("Error: Target node cannot be empty")
+			fmt.Fprintln(os.Stderr, "Error: Target node cannot be empty")
 			os.Exit(1)
 		}
 

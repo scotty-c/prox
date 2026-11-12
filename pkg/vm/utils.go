@@ -5,10 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
-	"time"
 
-	"github.com/briandowns/spinner"
 	c "github.com/scotty-c/prox/pkg/client"
+	"github.com/scotty-c/prox/pkg/output"
 	"github.com/scotty-c/prox/pkg/util"
 )
 
@@ -108,10 +107,8 @@ func vmFromResource(resource c.Resource) VM {
 
 // waitForTask waits for a Proxmox task to complete, showing a spinner
 func waitForTask(ctx context.Context, client c.ProxmoxClientInterface, node, taskID string) error {
-	s := spinner.New(spinner.CharSets[14], 100*time.Millisecond)
-	s.Suffix = " Processing..."
-	s.Start()
-	defer s.Stop()
+	stop := output.StartSpinner(" Processing...")
+	defer stop()
 
 	return c.WaitForTaskSuccess(ctx, client, node, taskID)
 }

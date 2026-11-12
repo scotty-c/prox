@@ -32,7 +32,7 @@ var createCmd = &cobra.Command{
 		switchToNew, _ := cmd.Flags().GetBool("use")
 		if switchToNew {
 			if err := c.SetCurrentProfile(profile); err != nil {
-				fmt.Printf("Warning: profile created but failed to switch: %v\n", err)
+				fmt.Fprintf(os.Stderr, "Warning: profile created but failed to switch: %v\n", err)
 			} else {
 				fmt.Printf("Switched to profile: %s\n", profile)
 			}

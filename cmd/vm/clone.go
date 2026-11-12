@@ -31,7 +31,7 @@ Examples:
 		// Parse new VM ID
 		newID, err := strconv.Atoi(args[1])
 		if err != nil {
-			fmt.Printf("Error: Invalid new VM ID '%s'. Must be a number.\n", args[1])
+			fmt.Fprintf(os.Stderr, "Error: Invalid new VM ID '%s'. Must be a number.\n", args[1])
 			os.Exit(1)
 		}
 
@@ -50,11 +50,11 @@ Examples:
 		if name == "" {
 			name = flagName
 		} else if flagName != "" && name != flagName {
-			fmt.Printf("WARNING: --name \"%s\" ignored; using positional name \"%s\"\n", flagName, name)
+			fmt.Fprintf(os.Stderr, "WARNING: --name \"%s\" ignored; using positional name \"%s\"\n", flagName, name)
 		}
 
 		if name == "" {
-			fmt.Println("Error: NAME (positional) or --name flag is required")
+			fmt.Fprintln(os.Stderr, "Error: NAME (positional) or --name flag is required")
 			cmd.Usage()
 			os.Exit(1)
 		}
