@@ -174,6 +174,8 @@ prox ct stop web
 prox ct edit web --cpu 2 --memory 2048   # Change resources (--disk 10 grows the root disk)
 prox ct clone web 201 web-copy --full    # Clone (linked clones need a template source)
 prox ct migrate web node2 --restart      # Move a running container to another node
+prox ct templates --available             # Templates Proxmox can download
+prox ct templates pull debian:12          # Download one, then: prox ct create web debian:12
 ```
 Advanced examples:
 ```bash

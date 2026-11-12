@@ -83,3 +83,34 @@ func (c *ProxmoxClient) ResizeContainerDisk(ctx context.Context, node string, vm
 	body := map[string]interface{}{"disk": disk, "size": size}
 	return requestData[string](ctx, c, "PUT", path+"/resize", body, "resize container disk")
 }
+
+// Appliance is a container template that Proxmox can download (aplinfo)
+type Appliance struct {
+	Template    string `json:"template"` // file name, e.g. debian-12-standard_12.7-1_amd64.tar.zst
+	OS          string `json:"os,omitempty"`
+	Version     string `json:"version,omitempty"`
+	Section     string `json:"section,omitempty"`
+	Description string `json:"headline,omitempty"`
+}
+
+// GetAvailableTemplates lists the templates a node can download
+func (c *ProxmoxClient) GetAvailableTemplates(ctx context.Context, node string) ([]Appliance, error) {
+	raw, err := c.makeRequest(ctx, "GET", fmt.Sprintf("/nodes/%s/aplinfo", url.PathEscape(node)), nil)
+	if err != nil {
+		return nil, err
+	}
+	var resp struct {
+		Data []Appliance `json:"data"`
+	}
+	if err := json.Unmarshal(raw, &resp); err != nil {
+		return nil, fmt.Errorf("failed to parse aplinfo response: %w", err)
+	}
+	return resp.Data, nil
+}
+
+// DownloadTemplate starts downloading an appliance template to storage and
+// returns the task ID
+func (c *ProxmoxClient) DownloadTemplate(ctx context.Context, node, storage, template string) (string, error) {
+	body := map[string]interface{}{"storage": storage, "template": template}
+	return requestData[string](ctx, c, "POST", fmt.Sprintf("/nodes/%s/aplinfo", url.PathEscape(node)), body, "download template")
+}

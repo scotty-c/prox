@@ -154,6 +154,8 @@ type ProxmoxClientInterface interface {
 	MigrateContainer(ctx context.Context, node string, vmid int, targetNode string, restart bool) (string, error)
 	UpdateContainer(ctx context.Context, node string, vmid int, config map[string]interface{}) error
 	ResizeContainerDisk(ctx context.Context, node string, vmid int, disk, size string) (string, error)
+	GetAvailableTemplates(ctx context.Context, node string) ([]Appliance, error)
+	DownloadTemplate(ctx context.Context, node, storage, template string) (string, error)
 
 	// Snapshot operations (guestType is GuestVM or GuestContainer)
 	ListSnapshots(ctx context.Context, node, guestType string, vmid int) ([]Snapshot, error)

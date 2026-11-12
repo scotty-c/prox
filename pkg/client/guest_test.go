@@ -2,6 +2,10 @@ package client
 
 import (
 	"context"
+	"encoding/json"
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"reflect"
 	"testing"
 )
@@ -43,5 +47,36 @@ func TestGuestOperationRequests(t *testing.T) {
 	}
 	if !reflect.DeepEqual(requests, want) {
 		t.Fatalf("requests:\n got %+v\nwant %+v", requests, want)
+	}
+}
+
+func TestAvailableTemplates(t *testing.T) {
+	var requests []recordedRequest
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		req := recordedRequest{Method: r.Method, Path: r.URL.Path}
+		if raw, _ := io.ReadAll(r.Body); len(raw) > 0 {
+			_ = json.Unmarshal(raw, &req.Body)
+		}
+		requests = append(requests, req)
+		if r.Method == http.MethodGet {
+			w.Write([]byte(`{"data":[{"template":"debian-12-standard_12.7-1_amd64.tar.zst","section":"system","headline":"Debian 12"}]}`))
+			return
+		}
+		w.Write([]byte(`{"data":"UPID:pve:1:2:3:download:0:root@pam:"}`))
+	}))
+	defer srv.Close()
+	c, _ := NewClientWithTLS(srv.URL, "root@pam!t", "s", TLSOptions{Insecure: true})
+	ctx := context.Background()
+
+	apps, err := c.GetAvailableTemplates(ctx, "pve")
+	if err != nil || len(apps) != 1 || apps[0].Template != "debian-12-standard_12.7-1_amd64.tar.zst" || apps[0].Description != "Debian 12" {
+		t.Fatalf("GetAvailableTemplates = %+v, %v", apps, err)
+	}
+	if _, err := c.DownloadTemplate(ctx, "pve", "local", apps[0].Template); err != nil {
+		t.Fatal(err)
+	}
+	want := recordedRequest{"POST", "/api2/json/nodes/pve/aplinfo", map[string]interface{}{"storage": "local", "template": "debian-12-standard_12.7-1_amd64.tar.zst"}}
+	if !reflect.DeepEqual(requests[1], want) {
+		t.Fatalf("download request = %+v, want %+v", requests[1], want)
 	}
 }
