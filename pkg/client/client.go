@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -25,6 +26,7 @@ type ProxmoxClient struct {
 	HTTPClient *http.Client
 	ticket     string
 	csrfToken  string
+	authMu     sync.Mutex // guards ticket and csrfToken
 
 	// Cluster resources cache
 	cachedResources      []Resource
@@ -235,6 +237,13 @@ func (c *ProxmoxClient) Authenticate(ctx context.Context) error {
 		return nil
 	}
 
+	c.authMu.Lock()
+	defer c.authMu.Unlock()
+	return c.authenticateLocked(ctx)
+}
+
+// authenticateLocked logs in with username and password. c.authMu must be held.
+func (c *ProxmoxClient) authenticateLocked(ctx context.Context) error {
 	authURL := fmt.Sprintf("%s/api2/json/access/ticket", c.BaseURL)
 
 	data := url.Values{}
@@ -276,27 +285,51 @@ func (c *ProxmoxClient) Authenticate(ctx context.Context) error {
 
 // makeRequest makes an authenticated request to the Proxmox API
 func (c *ProxmoxClient) makeRequest(ctx context.Context, method, path string, body interface{}) ([]byte, error) {
-	// Ensure we're authenticated (API tokens are sent with every request)
-	if !c.usesAPIToken() && c.ticket == "" {
-		if err := c.Authenticate(ctx); err != nil {
-			return nil, fmt.Errorf("authentication failed: %w", err)
-		}
-	}
-
-	url := fmt.Sprintf("%s/api2/json%s", c.BaseURL, path)
-
-	var reqBody io.Reader
+	var jsonBody []byte
 	if body != nil {
-		jsonBody, err := json.Marshal(body)
+		var err error
+		jsonBody, err = json.Marshal(body)
 		if err != nil {
 			return nil, fmt.Errorf("failed to marshal request body: %w", err)
 		}
+	}
+
+	for attempt := 0; ; attempt++ {
+		ticket, csrfToken, err := c.ensureTicket(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("authentication failed: %w", err)
+		}
+
+		status, reason, respBody, err := c.doRequest(ctx, method, path, jsonBody, ticket, csrfToken)
+		if err != nil {
+			return nil, err
+		}
+
+		// Tickets expire after two hours. Log in again once and retry.
+		if status == http.StatusUnauthorized && !c.usesAPIToken() && attempt == 0 {
+			c.clearTicket(ticket)
+			continue
+		}
+
+		if status < 200 || status >= 300 {
+			return nil, fmt.Errorf("API request failed with status %d: %s", status, apiErrorMessage(reason, respBody))
+		}
+		return respBody, nil
+	}
+}
+
+// doRequest sends one request and returns the status code, status reason and body
+func (c *ProxmoxClient) doRequest(ctx context.Context, method, path string, jsonBody []byte, ticket, csrfToken string) (int, string, []byte, error) {
+	reqURL := fmt.Sprintf("%s/api2/json%s", c.BaseURL, path)
+
+	var reqBody io.Reader
+	if jsonBody != nil {
 		reqBody = bytes.NewReader(jsonBody)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, method, url, reqBody)
+	req, err := http.NewRequestWithContext(ctx, method, reqURL, reqBody)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
+		return 0, "", nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
 	// Set authentication headers
@@ -304,32 +337,98 @@ func (c *ProxmoxClient) makeRequest(ctx context.Context, method, path string, bo
 		// Token requests don't need a ticket or CSRF token
 		req.Header.Set("Authorization", fmt.Sprintf("PVEAPIToken=%s=%s", c.Username, c.Password))
 	} else {
-		req.Header.Set("Cookie", fmt.Sprintf("PVEAuthCookie=%s", c.ticket))
+		req.Header.Set("Cookie", fmt.Sprintf("PVEAuthCookie=%s", ticket))
 		if method != "GET" && method != "HEAD" {
-			req.Header.Set("CSRFPreventionToken", c.csrfToken)
+			req.Header.Set("CSRFPreventionToken", csrfToken)
 		}
 	}
 
-	if body != nil {
+	if jsonBody != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
 
 	resp, err := c.HTTPClient.Do(req)
 	if err != nil {
-		return nil, wrapTLSError(fmt.Errorf("request failed: %w", err), c.BaseURL)
+		return 0, "", nil, wrapTLSError(fmt.Errorf("request failed: %w", err), c.BaseURL)
 	}
 	defer resp.Body.Close()
 
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read response: %w", err)
+		return 0, "", nil, fmt.Errorf("failed to read response: %w", err)
 	}
 
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, string(respBody))
-	}
+	// resp.Status is e.g. "500 VM 100 not running"; Proxmox puts the reason there
+	reason := strings.TrimSpace(strings.TrimPrefix(resp.Status, strconv.Itoa(resp.StatusCode)))
+	return resp.StatusCode, reason, respBody, nil
+}
 
-	return respBody, nil
+// ensureTicket logs in if there is no ticket yet and returns the current
+// ticket and CSRF token. API token clients return empty values.
+func (c *ProxmoxClient) ensureTicket(ctx context.Context) (string, string, error) {
+	if c.usesAPIToken() {
+		return "", "", nil
+	}
+	c.authMu.Lock()
+	defer c.authMu.Unlock()
+	if c.ticket == "" {
+		if err := c.authenticateLocked(ctx); err != nil {
+			return "", "", err
+		}
+	}
+	return c.ticket, c.csrfToken, nil
+}
+
+// clearTicket forgets a ticket that the server rejected, unless another
+// request has already replaced it
+func (c *ProxmoxClient) clearTicket(rejected string) {
+	c.authMu.Lock()
+	defer c.authMu.Unlock()
+	if c.ticket == rejected {
+		c.ticket = ""
+		c.csrfToken = ""
+	}
+}
+
+// maxErrorBodyLength limits how much of an unrecognised error body is shown
+const maxErrorBodyLength = 300
+
+// apiErrorMessage builds a readable message from a failed API response
+func apiErrorMessage(reason string, body []byte) string {
+	var parsed struct {
+		Message string            `json:"message"`
+		Errors  map[string]string `json:"errors"`
+	}
+	var parts []string
+	if reason != "" {
+		parts = append(parts, reason)
+	}
+	if err := json.Unmarshal(body, &parsed); err == nil {
+		if msg := strings.TrimSpace(parsed.Message); msg != "" && msg != reason {
+			parts = append(parts, msg)
+		}
+		if len(parsed.Errors) > 0 {
+			keys := make([]string, 0, len(parsed.Errors))
+			for k := range parsed.Errors {
+				keys = append(keys, k)
+			}
+			sort.Strings(keys)
+			var errs []string
+			for _, k := range keys {
+				errs = append(errs, fmt.Sprintf("%s: %s", k, strings.TrimSpace(parsed.Errors[k])))
+			}
+			parts = append(parts, "("+strings.Join(errs, "; ")+")")
+		}
+	} else if text := strings.TrimSpace(string(body)); text != "" {
+		if len(text) > maxErrorBodyLength {
+			text = text[:maxErrorBodyLength] + "..."
+		}
+		parts = append(parts, text)
+	}
+	if len(parts) == 0 {
+		return "no details returned"
+	}
+	return strings.Join(parts, " ")
 }
 
 // GetVersion gets the Proxmox version
@@ -447,7 +546,7 @@ func (c *ProxmoxClient) GetClusterResources(ctx context.Context) ([]Resource, er
 
 // StartVM starts a virtual machine
 func (c *ProxmoxClient) StartVM(ctx context.Context, node string, vmid int) (string, error) {
-	path := fmt.Sprintf("/nodes/%s/qemu/%d/status/start", node, vmid)
+	path := fmt.Sprintf("/nodes/%s/qemu/%d/status/start", url.PathEscape(node), vmid)
 	body, err := c.makeRequest(ctx, "POST", path, nil)
 	if err != nil {
 		return "", err
@@ -467,7 +566,7 @@ func (c *ProxmoxClient) StartVM(ctx context.Context, node string, vmid int) (str
 
 // StopVM stops a virtual machine
 func (c *ProxmoxClient) StopVM(ctx context.Context, node string, vmid int) (string, error) {
-	path := fmt.Sprintf("/nodes/%s/qemu/%d/status/shutdown", node, vmid)
+	path := fmt.Sprintf("/nodes/%s/qemu/%d/status/shutdown", url.PathEscape(node), vmid)
 	body, err := c.makeRequest(ctx, "POST", path, nil)
 	if err != nil {
 		return "", err
@@ -488,13 +587,13 @@ func (c *ProxmoxClient) StopVM(ctx context.Context, node string, vmid int) (stri
 // ForceStopVM stops a virtual machine immediately, like pulling the power.
 // Use StopVM for a clean ACPI shutdown.
 func (c *ProxmoxClient) ForceStopVM(ctx context.Context, node string, vmid int) (string, error) {
-	return c.postForTask(ctx, fmt.Sprintf("/nodes/%s/qemu/%d/status/stop", node, vmid), "force stop VM")
+	return c.postForTask(ctx, fmt.Sprintf("/nodes/%s/qemu/%d/status/stop", url.PathEscape(node), vmid), "force stop VM")
 }
 
 // ForceStopContainer stops a container immediately. Use StopContainer for a
 // clean shutdown.
 func (c *ProxmoxClient) ForceStopContainer(ctx context.Context, node string, vmid int) (string, error) {
-	return c.postForTask(ctx, fmt.Sprintf("/nodes/%s/lxc/%d/status/stop", node, vmid), "force stop container")
+	return c.postForTask(ctx, fmt.Sprintf("/nodes/%s/lxc/%d/status/stop", url.PathEscape(node), vmid), "force stop container")
 }
 
 // postForTask sends a POST with no body and returns the task ID from the response
@@ -517,7 +616,7 @@ func (c *ProxmoxClient) postForTask(ctx context.Context, path, action string) (s
 
 // DeleteVM deletes a virtual machine
 func (c *ProxmoxClient) DeleteVM(ctx context.Context, node string, vmid int) (string, error) {
-	path := fmt.Sprintf("/nodes/%s/qemu/%d", node, vmid)
+	path := fmt.Sprintf("/nodes/%s/qemu/%d", url.PathEscape(node), vmid)
 	body, err := c.makeRequest(ctx, "DELETE", path, nil)
 	if err != nil {
 		return "", err
@@ -537,7 +636,7 @@ func (c *ProxmoxClient) DeleteVM(ctx context.Context, node string, vmid int) (st
 
 // CloneVM clones a virtual machine
 func (c *ProxmoxClient) CloneVM(ctx context.Context, node string, vmid int, newid int, name string, full bool) (string, error) {
-	path := fmt.Sprintf("/nodes/%s/qemu/%d/clone", node, vmid)
+	path := fmt.Sprintf("/nodes/%s/qemu/%d/clone", url.PathEscape(node), vmid)
 	reqBody := map[string]interface{}{
 		"newid": newid,
 		"name":  name,
@@ -567,7 +666,7 @@ func (c *ProxmoxClient) CloneVM(ctx context.Context, node string, vmid int, newi
 
 // CreateContainer creates a new LXC container
 func (c *ProxmoxClient) CreateContainer(ctx context.Context, node string, vmid int, params map[string]interface{}) (string, error) {
-	path := fmt.Sprintf("/nodes/%s/lxc", node)
+	path := fmt.Sprintf("/nodes/%s/lxc", url.PathEscape(node))
 
 	// Ensure vmid is included in the request
 	params["vmid"] = vmid
@@ -591,7 +690,7 @@ func (c *ProxmoxClient) CreateContainer(ctx context.Context, node string, vmid i
 
 // StartContainer starts an LXC container
 func (c *ProxmoxClient) StartContainer(ctx context.Context, node string, vmid int) (string, error) {
-	path := fmt.Sprintf("/nodes/%s/lxc/%d/status/start", node, vmid)
+	path := fmt.Sprintf("/nodes/%s/lxc/%d/status/start", url.PathEscape(node), vmid)
 	body, err := c.makeRequest(ctx, "POST", path, nil)
 	if err != nil {
 		return "", err
@@ -611,7 +710,7 @@ func (c *ProxmoxClient) StartContainer(ctx context.Context, node string, vmid in
 
 // StopContainer stops an LXC container
 func (c *ProxmoxClient) StopContainer(ctx context.Context, node string, vmid int) (string, error) {
-	path := fmt.Sprintf("/nodes/%s/lxc/%d/status/shutdown", node, vmid)
+	path := fmt.Sprintf("/nodes/%s/lxc/%d/status/shutdown", url.PathEscape(node), vmid)
 	body, err := c.makeRequest(ctx, "POST", path, nil)
 	if err != nil {
 		return "", err
@@ -631,7 +730,7 @@ func (c *ProxmoxClient) StopContainer(ctx context.Context, node string, vmid int
 
 // DeleteContainer deletes a container
 func (c *ProxmoxClient) DeleteContainer(ctx context.Context, node string, vmid int) (string, error) {
-	path := fmt.Sprintf("/nodes/%s/lxc/%d", node, vmid)
+	path := fmt.Sprintf("/nodes/%s/lxc/%d", url.PathEscape(node), vmid)
 	body, err := c.makeRequest(ctx, "DELETE", path, nil)
 	if err != nil {
 		return "", err
@@ -651,7 +750,7 @@ func (c *ProxmoxClient) DeleteContainer(ctx context.Context, node string, vmid i
 
 // GetContainerConfig gets the configuration of an LXC container
 func (c *ProxmoxClient) GetContainerConfig(ctx context.Context, node string, vmid int) (map[string]interface{}, error) {
-	path := fmt.Sprintf("/nodes/%s/lxc/%d/config", node, vmid)
+	path := fmt.Sprintf("/nodes/%s/lxc/%d/config", url.PathEscape(node), vmid)
 	body, err := c.makeRequest(ctx, "GET", path, nil)
 	if err != nil {
 		return nil, err
@@ -671,7 +770,7 @@ func (c *ProxmoxClient) GetContainerConfig(ctx context.Context, node string, vmi
 
 // GetContainerStatus gets the status of an LXC container
 func (c *ProxmoxClient) GetContainerStatus(ctx context.Context, node string, vmid int) (map[string]interface{}, error) {
-	path := fmt.Sprintf("/nodes/%s/lxc/%d/status/current", node, vmid)
+	path := fmt.Sprintf("/nodes/%s/lxc/%d/status/current", url.PathEscape(node), vmid)
 	body, err := c.makeRequest(ctx, "GET", path, nil)
 	if err != nil {
 		return nil, err
@@ -720,7 +819,7 @@ func (c *ProxmoxClient) GetNextVMID(ctx context.Context) (int, error) {
 
 // GetTaskStatus gets the status of a Proxmox task
 func (c *ProxmoxClient) GetTaskStatus(ctx context.Context, node, upid string) (*Task, error) {
-	path := fmt.Sprintf("/nodes/%s/tasks/%s/status", node, upid)
+	path := fmt.Sprintf("/nodes/%s/tasks/%s/status", url.PathEscape(node), url.PathEscape(upid))
 
 	body, err := c.makeRequest(ctx, "GET", path, nil)
 	if err != nil {
@@ -762,7 +861,7 @@ func (c *ProxmoxClient) GetTaskStatus(ctx context.Context, node, upid string) (*
 
 // GetTaskLog retrieves the log for a Proxmox task
 func (c *ProxmoxClient) GetTaskLog(ctx context.Context, node, upid string, start int, limit int) ([]string, error) {
-	path := fmt.Sprintf("/nodes/%s/tasks/%s/log", node, upid)
+	path := fmt.Sprintf("/nodes/%s/tasks/%s/log", url.PathEscape(node), url.PathEscape(upid))
 
 	// Add query parameters for pagination
 	params := url.Values{}
@@ -1040,7 +1139,7 @@ func extractIPFromInterfaces(interfaces []interface{}) string {
 
 // getVMIPFromGuestAgent tries to get IP from QEMU guest agent
 func (c *ProxmoxClient) getVMIPFromGuestAgent(ctx context.Context, node string, vmid int) string {
-	path := fmt.Sprintf("/nodes/%s/qemu/%d/agent/network-get-interfaces", node, vmid)
+	path := fmt.Sprintf("/nodes/%s/qemu/%d/agent/network-get-interfaces", url.PathEscape(node), vmid)
 	body, err := c.makeRequest(ctx, "GET", path, nil)
 	if err != nil {
 		return "N/A"
@@ -1096,7 +1195,7 @@ func (c *ProxmoxClient) getVMIPFromStatus(ctx context.Context, node string, vmid
 
 // getVMIPFromInterfaces tries to get IP from network interfaces endpoint
 func (c *ProxmoxClient) getVMIPFromInterfaces(ctx context.Context, node string, vmid int) string {
-	path := fmt.Sprintf("/nodes/%s/qemu/%d/interfaces", node, vmid)
+	path := fmt.Sprintf("/nodes/%s/qemu/%d/interfaces", url.PathEscape(node), vmid)
 	body, err := c.makeRequest(ctx, "GET", path, nil)
 	if err != nil {
 		return "N/A"
@@ -1178,7 +1277,7 @@ func (c *ProxmoxClient) GetContainerIP(ctx context.Context, node string, vmid in
 
 // getContainerIPFromGuestAgent tries to get IP from LXC guest agent
 func (c *ProxmoxClient) getContainerIPFromGuestAgent(ctx context.Context, node string, vmid int) string {
-	path := fmt.Sprintf("/nodes/%s/lxc/%d/agent/network-get-interfaces", node, vmid)
+	path := fmt.Sprintf("/nodes/%s/lxc/%d/agent/network-get-interfaces", url.PathEscape(node), vmid)
 	body, err := c.makeRequest(ctx, "GET", path, nil)
 	if err != nil {
 		return "N/A"
@@ -1226,7 +1325,7 @@ func (c *ProxmoxClient) GetContainerIPAlternative(ctx context.Context, node stri
 	}
 
 	// Try to get IP from network interfaces endpoint
-	path := fmt.Sprintf("/nodes/%s/lxc/%d/interfaces", node, vmid)
+	path := fmt.Sprintf("/nodes/%s/lxc/%d/interfaces", url.PathEscape(node), vmid)
 	body, err := c.makeRequest(ctx, "GET", path, nil)
 	if err != nil {
 		c.setCachedIP(node, vmid, "N/A")
@@ -1269,7 +1368,7 @@ func (c *ProxmoxClient) GetContainerIPAlternative(ctx context.Context, node stri
 // GetNodeIP attempts to get a primary IP address for a Proxmox node.
 // This uses the node network API and returns the first non-loopback IPv4 it finds.
 func (c *ProxmoxClient) GetNodeIP(ctx context.Context, node string) (string, error) {
-	path := fmt.Sprintf("/nodes/%s/network", node)
+	path := fmt.Sprintf("/nodes/%s/network", url.PathEscape(node))
 	body, err := c.makeRequest(ctx, "GET", path, nil)
 	if err != nil {
 		return "N/A", err
@@ -1319,7 +1418,7 @@ func (c *ProxmoxClient) GetNodeIP(ctx context.Context, node string) (string, err
 
 // UpdateVM updates a virtual machine configuration
 func (c *ProxmoxClient) UpdateVM(ctx context.Context, node string, vmid int, config map[string]interface{}) (string, error) {
-	path := fmt.Sprintf("/nodes/%s/qemu/%d/config", node, vmid)
+	path := fmt.Sprintf("/nodes/%s/qemu/%d/config", url.PathEscape(node), vmid)
 
 	body, err := c.makeRequest(ctx, "PUT", path, config)
 	if err != nil {
@@ -1342,7 +1441,7 @@ func (c *ProxmoxClient) UpdateVM(ctx context.Context, node string, vmid int, con
 
 // ResizeDisk resizes a VM disk
 func (c *ProxmoxClient) ResizeDisk(ctx context.Context, node string, vmid int, disk string, size string) (string, error) {
-	path := fmt.Sprintf("/nodes/%s/qemu/%d/resize", node, vmid)
+	path := fmt.Sprintf("/nodes/%s/qemu/%d/resize", url.PathEscape(node), vmid)
 	reqBody := map[string]interface{}{
 		"disk": disk,
 		"size": size,
@@ -1367,7 +1466,7 @@ func (c *ProxmoxClient) ResizeDisk(ctx context.Context, node string, vmid int, d
 
 // GetVMConfig gets the configuration of a virtual machine
 func (c *ProxmoxClient) GetVMConfig(ctx context.Context, node string, vmid int) (map[string]interface{}, error) {
-	path := fmt.Sprintf("/nodes/%s/qemu/%d/config", node, vmid)
+	path := fmt.Sprintf("/nodes/%s/qemu/%d/config", url.PathEscape(node), vmid)
 
 	body, err := c.makeRequest(ctx, "GET", path, nil)
 	if err != nil {
@@ -1388,7 +1487,7 @@ func (c *ProxmoxClient) GetVMConfig(ctx context.Context, node string, vmid int) 
 
 // GetContainerTemplates gets available container templates from a node
 func (c *ProxmoxClient) GetContainerTemplates(ctx context.Context, node string) ([]ContainerTemplate, error) {
-	path := fmt.Sprintf("/nodes/%s/storage", node)
+	path := fmt.Sprintf("/nodes/%s/storage", url.PathEscape(node))
 
 	body, err := c.makeRequest(ctx, "GET", path, nil)
 	if err != nil {
@@ -1440,7 +1539,7 @@ func (c *ProxmoxClient) GetContainerTemplates(ctx context.Context, node string) 
 
 // getStorageTemplates gets templates from a specific storage
 func (c *ProxmoxClient) getStorageTemplates(ctx context.Context, node, storage string) ([]ContainerTemplate, error) {
-	path := fmt.Sprintf("/nodes/%s/storage/%s/content", node, storage)
+	path := fmt.Sprintf("/nodes/%s/storage/%s/content", url.PathEscape(node), url.PathEscape(storage))
 
 	// Add query parameter to filter for container templates
 	query := "?content=vztmpl"
@@ -1489,7 +1588,7 @@ func (c *ProxmoxClient) getStorageTemplates(ctx context.Context, node, storage s
 
 // GetVMStatus gets the current status of a virtual machine
 func (c *ProxmoxClient) GetVMStatus(ctx context.Context, node string, vmid int) (map[string]interface{}, error) {
-	path := fmt.Sprintf("/nodes/%s/qemu/%d/status/current", node, vmid)
+	path := fmt.Sprintf("/nodes/%s/qemu/%d/status/current", url.PathEscape(node), vmid)
 	body, err := c.makeRequest(ctx, "GET", path, nil)
 	if err != nil {
 		return nil, err
@@ -1598,7 +1697,7 @@ func (c *ProxmoxClient) GetVMDiskInfo(ctx context.Context, node string, vmid int
 // getVMDiskUsageFromGuestAgent returns the space used on the VM's disk-backed
 // filesystems as reported by the QEMU guest agent.
 func (c *ProxmoxClient) getVMDiskUsageFromGuestAgent(ctx context.Context, node string, vmid int) (uint64, error) {
-	path := fmt.Sprintf("/nodes/%s/qemu/%d/agent/get-fsinfo", node, vmid)
+	path := fmt.Sprintf("/nodes/%s/qemu/%d/agent/get-fsinfo", url.PathEscape(node), vmid)
 	body, err := c.makeRequest(ctx, "GET", path, nil)
 	if err != nil {
 		return 0, err
@@ -1655,7 +1754,7 @@ func (c *ProxmoxClient) getStorageVolumeSizeWithCache(ctx context.Context, node,
 
 	if !cached {
 		// Fetch storage content from API
-		path := fmt.Sprintf("/nodes/%s/storage/%s/content", node, storage)
+		path := fmt.Sprintf("/nodes/%s/storage/%s/content", url.PathEscape(node), url.PathEscape(storage))
 
 		body, err := c.makeRequest(ctx, "GET", path, nil)
 		if err != nil {
@@ -1767,7 +1866,7 @@ func (c *ProxmoxClient) getVMIPFromConfig(ctx context.Context, node string, vmid
 
 // MigrateVM migrates a virtual machine to another node
 func (c *ProxmoxClient) MigrateVM(ctx context.Context, node string, vmid int, targetNode string, options map[string]interface{}) (string, error) {
-	path := fmt.Sprintf("/nodes/%s/qemu/%d/migrate", node, vmid)
+	path := fmt.Sprintf("/nodes/%s/qemu/%d/migrate", url.PathEscape(node), vmid)
 
 	// Prepare migration parameters
 	reqBody := map[string]interface{}{
