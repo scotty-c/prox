@@ -136,7 +136,7 @@ func setupSSHConfig(nameOrID, username string, port int, keyPath string, dryRun 
 		}
 	}
 
-	if ip == "" {
+	if ip == "" || ip == "N/A" {
 		return fmt.Errorf("no IP address found for %s '%s' (ID: %d). Make sure the resource is running and has an IP assigned", resourceType, resourceName, resourceID)
 	}
 

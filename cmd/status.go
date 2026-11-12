@@ -36,14 +36,12 @@ func init() {
 }
 
 func showStatus() error {
-	// Check if config exists
-	if !config.Check() {
-		return fmt.Errorf("no configuration found. Run 'prox config setup' to configure connection")
-	}
-
-	// Read config
-	_, _, url, err := config.Read()
+	// Read config (environment variables take precedence over the config file)
+	_, _, url, err := client.ReadConfig()
 	if err != nil {
+		if !config.Check() {
+			return fmt.Errorf("no configuration found. Run 'prox config setup' to configure connection")
+		}
 		return fmt.Errorf("failed to read config: %w", err)
 	}
 
