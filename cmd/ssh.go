@@ -3,14 +3,15 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 
 	"github.com/jedib0t/go-pretty/v6/table"
 	"github.com/scotty-c/prox/pkg/client"
 	"github.com/scotty-c/prox/pkg/container"
+	"github.com/scotty-c/prox/pkg/sshconfig"
 	"github.com/scotty-c/prox/pkg/vm"
 	"github.com/spf13/cobra"
 )
@@ -192,18 +193,7 @@ func setupSSHConfig(nameOrID, username string, port int, keyPath string, dryRun 
 }
 
 func isValidIP(ip string) bool {
-	parts := strings.Split(ip, ".")
-	if len(parts) != 4 {
-		return false
-	}
-
-	for _, part := range parts {
-		if num, err := strconv.Atoi(part); err != nil || num < 0 || num > 255 {
-			return false
-		}
-	}
-
-	return true
+	return net.ParseIP(ip) != nil
 }
 
 func generateSSHConfigEntry(host, hostname, user string, port int, keyPath string) string {
@@ -227,58 +217,33 @@ func generateSSHConfigEntry(host, hostname, user string, port int, keyPath strin
 	return config.String()
 }
 
-func addToSSHConfig(hostAlias, configEntry string) error {
+func sshConfigPath() (string, error) {
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
-		return fmt.Errorf("failed to get home directory: %w", err)
+		return "", fmt.Errorf("failed to get home directory: %w", err)
+	}
+	return filepath.Join(homeDir, ".ssh", "config"), nil
+}
+
+func addToSSHConfig(hostAlias, configEntry string) error {
+	configPath, err := sshConfigPath()
+	if err != nil {
+		return err
 	}
 
-	sshDir := filepath.Join(homeDir, ".ssh")
-	configPath := filepath.Join(sshDir, "config")
-
 	// Create .ssh directory if it doesn't exist
-	if err := os.MkdirAll(sshDir, 0700); err != nil {
+	if err := os.MkdirAll(filepath.Dir(configPath), 0700); err != nil {
 		return fmt.Errorf("failed to create .ssh directory: %w", err)
 	}
 
 	// Read existing config if it exists
-	var existingConfig []byte
-	if _, err := os.Stat(configPath); err == nil {
-		existingConfig, err = os.ReadFile(configPath)
-		if err != nil {
-			return fmt.Errorf("failed to read existing SSH config: %w", err)
-		}
+	existingConfig, err := os.ReadFile(configPath)
+	if err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("failed to read existing SSH config: %w", err)
 	}
 
-	// Check if host already exists and remove it
-	configLines := strings.Split(string(existingConfig), "\n")
-	var newConfig strings.Builder
-	skipUntilNextHost := false
-
-	for _, line := range configLines {
-		trimmed := strings.TrimSpace(line)
-
-		if strings.HasPrefix(trimmed, "Host ") {
-			hostName := strings.TrimSpace(strings.TrimPrefix(trimmed, "Host "))
-			if hostName == hostAlias {
-				skipUntilNextHost = true
-				continue
-			} else {
-				skipUntilNextHost = false
-			}
-		}
-
-		if !skipUntilNextHost {
-			newConfig.WriteString(line + "\n")
-		}
-	}
-
-	// Add new config entry at the beginning
-	finalConfig := configEntry + "\n" + newConfig.String()
-
-	// Write the updated config
-	err = os.WriteFile(configPath, []byte(finalConfig), 0600)
-	if err != nil {
+	newConfig := sshconfig.AddHost(string(existingConfig), hostAlias, configEntry)
+	if err := sshconfig.WriteFile(configPath, []byte(newConfig)); err != nil {
 		return fmt.Errorf("failed to write SSH config: %w", err)
 	}
 
@@ -326,89 +291,38 @@ func deleteSSHConfigEntry(nameOrID string, dryRun bool) error {
 
 // removeFromSSHConfig removes a host block from ~/.ssh/config. Returns (removed, removedBlock, error).
 func removeFromSSHConfig(hostAlias string, dryRun bool) (bool, string, error) {
-	homeDir, err := os.UserHomeDir()
+	configPath, err := sshConfigPath()
 	if err != nil {
-		return false, "", fmt.Errorf("failed to get home directory: %w", err)
-	}
-
-	sshDir := filepath.Join(homeDir, ".ssh")
-	configPath := filepath.Join(sshDir, "config")
-
-	if _, err := os.Stat(configPath); os.IsNotExist(err) {
-		return false, "", nil // Nothing to remove
+		return false, "", err
 	}
 
 	data, err := os.ReadFile(configPath)
+	if os.IsNotExist(err) {
+		return false, "", nil // Nothing to remove
+	}
 	if err != nil {
 		return false, "", fmt.Errorf("failed to read SSH config: %w", err)
 	}
 
-	lines := strings.Split(string(data), "\n")
-	var newConfig strings.Builder
-	var blockBuilder strings.Builder
-	inTargetBlock := false
-	removed := false
-
-	for i, line := range lines {
-		trimmed := strings.TrimSpace(line)
-		if strings.HasPrefix(trimmed, "Host ") {
-			// Starting a new host block; decide if previous target block ended
-			if inTargetBlock {
-				// We were skipping target block and encountered next host -> target block ended
-				inTargetBlock = false
-			}
-
-			// Determine if this host line matches (support multiple hosts on one line)
-			fields := strings.Fields(trimmed)[1:]
-			match := false
-			for _, f := range fields {
-				if f == hostAlias {
-					match = true
-					break
-				}
-			}
-			if match {
-				removed = true
-				inTargetBlock = true
-				blockBuilder.WriteString(line + "\n")
-				continue
-			}
-		}
-
-		if inTargetBlock {
-			// Capture lines belonging to the block until next Host line (handled at start of loop)
-			blockBuilder.WriteString(line + "\n")
-			continue
-		}
-
-		// Keep line
-		// Avoid adding an extra trailing newline at end if last line is empty and we'll add our own
-		if i < len(lines)-1 || line != "" {
-			newConfig.WriteString(line + "\n")
-		}
-	}
+	newConfig, block, removed := sshconfig.RemoveHost(string(data), hostAlias, false)
 
 	// If dry run, do not write changes; just return info
-	if dryRun {
-		return removed, blockBuilder.String(), nil
+	if dryRun || !removed {
+		return removed, block, nil
 	}
 
-	if removed {
-		if err := os.WriteFile(configPath, []byte(newConfig.String()), 0600); err != nil {
-			return false, "", fmt.Errorf("failed to write updated SSH config: %w", err)
-		}
+	if err := sshconfig.WriteFile(configPath, []byte(newConfig)); err != nil {
+		return false, "", fmt.Errorf("failed to write updated SSH config: %w", err)
 	}
 
-	return removed, blockBuilder.String(), nil
+	return removed, block, nil
 }
 
 func listSSHConfigEntries() error {
-	homeDir, err := os.UserHomeDir()
+	configPath, err := sshConfigPath()
 	if err != nil {
-		return fmt.Errorf("failed to get home directory: %w", err)
+		return err
 	}
-	sshDir := filepath.Join(homeDir, ".ssh")
-	configPath := filepath.Join(sshDir, "config")
 
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
 		fmt.Println("Note: No SSH config file found (~/.ssh/config)")
@@ -420,52 +334,7 @@ func listSSHConfigEntries() error {
 		return fmt.Errorf("failed to read SSH config: %w", err)
 	}
 
-	type entry struct {
-		Hosts    []string
-		HostName string
-		User     string
-		Port     string
-		Identity string
-	}
-	var entries []entry
-	var current *entry
-
-	flush := func() {
-		if current != nil {
-			entries = append(entries, *current)
-			current = nil
-		}
-	}
-
-	lines := strings.Split(string(data), "\n")
-	for _, line := range lines {
-		trim := strings.TrimSpace(line)
-		if trim == "" || strings.HasPrefix(trim, "#") {
-			continue
-		}
-		if strings.HasPrefix(trim, "Host ") {
-			flush()
-			fields := strings.Fields(trim)
-			if len(fields) > 1 {
-				current = &entry{Hosts: fields[1:], Port: "22"}
-			}
-			continue
-		}
-		if current == nil { // skip lines outside a host block
-			continue
-		}
-		lower := strings.ToLower(trim)
-		if strings.HasPrefix(lower, "hostname ") {
-			current.HostName = strings.TrimSpace(trim[8:])
-		} else if strings.HasPrefix(lower, "user ") {
-			current.User = strings.TrimSpace(trim[5:])
-		} else if strings.HasPrefix(lower, "port ") {
-			current.Port = strings.TrimSpace(trim[5:])
-		} else if strings.HasPrefix(lower, "identityfile ") {
-			current.Identity = strings.TrimSpace(trim[12:])
-		}
-	}
-	flush()
+	entries := sshconfig.ParseEntries(string(data))
 
 	if len(entries) == 0 {
 		fmt.Println("Note: No host entries found in SSH config")
