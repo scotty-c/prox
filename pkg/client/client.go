@@ -1612,42 +1612,6 @@ func sumGuestFilesystemUsage(filesystems []guestFilesystem) (uint64, bool) {
 	return total, found
 }
 
-// getStorageVolumeSize attempts to get the size of a storage volume
-func (c *ProxmoxClient) getStorageVolumeSize(ctx context.Context, node, storage, volumeID string) (uint64, error) {
-	path := fmt.Sprintf("/nodes/%s/storage/%s/content", node, storage)
-
-	body, err := c.makeRequest(ctx, "GET", path, nil)
-	if err != nil {
-		return 0, err
-	}
-
-	var resp APIResponse
-	if err := json.Unmarshal(body, &resp); err != nil {
-		return 0, err
-	}
-
-	if contentList, ok := resp.Data.([]interface{}); ok {
-		for _, content := range contentList {
-			if contentMap, ok := content.(map[string]interface{}); ok {
-				if volID, exists := contentMap["volid"]; exists {
-					if volIDStr, ok := volID.(string); ok {
-						// Match the volume ID - try exact match first, then partial match
-						if volIDStr == fmt.Sprintf("%s:%s", storage, volumeID) || strings.Contains(volIDStr, volumeID) {
-							if size, exists := contentMap["size"]; exists {
-								if sizeFloat, ok := size.(float64); ok {
-									return uint64(sizeFloat), nil
-								}
-							}
-						}
-					}
-				}
-			}
-		}
-	}
-
-	return 0, fmt.Errorf("volume not found in storage")
-}
-
 // getStorageVolumeSizeWithCache is like getStorageVolumeSize but uses a cache to avoid
 // repeated API calls for the same storage. This significantly improves performance when
 // a VM has multiple disks on the same storage.

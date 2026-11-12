@@ -201,16 +201,16 @@ func isValidIP(ip string) bool {
 func generateSSHConfigEntry(host, hostname, user string, port int, keyPath string, skipHostKeyCheck bool) string {
 	var config strings.Builder
 
-	config.WriteString(fmt.Sprintf("Host %s\n", host))
-	config.WriteString(fmt.Sprintf("    HostName %s\n", hostname))
-	config.WriteString(fmt.Sprintf("    User %s\n", user))
+	fmt.Fprintf(&config, "Host %s\n", host)
+	fmt.Fprintf(&config, "    HostName %s\n", hostname)
+	fmt.Fprintf(&config, "    User %s\n", user)
 
 	if port != 22 {
-		config.WriteString(fmt.Sprintf("    Port %d\n", port))
+		fmt.Fprintf(&config, "    Port %d\n", port)
 	}
 
 	if keyPath != "" {
-		config.WriteString(fmt.Sprintf("    IdentityFile %s\n", keyPath))
+		fmt.Fprintf(&config, "    IdentityFile %s\n", keyPath)
 	}
 
 	if skipHostKeyCheck {

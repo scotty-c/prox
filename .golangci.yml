@@ -1,0 +1,16 @@
+version: "2"
+
+linters:
+  default: standard # errcheck, govet, ineffassign, staticcheck, unused
+  settings:
+    errcheck:
+      # Errors from these are safe to ignore on cleanup and read paths. Where a
+      # Close error matters (after writing a file) it is checked explicitly.
+      exclude-functions:
+        - (*os.File).Close
+        - (io.ReadCloser).Close
+        - (io.Closer).Close
+        - os.Remove
+        - (net/http.ResponseWriter).Write
+        - (*github.com/spf13/cobra.Command).Help
+        - (*github.com/spf13/cobra.Command).Usage

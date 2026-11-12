@@ -461,10 +461,9 @@ func Create(username string, password string, url string) error {
 		return err
 	}
 
-	// Set as current profile if not already set
-	if err := SetCurrentProfile(profile); err != nil {
-		// Ignore error if it's already the current profile
-	}
+	// Make it the current profile. Failure here is not fatal: the profile
+	// was created, and GetCurrentProfile already resolves to it.
+	_ = SetCurrentProfile(profile)
 
 	return nil
 }
@@ -472,9 +471,9 @@ func Create(username string, password string, url string) error {
 // Read reads the current profile's config file and decrypts sensitive data
 func Read() (string, string, string, error) {
 	// Try to migrate old config if it exists
-	if err := MigrateToProfiles(); err != nil {
-		// Ignore migration errors, might not be needed
-	}
+	// Ignore migration errors: migration might not be needed, and reading the
+	// profile below reports any real problem
+	_ = MigrateToProfiles()
 
 	profile := GetCurrentProfile()
 	return ReadProfile(profile)
@@ -600,6 +599,6 @@ func readLegacy() (string, string, string) {
 	defer file.Close()
 
 	var username, password, url string
-	fmt.Fscanf(file, "username=%s\npassword=%s\nurl=%s\n", &username, &password, &url)
+	_, _ = fmt.Fscanf(file, "username=%s\npassword=%s\nurl=%s\n", &username, &password, &url)
 	return username, password, url
 }

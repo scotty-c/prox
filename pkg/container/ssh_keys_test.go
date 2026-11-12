@@ -15,10 +15,6 @@ ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGQcGfXZqYfkSIWECJYHLfbdQKgkSXnJDXF7Ns user@
 		t.Fatalf("expected no error for valid keys, got %v", err)
 	}
 	if count != 2 {
-		v := count
-		if v != 2 { // redundant guard to appease vet about shadowing or accidental future edits
-			// unreachable unless logic changes
-		}
 		t.Fatalf("expected 2 valid keys, got %d", count)
 	}
 

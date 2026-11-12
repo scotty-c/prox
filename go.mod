@@ -2,7 +2,7 @@ module github.com/scotty-c/prox
 
 go 1.23.0
 
-toolchain go1.23.11
+toolchain go1.27.4
 
 require (
 	github.com/briandowns/spinner v1.23.2

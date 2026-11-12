@@ -3,6 +3,7 @@ package container
 import (
 	"bufio"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"strconv"
@@ -116,23 +117,6 @@ func getClusterNodes(client c.ProxmoxClientInterface) ([]string, error) {
 	return nodes, nil
 }
 
-// autoDetectNode automatically detects the best node for container creation
-func autoDetectNode(client *c.ProxmoxClient) (string, error) {
-	resources, err := client.GetClusterResources(context.Background())
-	if err != nil {
-		return "", err
-	}
-
-	// Find the first available node
-	for _, resource := range resources {
-		if resource.Type == "node" && resource.Status == "online" {
-			return resource.Node, nil
-		}
-	}
-
-	return "", fmt.Errorf("no online nodes found")
-}
-
 // waitForTask waits for a Proxmox task to complete, showing a spinner
 func waitForTask(ctx context.Context, client c.ProxmoxClientInterface, node, taskID string) error {
 	stop := output.StartSpinner(" Processing...")
@@ -198,7 +182,7 @@ func FindByNameOrID(ctx context.Context, client c.ProxmoxClientInterface, nameOr
 		errorMsg += "\n\nRun 'prox ct list' to see all available containers"
 	}
 
-	return nil, fmt.Errorf(errorMsg)
+	return nil, errors.New(errorMsg)
 }
 
 // ReadSSHKeys reads SSH public keys (one per line) from r until EOF.
