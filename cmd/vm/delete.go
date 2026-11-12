@@ -29,6 +29,7 @@ Examples:
 
 		// Get flags
 		force, _ := cmd.Flags().GetBool("force")
+		node, _ := cmd.Flags().GetString("node")
 
 		// Confirm deletion unless --force is used
 		if !force {
@@ -39,7 +40,7 @@ Examples:
 		}
 
 		// Delete the VM
-		if err := vm.DeleteVMByNameOrID(nameOrID); err != nil {
+		if err := vm.DeleteVMByNameOrID(nameOrID, node); err != nil {
 			output.VMError("delete", err)
 			os.Exit(1)
 		}
@@ -47,7 +48,7 @@ Examples:
 }
 
 func init() {
-	delCmd.Flags().StringP("node", "n", "", "Proxmox node name (optional - will be auto-discovered if not specified)")
+	delCmd.Flags().StringP("node", "n", "", "Only match VMs on this node (optional - auto-discovered if not specified)")
 	delCmd.Flags().BoolP("force", "f", false, "Skip confirmation prompt (use with caution)")
 	vmCmd.AddCommand(delCmd)
 }

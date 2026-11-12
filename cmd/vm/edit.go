@@ -30,9 +30,10 @@ Examples:
 		cpu, _ := cmd.Flags().GetInt("cpu")
 		memory, _ := cmd.Flags().GetInt("memory")
 		diskSize, _ := cmd.Flags().GetInt("disk")
+		node, _ := cmd.Flags().GetString("node")
 
 		// Edit the VM
-		if err := vm.EditVMByNameOrID(nameOrID, name, cpu, memory, diskSize); err != nil {
+		if err := vm.EditVMByNameOrID(nameOrID, node, name, cpu, memory, diskSize); err != nil {
 			output.VMError("edit", err)
 			os.Exit(1)
 		}
@@ -40,7 +41,7 @@ Examples:
 }
 
 func init() {
-	editCmd.Flags().StringP("node", "n", "", "Proxmox node name (optional - will be auto-discovered if not specified)")
+	editCmd.Flags().StringP("node", "n", "", "Only match VMs on this node (optional - auto-discovered if not specified)")
 	editCmd.Flags().StringP("name", "N", "", "VM name")
 	editCmd.Flags().IntP("cpu", "c", 0, "Number of CPU cores")
 	editCmd.Flags().IntP("memory", "m", 0, "Memory size in MB")

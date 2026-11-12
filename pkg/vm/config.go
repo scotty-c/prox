@@ -207,8 +207,9 @@ func (v *VirtualMachine) GetPrimaryDisk(ctx context.Context) (string, error) {
 	return "", fmt.Errorf("no valid disk found for VM %d", v.ID)
 }
 
-// EditVMByNameOrID edits a VM by name or ID
-func EditVMByNameOrID(nameOrID string, name string, cores int, mem int, diskSize int) error {
+// EditVMByNameOrID edits a VM by name or ID.
+// If node is not empty, only VMs on that node are considered.
+func EditVMByNameOrID(nameOrID string, node string, name string, cores int, mem int, diskSize int) error {
 	ctx := context.Background()
 	client, err := c.CreateClient()
 	if err != nil {
@@ -217,7 +218,7 @@ func EditVMByNameOrID(nameOrID string, name string, cores int, mem int, diskSize
 	}
 
 	// Find the VM by name or ID
-	vm, err := FindByNameOrID(ctx, client, nameOrID)
+	vm, err := FindByNameOrIDOnNode(ctx, client, nameOrID, node)
 	if err != nil {
 		return fmt.Errorf("failed to find VM: %w", err)
 	}

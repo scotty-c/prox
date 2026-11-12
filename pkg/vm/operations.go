@@ -386,11 +386,12 @@ func MigrateVM(ctx context.Context, id int, sourceNode, targetNode string, onlin
 
 // StartVMByNameOrID starts a VM by name or ID
 func StartVMByNameOrID(nameOrID string) error {
-	return StartVMByNameOrIDWithWait(nameOrID, false)
+	return StartVMByNameOrIDWithWait(nameOrID, "", false)
 }
 
-// StartVMByNameOrIDWithWait starts a VM by name or ID with optional wait
-func StartVMByNameOrIDWithWait(nameOrID string, wait bool) error {
+// StartVMByNameOrIDWithWait starts a VM by name or ID with optional wait.
+// If node is not empty, only VMs on that node are considered.
+func StartVMByNameOrIDWithWait(nameOrID string, node string, wait bool) error {
 	ctx := context.Background()
 	client, err := c.CreateClient()
 	if err != nil {
@@ -399,7 +400,7 @@ func StartVMByNameOrIDWithWait(nameOrID string, wait bool) error {
 	}
 
 	// Find the VM by name or ID
-	vm, err := FindByNameOrID(ctx, client, nameOrID)
+	vm, err := FindByNameOrIDOnNode(ctx, client, nameOrID, node)
 	if err != nil {
 		return fmt.Errorf("failed to find VM: %w", err)
 	}
@@ -413,11 +414,12 @@ func StartVMByNameOrIDWithWait(nameOrID string, wait bool) error {
 
 // ShutdownVMByNameOrID shuts down a VM by name or ID
 func ShutdownVMByNameOrID(nameOrID string) error {
-	return ShutdownVMByNameOrIDWithWait(nameOrID, false)
+	return ShutdownVMByNameOrIDWithWait(nameOrID, "", false)
 }
 
-// ShutdownVMByNameOrIDWithWait shuts down a VM by name or ID with optional wait
-func ShutdownVMByNameOrIDWithWait(nameOrID string, wait bool) error {
+// ShutdownVMByNameOrIDWithWait shuts down a VM by name or ID with optional wait.
+// If node is not empty, only VMs on that node are considered.
+func ShutdownVMByNameOrIDWithWait(nameOrID string, node string, wait bool) error {
 	ctx := context.Background()
 	client, err := c.CreateClient()
 	if err != nil {
@@ -426,7 +428,7 @@ func ShutdownVMByNameOrIDWithWait(nameOrID string, wait bool) error {
 	}
 
 	// Find the VM by name or ID
-	vm, err := FindByNameOrID(ctx, client, nameOrID)
+	vm, err := FindByNameOrIDOnNode(ctx, client, nameOrID, node)
 	if err != nil {
 		return fmt.Errorf("failed to find VM: %w", err)
 	}
@@ -438,8 +440,9 @@ func ShutdownVMByNameOrIDWithWait(nameOrID string, wait bool) error {
 	return nil
 }
 
-// DeleteVMByNameOrID deletes a VM by name or ID
-func DeleteVMByNameOrID(nameOrID string) error {
+// DeleteVMByNameOrID deletes a VM by name or ID.
+// If node is not empty, only VMs on that node are considered.
+func DeleteVMByNameOrID(nameOrID string, node string) error {
 	ctx := context.Background()
 	client, err := c.CreateClient()
 	if err != nil {
@@ -448,7 +451,7 @@ func DeleteVMByNameOrID(nameOrID string) error {
 	}
 
 	// Find the VM by name or ID
-	vm, err := FindByNameOrID(ctx, client, nameOrID)
+	vm, err := FindByNameOrIDOnNode(ctx, client, nameOrID, node)
 	if err != nil {
 		return fmt.Errorf("failed to find VM: %w", err)
 	}
@@ -459,11 +462,12 @@ func DeleteVMByNameOrID(nameOrID string) error {
 
 // CloneVMByNameOrID clones a VM by name or ID
 func CloneVMByNameOrID(sourceNameOrID string, name string, newID int, full bool) error {
-	return CloneVMByNameOrIDWithWait(sourceNameOrID, name, newID, full, true)
+	return CloneVMByNameOrIDWithWait(sourceNameOrID, "", name, newID, full, true)
 }
 
-// CloneVMByNameOrIDWithWait clones a VM by name or ID with optional wait
-func CloneVMByNameOrIDWithWait(sourceNameOrID string, name string, newID int, full bool, wait bool) error {
+// CloneVMByNameOrIDWithWait clones a VM by name or ID with optional wait.
+// If node is not empty, only source VMs on that node are considered.
+func CloneVMByNameOrIDWithWait(sourceNameOrID string, node string, name string, newID int, full bool, wait bool) error {
 	ctx := context.Background()
 	client, err := c.CreateClient()
 	if err != nil {
@@ -472,7 +476,7 @@ func CloneVMByNameOrIDWithWait(sourceNameOrID string, name string, newID int, fu
 	}
 
 	// Find the source VM by name or ID
-	vm, err := FindByNameOrID(ctx, client, sourceNameOrID)
+	vm, err := FindByNameOrIDOnNode(ctx, client, sourceNameOrID, node)
 	if err != nil {
 		return fmt.Errorf("failed to find source VM: %w", err)
 	}
@@ -491,7 +495,7 @@ func MigrateVMByNameOrID(nameOrID string, sourceNode, targetNode string, online 
 	}
 
 	// Find the VM by name or ID
-	vm, err := FindByNameOrID(ctx, client, nameOrID)
+	vm, err := FindByNameOrIDOnNode(ctx, client, nameOrID, sourceNode)
 	if err != nil {
 		return fmt.Errorf("failed to find VM: %w", err)
 	}
