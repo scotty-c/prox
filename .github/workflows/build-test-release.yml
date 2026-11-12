@@ -100,6 +100,9 @@ jobs:
       - name: Build multi-platform binaries
         run: make build-all
 
+      - name: Generate checksums
+        run: cd bin && sha256sum prox-* > checksums.txt
+
       - name: Create release
         id: create_release
         uses: softprops/action-gh-release@v2
@@ -110,6 +113,7 @@ jobs:
             ./bin/prox-darwin-amd64
             ./bin/prox-darwin-arm64
             ./bin/prox-windows-amd64.exe
+            ./bin/checksums.txt
           draft: false
           prerelease: false
           generate_release_notes: true
@@ -205,6 +209,10 @@ jobs:
             ${{ steps.meta.outputs.tags }}
             ${{ inputs.tag != '' && format('ghcr.io/{0}/prox:{1}', github.repository_owner, inputs.tag) || '' }}
           labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            VERSION=${{ steps.meta.outputs.version }}
+            COMMIT=${{ github.sha }}
+            BUILD_DATE=${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.created'] }}
 
       - name: Build and push Docker image (tags/releases)
         if: ${{ github.event_name != 'workflow_dispatch' }}
@@ -215,6 +223,10 @@ jobs:
           platforms: linux/amd64,linux/arm64
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            VERSION=${{ steps.meta.outputs.version }}
+            COMMIT=${{ github.sha }}
+            BUILD_DATE=${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.created'] }}
 
       - name: Verify push success
         if: ${{ (github.event_name != 'workflow_dispatch' || inputs.push) && success() }}

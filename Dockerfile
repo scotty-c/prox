@@ -1,5 +1,5 @@
 # Build stage
-FROM golang:1.23-alpine AS builder
+FROM golang:1.27.4-alpine3.24 AS builder
 
 # Install git for version info
 RUN apk add --no-cache git
@@ -16,11 +16,18 @@ RUN go mod download
 # Copy source code
 COPY . .
 
+# Version information (passed by the release workflow)
+ARG VERSION=dev
+ARG COMMIT=unknown
+ARG BUILD_DATE=unknown
+
 # Build the binary
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags "-w -s" -o prox main.go
+RUN CGO_ENABLED=0 GOOS=linux go build \
+    -ldflags "-w -s -X main.version=${VERSION} -X main.commit=${COMMIT} -X main.buildDate=${BUILD_DATE}" \
+    -o prox main.go
 
 # Final stage
-FROM alpine:latest
+FROM alpine:3.24
 
 # Install ca-certificates for HTTPS calls
 RUN apk --no-cache add ca-certificates
