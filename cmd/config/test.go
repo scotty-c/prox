@@ -34,8 +34,27 @@ var testCmd = &cobra.Command{
 		output.Info("2. Initializing client... ")
 		// We use NewClient directly instead of CreateClient to avoid caching side effects for a test command
 		// and to ensure we are testing the exact credentials we just read
-		c := client.NewClient(url, user, pass)
+		tlsOpts, err := client.ResolveTLSOptions()
+		if err != nil {
+			output.Errorln("FAILED")
+			output.Error("   Error: %v\n", err)
+			os.Exit(1)
+		}
+		c, err := client.NewClientWithTLS(url, user, pass, tlsOpts)
+		if err != nil {
+			output.Errorln("FAILED")
+			output.Error("   Error: %v\n", err)
+			os.Exit(1)
+		}
 		output.Resultln("OK")
+		switch {
+		case tlsOpts.Insecure:
+			output.Result("   TLS: certificate verification disabled\n")
+		case tlsOpts.CACert != "":
+			output.Result("   TLS: verifying with CA %s\n", tlsOpts.CACert)
+		default:
+			output.Result("   TLS: verifying with system CAs\n")
+		}
 
 		// Step 3: Authenticate
 		output.Info("3. Authenticating... ")

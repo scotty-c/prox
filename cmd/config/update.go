@@ -19,6 +19,7 @@ var updateCmd = &cobra.Command{
 		password, _ := cmd.Flags().GetString("password")
 		url, _ := cmd.Flags().GetString("url")
 
+		saveTLSFlagsOrExit(cmd, c.GetCurrentProfile())
 		if err := c.Update(username, password, url); err != nil {
 			fmt.Fprintf(os.Stderr, "Error updating config: %v\n", err)
 			os.Exit(1)

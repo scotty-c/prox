@@ -171,26 +171,46 @@ func CreateProfile(profile, username, password, url string) error {
 		return fmt.Errorf("failed to encrypt password: %w", err)
 	}
 
-	file, err := os.Create(profilePath)
-	if err != nil {
-		return fmt.Errorf("failed to create profile file: %w", err)
-	}
-	defer file.Close()
+	// Keep TLS settings from an existing profile with the same name
+	tlsOpts, _ := ReadTLSOptions(profile)
 
-	// Set restrictive permissions
-	if err := file.Chmod(0600); err != nil {
-		return fmt.Errorf("failed to set file permissions: %w", err)
-	}
-
-	// Write encrypted data
-	fmt.Fprintf(file, "username=%s\n", encryptedUsername)
-	fmt.Fprintf(file, "password=%s\n", encryptedPassword)
-	fmt.Fprintf(file, "url=%s\n", url)
+	var content strings.Builder
+	fmt.Fprintf(&content, "username=%s\n", encryptedUsername)
+	fmt.Fprintf(&content, "password=%s\n", encryptedPassword)
+	fmt.Fprintf(&content, "url=%s\n", url)
+	writeTLSOptions(&content, tlsOpts)
 
 	// Add a marker to indicate this config uses encryption
 	fingerprint, _ := crypto.GetKeyFingerprint()
-	fmt.Fprintf(file, "%s %s\n", fingerprintComment, fingerprint)
+	fmt.Fprintf(&content, "%s %s\n", fingerprintComment, fingerprint)
 
+	return writeProfileFile(profilePath, content.String())
+}
+
+// writeProfileFile writes a profile with 0600 permissions from the start, via
+// a temporary file and rename so a failure never leaves a half-written profile.
+func writeProfileFile(path, content string) error {
+	tmp, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".tmp-*")
+	if err != nil {
+		return fmt.Errorf("failed to create profile file: %w", err)
+	}
+	tmpName := tmp.Name()
+	defer os.Remove(tmpName) // no-op after a successful rename
+
+	if err := tmp.Chmod(0600); err != nil {
+		tmp.Close()
+		return fmt.Errorf("failed to set file permissions: %w", err)
+	}
+	if _, err := tmp.WriteString(content); err != nil {
+		tmp.Close()
+		return fmt.Errorf("failed to write profile file: %w", err)
+	}
+	if err := tmp.Close(); err != nil {
+		return fmt.Errorf("failed to write profile file: %w", err)
+	}
+	if err := os.Rename(tmpName, path); err != nil {
+		return fmt.Errorf("failed to save profile file: %w", err)
+	}
 	return nil
 }
 

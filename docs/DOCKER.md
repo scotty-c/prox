@@ -7,51 +7,57 @@ make docker-build
 docker build -t prox:latest .
 ```
 
-## Run Commands
+## Configure with Environment Variables
+Pass connection details as environment variables:
 ```bash
-docker run --rm prox:latest vm list
+docker run --rm \
+  -e PROX_URL=https://proxmox:8006 \
+  -e PROX_USER=admin@pam \
+  -e PROX_PASSWORD=secret \
+  -e PROX_INSECURE=true \
+  prox:latest vm list
 ```
 
-## Persist Config
-Create config on host first:
+To verify the Proxmox certificate instead of using `PROX_INSECURE`, mount the
+Proxmox CA (a copy of `/etc/pve/pve-root-ca.pem` from any node):
 ```bash
-prox config setup -u admin@pam -p secret -l https://proxmox:8006
+docker run --rm \
+  -e PROX_URL=https://proxmox:8006 \
+  -e PROX_USER=admin@pam \
+  -e PROX_PASSWORD=secret \
+  -e PROX_CA_CERT=/certs/pve-root-ca.pem \
+  -v ~/.prox/pve-root-ca.pem:/certs/pve-root-ca.pem:ro \
+  prox:latest vm list
 ```
-Then mount:
+
+Keep the password out of your shell history with an env file:
 ```bash
-docker run --rm -v ~/.prox:/home/prox/.prox prox:latest vm list
+docker run --rm --env-file ~/.prox/docker.env prox:latest vm list
 ```
+
+### Why not mount `~/.prox`?
+Saved profiles are encrypted with a key derived from your username and hostname.
+Both are different inside the container, so a profile created on the host can't
+be decrypted there. Use environment variables instead.
 
 ## Interactive Shell
 ```bash
-docker run --rm -it -v ~/.prox:/home/prox/.prox prox:latest /bin/sh
+docker run --rm -it --env-file ~/.prox/docker.env --entrypoint /bin/sh prox:latest
 ```
 
 ## Specific Operations
 ```bash
-docker run --rm -v ~/.prox:/home/prox/.prox prox:latest vm describe 100
-docker run --rm -v ~/.prox:/home/prox/.prox prox:latest ct templates
+docker run --rm --env-file ~/.prox/docker.env prox:latest vm describe 100
+docker run --rm --env-file ~/.prox/docker.env prox:latest ct templates
 ```
-
-## Environment Variables (Optional / Less Secure)
-```bash
-docker run --rm \
-  -e PROXMOX_URL=https://proxmox:8006 \
-  -e PROXMOX_USER=admin@pam \
-  -e PROXMOX_PASS=secret \
-  prox:latest vm list
-```
-(Stored encrypted config file is preferred.)
 
 ## Docker Compose
 `docker-compose.yml` example:
 ```yaml
-version: '3.8'
 services:
   prox:
     build: .
-    volumes:
-      - ~/.prox:/home/prox/.prox:ro
+    env_file: ~/.prox/docker.env
     command: ["vm", "list"]
 ```
 Run:

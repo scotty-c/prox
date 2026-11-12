@@ -3,7 +3,6 @@ package client
 import (
 	"bytes"
 	"context"
-	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -174,14 +173,23 @@ var (
 	clientCacheMutex sync.RWMutex
 )
 
-// NewClient creates a new Proxmox client
+// NewClient creates a new Proxmox client that verifies the server certificate
+// against the system CAs. Use NewClientWithTLS to trust another CA or to skip
+// verification.
 func NewClient(baseURL, username, password string) *ProxmoxClient {
-	// Create HTTP client with custom transport for self-signed certificates
-	// and connection pooling for better performance
+	client, _ := NewClientWithTLS(baseURL, username, password, TLSOptions{})
+	return client
+}
+
+// NewClientWithTLS creates a new Proxmox client with the given TLS options
+func NewClientWithTLS(baseURL, username, password string, opts TLSOptions) (*ProxmoxClient, error) {
+	tlsConfig, err := buildTLSConfig(opts)
+	if err != nil {
+		return nil, err
+	}
+
 	transport := &http.Transport{
-		TLSClientConfig: &tls.Config{
-			InsecureSkipVerify: true,
-		},
+		TLSClientConfig: tlsConfig,
 		// Connection pooling settings for better reuse
 		MaxIdleConns:        100,              // Maximum idle connections across all hosts
 		MaxIdleConnsPerHost: 10,               // Maximum idle connections per host
@@ -200,7 +208,7 @@ func NewClient(baseURL, username, password string) *ProxmoxClient {
 		Password:   password,
 		HTTPClient: client,
 		ipCache:    make(map[string]ipCacheEntry),
-	}
+	}, nil
 }
 
 // Authenticate authenticates with Proxmox and stores the ticket
@@ -220,7 +228,7 @@ func (c *ProxmoxClient) Authenticate(ctx context.Context) error {
 
 	resp, err := c.HTTPClient.Do(req)
 	if err != nil {
-		return fmt.Errorf("authentication request failed: %w", err)
+		return wrapTLSError(fmt.Errorf("authentication request failed: %w", err), c.BaseURL)
 	}
 	defer resp.Body.Close()
 
@@ -281,7 +289,7 @@ func (c *ProxmoxClient) makeRequest(ctx context.Context, method, path string, bo
 
 	resp, err := c.HTTPClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("request failed: %w", err)
+		return nil, wrapTLSError(fmt.Errorf("request failed: %w", err), c.BaseURL)
 	}
 	defer resp.Body.Close()
 
@@ -767,8 +775,13 @@ func CreateClient() (ProxmoxClientInterface, error) {
 		return nil, fmt.Errorf("failed to read config: %w", err)
 	}
 
-	// Create a cache key based on user and URL
-	cacheKey := fmt.Sprintf("%s@%s", user, url)
+	tlsOpts, err := ResolveTLSOptions()
+	if err != nil {
+		return nil, fmt.Errorf("failed to read TLS settings: %w", err)
+	}
+
+	// Create a cache key based on user, URL and TLS settings
+	cacheKey := fmt.Sprintf("%s@%s|%v|%s", user, url, tlsOpts.Insecure, tlsOpts.CACert)
 
 	// Try to get cached client first (read lock)
 	clientCacheMutex.RLock()
@@ -789,7 +802,10 @@ func CreateClient() (ProxmoxClientInterface, error) {
 	}
 
 	// Create new client and cache it
-	client := NewClient(url, user, pass)
+	client, err := NewClientWithTLS(url, user, pass, tlsOpts)
+	if err != nil {
+		return nil, err
+	}
 	cachedClient = client
 	cachedClientKey = cacheKey
 

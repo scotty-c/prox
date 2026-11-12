@@ -81,7 +81,9 @@ func ClientError(err error) {
 	// Check for common error patterns and provide specific advice
 	errMsg := strings.ToLower(err.Error())
 
-	if strings.Contains(errMsg, "decrypt") || strings.Contains(errMsg, "encryption") {
+	if strings.Contains(errMsg, "certificate") || strings.Contains(errMsg, "tls") || strings.Contains(errMsg, "ssl") {
+		fmt.Fprintf(os.Stderr, "\nTip: TLS certificate problem. Use --ca-cert with the Proxmox CA, or --insecure for a self-signed certificate\n")
+	} else if strings.Contains(errMsg, "decrypt") || strings.Contains(errMsg, "encryption") {
 		fmt.Fprintf(os.Stderr, "\nTip: Saved credentials could not be decrypted. Re-create the profile with 'prox config create <profile> -u <user> -p <password> -l <url>'\n")
 	} else if strings.Contains(errMsg, "config file does not exist") || strings.Contains(errMsg, "failed to read config") {
 		fmt.Fprintf(os.Stderr, "\nTip: No configuration found. Run 'prox config setup' to configure your connection\n")
@@ -92,8 +94,6 @@ func ClientError(err error) {
 		fmt.Fprintf(os.Stderr, "  • Server URL is correct ('prox config setup' to update)\n")
 		fmt.Fprintf(os.Stderr, "  • Proxmox server is running and accessible\n")
 		fmt.Fprintf(os.Stderr, "  • Network connectivity\n")
-	} else if strings.Contains(errMsg, "certificate") || strings.Contains(errMsg, "tls") || strings.Contains(errMsg, "ssl") {
-		fmt.Fprintf(os.Stderr, "\nTip: TLS/SSL certificate issue. Verify the server URL is correct\n")
 	} else {
 		fmt.Fprintf(os.Stderr, "\nTip: Run 'prox config setup' to verify your configuration\n")
 	}

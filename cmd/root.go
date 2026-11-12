@@ -7,6 +7,7 @@ import (
 	"os"
 
 	"github.com/scotty-c/prox/cmd/node"
+	"github.com/scotty-c/prox/pkg/client"
 	c "github.com/scotty-c/prox/pkg/config"
 	"github.com/scotty-c/prox/pkg/output"
 	"github.com/spf13/cobra"
@@ -35,7 +36,9 @@ Configuration:
   Environment variables for CI/CD and automation:
     PROX_URL      - Proxmox server URL (e.g., https://proxmox.example.com:8006)
     PROX_USER     - Username (e.g., root@pam)
-    PROX_PASSWORD - Password or API token
+    PROX_PASSWORD - Password
+    PROX_INSECURE - Set to true to skip TLS certificate verification
+    PROX_CA_CERT  - Path to a PEM file with the Proxmox CA certificate
 
 Examples:
   prox config setup                    # Configure connection to Proxmox server
@@ -60,7 +63,7 @@ Examples:
 CI/CD Usage:
   export PROX_URL=https://proxmox.example.com:8006
   export PROX_USER=automation@pve
-  export PROX_PASSWORD=your-token-here
+  export PROX_PASSWORD=your-password
   prox vm list                        # Works without config file
 
 Use "prox [command] --help" for more information about a command.`,
@@ -79,6 +82,11 @@ Use "prox [command] --help" for more information about a command.`,
 		if profile != "" {
 			c.SetProfileOverride(profile)
 		}
+
+		// TLS overrides (take precedence over env vars and the profile)
+		insecure, _ := cmd.Flags().GetBool("insecure")
+		caCert, _ := cmd.Flags().GetString("ca-cert")
+		client.SetTLSFlagOverrides(insecure, cmd.Flags().Changed("insecure"), caCert)
 	},
 }
 
@@ -95,6 +103,8 @@ func init() {
 	// Add persistent flags available to all commands
 	RootCmd.PersistentFlags().BoolP("quiet", "q", false, "Suppress non-essential output (for scripting)")
 	RootCmd.PersistentFlags().String("profile", "", "Use a specific configuration profile")
+	RootCmd.PersistentFlags().Bool("insecure", false, "Skip TLS certificate verification (for self-signed certificates)")
+	RootCmd.PersistentFlags().String("ca-cert", "", "Trust the CA certificate(s) in this PEM file (e.g. a copy of /etc/pve/pve-root-ca.pem)")
 
 	// Define command groups for better organization
 	RootCmd.AddGroup(

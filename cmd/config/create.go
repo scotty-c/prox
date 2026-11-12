@@ -25,6 +25,7 @@ var createCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
+		saveTLSFlagsOrExit(cmd, profile)
 		fmt.Printf("Profile '%s' created successfully\n", profile)
 
 		// Ask if they want to switch to this profile

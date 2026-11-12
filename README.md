@@ -105,6 +105,25 @@ prox config list                    # List all profiles
 prox config use homelab             # Switch to homelab profile
 prox --profile production vm list   # Use specific profile for one command
 ```
+
+### TLS certificates
+prox verifies the Proxmox server's TLS certificate. A default Proxmox install uses a
+self-signed certificate, so tell prox to trust the Proxmox CA (recommended) or to
+skip verification:
+```bash
+# Trust the Proxmox CA (copy /etc/pve/pve-root-ca.pem from any node)
+scp root@pve:/etc/pve/pve-root-ca.pem ~/.prox/pve-root-ca.pem
+prox config update --ca-cert ~/.prox/pve-root-ca.pem
+
+# Or skip verification for this profile
+prox config update --insecure
+```
+Both also work per command (`--ca-cert`, `--insecure`) and as environment variables
+(`PROX_CA_CERT`, `PROX_INSECURE=true`). Flags override environment variables, which
+override the profile.
+
+> **Upgrading from an earlier release:** earlier versions never verified certificates.
+> If prox now reports `TLS certificate verification failed`, use one of the options above.
 VM workflow:
 ```bash
 prox vm list
@@ -341,7 +360,8 @@ SSH (manage ~/.ssh/config entries)
 	- Notes: --list and --delete are mutually exclusive with add/update mode
 
 Global config
-- prox config setup -u/--username -p/--password -l/--url
+- prox config setup -u/--username -p/--password -l/--url [--ca-cert <pem>] [--insecure]
+- Global flags: --profile <name>; --ca-cert <pem>; --insecure; -q/--quiet
 
 Tip: run any command with --help for full details.
 
@@ -350,6 +370,7 @@ Tip: run any command with --help for full details.
 - Plaintext legacy configs auto‑migrated to profile system
 - Profiles stored in `~/.prox/profiles/` with secure file perms (600)
 - Automatic migration from old single-config format to profiles
+- TLS certificates are verified; see [TLS certificates](#tls-certificates) for self-signed servers
 - See SECURITY.md for encryption details & migration command
 ```bash
 prox config migrate   # migrate legacy plaintext if present
