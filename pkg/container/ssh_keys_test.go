@@ -1,6 +1,7 @@
 package container_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/scotty-c/prox/pkg/container"
@@ -39,5 +40,28 @@ ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGQcGfXZqYfkSIWECJYHLfbdQKgkSXnJDXF7Ns user@
 	}
 	if count != 0 {
 		t.Fatalf("expected 0 for empty keys, got %d", count)
+	}
+}
+
+func TestReadSSHKeys(t *testing.T) {
+	input := "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGQcGfXZ user@host\n\n  ssh-rsa AAAAB3NzaC1yc2EAAAADAQAB other@host  \n"
+	keys, count, err := container.ReadSSHKeys(strings.NewReader(input))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if count != 2 {
+		t.Fatalf("expected 2 key lines, got %d", count)
+	}
+	want := "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGQcGfXZ user@host\nssh-rsa AAAAB3NzaC1yc2EAAAADAQAB other@host"
+	if keys != want {
+		t.Fatalf("keys = %q, want %q", keys, want)
+	}
+	if n, err := container.ValidateSSHKeys(keys); err != nil || n != 2 {
+		t.Fatalf("ValidateSSHKeys on read keys = %d, %v; want 2, nil", n, err)
+	}
+
+	keys, count, err = container.ReadSSHKeys(strings.NewReader(""))
+	if err != nil || keys != "" || count != 0 {
+		t.Fatalf("empty input: got %q, %d, %v", keys, count, err)
 	}
 }

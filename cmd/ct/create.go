@@ -122,19 +122,17 @@ Examples:
 		if sshKeysFile != "" {
 			if sshKeysFile == "-" {
 				// Read from stdin
-				fmt.Println("Enter SSH public keys (press Ctrl+D when finished):")
-				var keyLines []string
-				for {
-					var line string
-					_, err := fmt.Scanln(&line)
-					if err != nil {
-						break
-					}
-					keyLines = append(keyLines, line)
+				if term.IsTerminal(int(os.Stdin.Fd())) {
+					fmt.Println("Enter SSH public keys (press Ctrl+D when finished):")
 				}
-				sshKeys = strings.Join(keyLines, "\n")
+				keys, lineCount, err := container.ReadSSHKeys(os.Stdin)
+				if err != nil {
+					output.UserError("reading SSH keys from stdin", err)
+					os.Exit(1)
+				}
+				sshKeys = keys
 				if sshKeys != "" {
-					fmt.Printf("Read %d lines of SSH keys from stdin\n", len(keyLines))
+					fmt.Printf("Read %d lines of SSH keys from stdin\n", lineCount)
 				}
 			} else {
 				// Read from file

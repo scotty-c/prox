@@ -1,8 +1,10 @@
 package container
 
 import (
+	"bufio"
 	"context"
 	"fmt"
+	"io"
 	"strconv"
 	"strings"
 	"time"
@@ -12,44 +14,83 @@ import (
 	"github.com/scotty-c/prox/pkg/util"
 )
 
+// templateArchiveSuffixes lists the archive extensions used by Proxmox container templates
+var templateArchiveSuffixes = []string{".tar.gz", ".tar.zst", ".tar.xz", ".tar.bz2", ".tgz"}
+
+// knownTemplateOSNames maps template filename prefixes to display names.
+// The order matters for the legacy substring fallback in parseTemplateOS.
+var knownTemplateOSNames = []struct {
+	prefix string
+	name   string
+}{
+	{"ubuntu", "Ubuntu"},
+	{"debian", "Debian"},
+	{"centos", "CentOS"},
+	{"alpine", "Alpine"},
+	{"fedora", "Fedora"},
+}
+
+// templateFilename returns the template file name without the storage prefix
+// or archive extension, e.g. "local:vztmpl/debian-12-standard_12.7-1_amd64.tar.zst"
+// becomes "debian-12-standard_12.7-1_amd64".
+func templateFilename(volID string) string {
+	filename := volID
+	if idx := strings.LastIndex(filename, "/"); idx != -1 {
+		filename = filename[idx+1:]
+	}
+	for _, suffix := range templateArchiveSuffixes {
+		if strings.HasSuffix(filename, suffix) {
+			return strings.TrimSuffix(filename, suffix)
+		}
+	}
+	return filename
+}
+
 // parseTemplateDescription extracts a readable description from template name
 func parseTemplateDescription(volID string) string {
 	// Template names are usually in format: local:vztmpl/ubuntu-20.04-standard_20.04-1_amd64.tar.gz
-	parts := strings.Split(volID, "/")
-	if len(parts) < 2 {
+	if !strings.Contains(volID, "/") {
 		return volID
 	}
-
-	filename := parts[len(parts)-1]
-	// Remove .tar.gz extension
-	filename = strings.TrimSuffix(filename, ".tar.gz")
-
-	return strings.ReplaceAll(filename, "_", " ")
+	return strings.ReplaceAll(templateFilename(volID), "_", " ")
 }
 
 // parseTemplateOS extracts OS name from template
 func parseTemplateOS(volID string) string {
-	if strings.Contains(volID, "ubuntu") {
-		return "Ubuntu"
-	} else if strings.Contains(volID, "debian") {
-		return "Debian"
-	} else if strings.Contains(volID, "centos") {
-		return "CentOS"
-	} else if strings.Contains(volID, "alpine") {
-		return "Alpine"
-	} else if strings.Contains(volID, "fedora") {
-		return "Fedora"
+	// Standard Proxmox templates are named <os>-<version>-<flavour>_...
+	prefix := strings.ToLower(strings.SplitN(templateFilename(volID), "-", 2)[0])
+	for _, known := range knownTemplateOSNames {
+		if prefix == known.prefix {
+			return known.name
+		}
+	}
+
+	// Legacy behaviour: look for a known OS name anywhere in the volume ID
+	for _, known := range knownTemplateOSNames {
+		if strings.Contains(volID, known.prefix) {
+			return known.name
+		}
+	}
+
+	// Otherwise use the filename prefix (e.g. "rockylinux", "archlinux")
+	if prefix != "" && strings.Contains(templateFilename(volID), "-") {
+		return strings.ToUpper(prefix[:1]) + prefix[1:]
 	}
 	return "Unknown"
 }
 
 // parseTemplateVersion extracts version from template name
 func parseTemplateVersion(volID string) string {
-	// Try to extract version numbers like 20.04, 22.04, etc.
-	parts := strings.Split(volID, "-")
-	for _, part := range parts {
+	// Standard Proxmox templates are named <os>-<version>-<flavour>_...,
+	// e.g. debian-12-standard_12.7-1_amd64 or ubuntu-22.04-standard_22.04-1_amd64
+	parts := strings.Split(templateFilename(volID), "-")
+	if len(parts) >= 2 && parts[1] != "" && parts[1][0] >= '0' && parts[1][0] <= '9' {
+		return parts[1]
+	}
+
+	// Fallback: look for something that looks like a dotted version number
+	for _, part := range strings.Split(volID, "-") {
 		if strings.Contains(part, ".") && len(part) <= 10 {
-			// Likely a version number
 			return part
 		}
 	}
@@ -189,6 +230,25 @@ func FindByNameOrID(ctx context.Context, client c.ProxmoxClientInterface, nameOr
 	}
 
 	return nil, fmt.Errorf(errorMsg)
+}
+
+// ReadSSHKeys reads SSH public keys (one per line) from r until EOF.
+// It returns the non-empty lines joined with newlines and the number of those lines.
+func ReadSSHKeys(r io.Reader) (string, int, error) {
+	var keyLines []string
+	scanner := bufio.NewScanner(r)
+	// Allow long lines (e.g. large RSA keys with comments)
+	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line != "" {
+			keyLines = append(keyLines, line)
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		return "", 0, err
+	}
+	return strings.Join(keyLines, "\n"), len(keyLines), nil
 }
 
 // ValidateSSHKeys validates SSH public keys format and returns the number of valid keys
