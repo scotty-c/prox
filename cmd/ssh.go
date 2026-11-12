@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"os/user"
 	"path/filepath"
 	"strings"
 
@@ -70,7 +71,7 @@ Examples:
 }
 
 func init() {
-	sshCmd.Flags().StringP("user", "u", "", "SSH username (if not specified, uses the resource name)")
+	sshCmd.Flags().StringP("user", "u", "", "SSH username (default: your local username)")
 	sshCmd.Flags().IntP("port", "p", 22, "SSH port")
 	sshCmd.Flags().StringP("key", "k", "", "Path to SSH private key (optional)")
 	sshCmd.Flags().Bool("no-host-key-check", false, "Disable SSH host key checking for this entry (for disposable VMs whose keys change on rebuild)")
@@ -153,9 +154,9 @@ func setupSSHConfig(nameOrID, username string, port int, keyPath string, dryRun 
 		return fmt.Errorf("invalid IP address: %s", ip)
 	}
 
-	// Use resource name as username if not specified
+	// Default to the local username, as plain ssh does
 	if username == "" {
-		username = resourceName
+		username = localUsername()
 	}
 
 	// Validate SSH key path if provided
@@ -170,7 +171,9 @@ func setupSSHConfig(nameOrID, username string, port int, keyPath string, dryRun 
 	sshConfigEntry := generateSSHConfigEntry(hostAlias, ip, username, port, keyPath, skipHostKeyCheck)
 
 	fmt.Printf("IP Address: %s\n", ip)
-	fmt.Printf("SSH Username: %s\n", username)
+	if username != "" {
+		fmt.Printf("SSH Username: %s\n", username)
+	}
 	fmt.Printf("SSH Port: %d\n", port)
 	if keyPath != "" {
 		fmt.Printf("SSH Key: %s\n", keyPath)
@@ -198,12 +201,30 @@ func isValidIP(ip string) bool {
 	return net.ParseIP(ip) != nil
 }
 
+// localUsername returns the current user's name without any Windows domain
+// prefix, or "" if it can't be determined
+func localUsername() string {
+	name := ""
+	if u, err := user.Current(); err == nil {
+		name = u.Username
+	}
+	if name == "" {
+		name = os.Getenv("USER")
+	}
+	if i := strings.LastIndex(name, `\`); i != -1 {
+		name = name[i+1:]
+	}
+	return name
+}
+
 func generateSSHConfigEntry(host, hostname, user string, port int, keyPath string, skipHostKeyCheck bool) string {
 	var config strings.Builder
 
 	fmt.Fprintf(&config, "Host %s\n", host)
 	fmt.Fprintf(&config, "    HostName %s\n", hostname)
-	fmt.Fprintf(&config, "    User %s\n", user)
+	if user != "" {
+		fmt.Fprintf(&config, "    User %s\n", user)
+	}
 
 	if port != 22 {
 		fmt.Fprintf(&config, "    Port %d\n", port)
