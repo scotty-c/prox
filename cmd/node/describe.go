@@ -2,9 +2,10 @@ package node
 
 import (
 	"fmt"
-	"github.com/scotty-c/prox/pkg/completion"
 	"os"
 
+	"github.com/scotty-c/prox/pkg/cmdutil"
+	"github.com/scotty-c/prox/pkg/completion"
 	"github.com/scotty-c/prox/pkg/node"
 	"github.com/scotty-c/prox/pkg/output"
 	"github.com/spf13/cobra"
@@ -19,8 +20,7 @@ var describeCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		name := args[0]
 
-		jsonOutput, _ := cmd.Flags().GetBool("json")
-		if jsonOutput {
+		if cmdutil.StructuredOutput(cmd) {
 			details, err := node.GetNodeDetails(name)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Error getting node details: %v\n", err)
@@ -41,6 +41,6 @@ var describeCmd = &cobra.Command{
 }
 
 func init() {
-	describeCmd.Flags().Bool("json", false, "Output in JSON format")
+	describeCmd.Flags().Bool("json", false, "Output in JSON format (same as -o json)")
 	NodeCmd.AddCommand(describeCmd)
 }

@@ -2,9 +2,7 @@ package container
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"os"
 	"strings"
 	"sync"
 
@@ -203,11 +201,12 @@ func ListContainers(node string, runningOnly bool, jsonOutput bool, tag string) 
 	fetchContainerIPsConcurrently(client, containers)
 
 	if jsonOutput {
-		enc := json.NewEncoder(os.Stdout)
-		enc.SetIndent("", "  ")
-		if err := enc.Encode(containers); err != nil {
-			output.Error("Error encoding JSON: %v\n", err)
-			return fmt.Errorf("failed to encode JSON: %w", err)
+		if containers == nil {
+			containers = []Container{} // print [] rather than null
+		}
+		if err := output.OutputJSON(containers); err != nil {
+			output.Error("Error encoding output: %v\n", err)
+			return fmt.Errorf("failed to encode output: %w", err)
 		}
 		return nil
 	}

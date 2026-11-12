@@ -68,7 +68,7 @@ CI/CD Usage:
   prox vm list                        # Works without config file
 
 Use "prox [command] --help" for more information about a command.`,
-	PersistentPreRun: func(cmd *cobra.Command, args []string) {
+	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		// Arguments and flags have been validated by the time this runs, so any
 		// error from here on is a runtime failure. Don't follow it with the full
 		// usage text, which suggests the command was typed incorrectly.
@@ -89,9 +89,16 @@ Use "prox [command] --help" for more information about a command.`,
 		caCert, _ := cmd.Flags().GetString("ca-cert")
 		client.SetTLSFlagOverrides(insecure, cmd.Flags().Changed("insecure"), caCert)
 
+		// Output format
+		format, _ := cmd.Flags().GetString("output")
+		if err := output.SetFormat(format); err != nil {
+			return err
+		}
+
 		// Limit for waiting on Proxmox tasks
 		timeout, _ := cmd.Flags().GetDuration("timeout")
 		client.SetWaitTimeout(timeout)
+		return nil
 	},
 }
 
@@ -109,6 +116,10 @@ func init() {
 	RootCmd.PersistentFlags().BoolP("quiet", "q", false, "Suppress non-essential output (for scripting)")
 	RootCmd.PersistentFlags().String("profile", "", "Use a specific configuration profile")
 	_ = RootCmd.RegisterFlagCompletionFunc("profile", completion.GetProfileNames)
+	RootCmd.PersistentFlags().StringP("output", "o", "table", "Output format: table, json or yaml (for commands that list or describe resources)")
+	_ = RootCmd.RegisterFlagCompletionFunc("output", func(*cobra.Command, []string, string) ([]string, cobra.ShellCompDirective) {
+		return []string{output.FormatTable, output.FormatJSON, output.FormatYAML}, cobra.ShellCompDirectiveNoFileComp
+	})
 	RootCmd.PersistentFlags().Duration("timeout", 0, "Stop waiting for Proxmox tasks after this long, e.g. 10m (0 = no limit; the task keeps running)")
 	RootCmd.PersistentFlags().Bool("insecure", false, "Skip TLS certificate verification (for self-signed certificates)")
 	RootCmd.PersistentFlags().String("ca-cert", "", "Trust the CA certificate(s) in this PEM file (e.g. a copy of /etc/pve/pve-root-ca.pem)")

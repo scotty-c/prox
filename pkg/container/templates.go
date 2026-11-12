@@ -45,6 +45,13 @@ func ListTemplates(node string) error {
 		allTemplates = append(allTemplates, templates...)
 	}
 
+	if output.Structured() {
+		if allTemplates == nil {
+			allTemplates = []Template{} // print [] rather than null
+		}
+		return output.OutputJSON(allTemplates)
+	}
+
 	if len(allTemplates) == 0 {
 		output.Errorln("No container templates found")
 		return nil

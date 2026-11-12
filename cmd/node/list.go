@@ -2,12 +2,13 @@ package node
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 
 	"github.com/jedib0t/go-pretty/v6/table"
 	"github.com/scotty-c/prox/pkg/client"
+	"github.com/scotty-c/prox/pkg/cmdutil"
+	"github.com/scotty-c/prox/pkg/output"
 	"github.com/spf13/cobra"
 )
 
@@ -16,7 +17,7 @@ var listCmd = &cobra.Command{
 	Use:   "ls",
 	Short: "List all Proxmox nodes in the datacenter",
 	Run: func(cmd *cobra.Command, args []string) {
-		jsonOutput, _ := cmd.Flags().GetBool("json")
+		structured := cmdutil.StructuredOutput(cmd)
 
 		c, err := client.CreateClient()
 		if err != nil {
@@ -30,11 +31,12 @@ var listCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		if jsonOutput {
-			enc := json.NewEncoder(os.Stdout)
-			enc.SetIndent("", "  ")
-			if err := enc.Encode(nodes); err != nil {
-				fmt.Fprintf(os.Stderr, "Error encoding JSON: %v\n", err)
+		if structured {
+			if nodes == nil {
+				nodes = []client.Node{} // print [] rather than null
+			}
+			if err := output.OutputJSON(nodes); err != nil {
+				fmt.Fprintf(os.Stderr, "Error encoding output: %v\n", err)
 				os.Exit(1)
 			}
 			return
@@ -56,6 +58,6 @@ var listCmd = &cobra.Command{
 }
 
 func init() {
-	listCmd.Flags().Bool("json", false, "Output as JSON")
+	listCmd.Flags().Bool("json", false, "Output as JSON (same as -o json)")
 	NodeCmd.AddCommand(listCmd)
 }

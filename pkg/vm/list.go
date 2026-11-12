@@ -2,9 +2,7 @@ package vm
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"os"
 	"strings"
 	"sync"
 
@@ -236,11 +234,12 @@ func ListVMs(opts ListVMsOptions) error {
 	}
 
 	if opts.JSONOutput {
-		enc := json.NewEncoder(os.Stdout)
-		enc.SetIndent("", "  ")
-		if err := enc.Encode(vms); err != nil {
-			output.Error("Error encoding JSON: %v\n", err)
-			return fmt.Errorf("failed to encode JSON: %w", err)
+		if vms == nil {
+			vms = []VM{} // print [] rather than null
+		}
+		if err := output.OutputJSON(vms); err != nil {
+			output.Error("Error encoding output: %v\n", err)
+			return fmt.Errorf("failed to encode output: %w", err)
 		}
 		return nil
 	}

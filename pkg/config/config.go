@@ -137,7 +137,9 @@ func ListProfiles() ([]string, error) {
 
 	profiles := make([]string, 0, len(entries))
 	for _, entry := range entries {
-		if !entry.IsDir() {
+		// Skip directories and hidden files, such as temporary files left by
+		// an interrupted save
+		if !entry.IsDir() && !strings.HasPrefix(entry.Name(), ".") {
 			profiles = append(profiles, entry.Name())
 		}
 	}

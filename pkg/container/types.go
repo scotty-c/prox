@@ -2,12 +2,12 @@ package container
 
 // Template represents a container template
 type Template struct {
-	Name        string
-	Description string
-	OS          string
-	Version     string
-	Size        string
-	Node        string
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	OS          string `json:"os"`
+	Version     string `json:"version"`
+	Size        string `json:"size"`
+	Node        string `json:"node"`
 }
 
 // Container represents an LXC container

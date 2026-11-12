@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/scotty-c/prox/pkg/cmdutil"
 	"github.com/scotty-c/prox/pkg/completion"
 	"github.com/scotty-c/prox/pkg/output"
 	"github.com/scotty-c/prox/pkg/vm"
@@ -41,9 +42,7 @@ Examples:
 
 		// Get flags
 		node, _ := cmd.Flags().GetString("node")
-		jsonOutput, _ := cmd.Flags().GetBool("json")
-
-		if jsonOutput {
+		if cmdutil.StructuredOutput(cmd) {
 			details, err := vm.GetVMDetails(nameOrID, node)
 			if err != nil {
 				output.UserError("getting VM details", err)
@@ -67,7 +66,7 @@ Examples:
 
 func init() {
 	describeCmd.Flags().StringP("node", "n", "", "Proxmox node name (optional - will be auto-discovered if not specified)")
-	describeCmd.Flags().Bool("json", false, "Output in JSON format")
+	describeCmd.Flags().Bool("json", false, "Output in JSON format (same as -o json)")
 	vmCmd.AddCommand(describeCmd)
 	completion.RegisterNodeFlag(describeCmd, "node")
 }

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/scotty-c/prox/pkg/cmdutil"
 	"github.com/scotty-c/prox/pkg/completion"
 	"github.com/scotty-c/prox/pkg/container"
 	"github.com/scotty-c/prox/pkg/output"
@@ -33,8 +34,7 @@ Examples:
 	Run: func(cmd *cobra.Command, args []string) {
 		nameOrID := args[0]
 
-		jsonOutput, _ := cmd.Flags().GetBool("json")
-		if jsonOutput {
+		if cmdutil.StructuredOutput(cmd) {
 			details, err := container.GetContainerDetails(nameOrID)
 			if err != nil {
 				output.UserError("getting container details", err)
@@ -57,6 +57,6 @@ Examples:
 }
 
 func init() {
-	describeCmd.Flags().Bool("json", false, "Output in JSON format")
+	describeCmd.Flags().Bool("json", false, "Output in JSON format (same as -o json)")
 	ctCmd.AddCommand(describeCmd)
 }

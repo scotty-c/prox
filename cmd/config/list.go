@@ -5,6 +5,7 @@ import (
 	"os"
 
 	c "github.com/scotty-c/prox/pkg/config"
+	"github.com/scotty-c/prox/pkg/output"
 	"github.com/spf13/cobra"
 )
 
@@ -20,12 +21,29 @@ var listCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
+		currentProfile := c.GetCurrentProfile()
+
+		if output.Structured() {
+			type profileInfo struct {
+				Name    string `json:"name"`
+				Current bool   `json:"current"`
+			}
+			list := []profileInfo{}
+			for _, profile := range profiles {
+				list = append(list, profileInfo{Name: profile, Current: profile == currentProfile})
+			}
+			if err := output.OutputJSON(list); err != nil {
+				fmt.Fprintf(os.Stderr, "Error encoding output: %v\n", err)
+				os.Exit(1)
+			}
+			return
+		}
+
 		if len(profiles) == 0 {
 			fmt.Println("No profiles found")
 			return
 		}
 
-		currentProfile := c.GetCurrentProfile()
 		fmt.Println("Available profiles:")
 		for _, profile := range profiles {
 			if profile == currentProfile {

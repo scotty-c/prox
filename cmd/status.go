@@ -35,6 +35,23 @@ func init() {
 	RootCmd.AddCommand(statusCmd)
 }
 
+// clusterStatus is the --output json/yaml form of prox status
+type clusterStatus struct {
+	URL        string       `json:"url"`
+	Version    string       `json:"version"`
+	Release    string       `json:"release"`
+	Healthy    bool         `json:"healthy"`
+	Nodes      statusCounts `json:"nodes"`
+	VMs        statusCounts `json:"vms"`
+	Containers statusCounts `json:"containers"`
+}
+
+// statusCounts is a total plus a count per status (e.g. running, stopped)
+type statusCounts struct {
+	Total  int            `json:"total"`
+	Counts map[string]int `json:"by_status"`
+}
+
 func showStatus() error {
 	// Read config (environment variables take precedence over the config file)
 	_, _, url, err := client.ReadConfig()
@@ -45,7 +62,9 @@ func showStatus() error {
 		return fmt.Errorf("failed to read config: %w", err)
 	}
 
-	fmt.Println("Connecting to Proxmox VE cluster...")
+	if !output.Structured() {
+		fmt.Println("Connecting to Proxmox VE cluster...")
+	}
 
 	// Create client
 	cl, err := client.CreateClient()
@@ -100,6 +119,21 @@ func showStatus() error {
 		} else {
 			offlineNodes++
 		}
+	}
+
+	if output.Structured() {
+		return output.OutputJSON(clusterStatus{
+			URL:     url,
+			Version: version.Version,
+			Release: version.Release,
+			Healthy: offlineNodes == 0,
+			Nodes: statusCounts{
+				Total:  len(nodes),
+				Counts: map[string]int{"online": onlineNodes, "offline": offlineNodes},
+			},
+			VMs:        statusCounts{Total: totalVMs, Counts: vmCounts},
+			Containers: statusCounts{Total: totalCTs, Counts: ctCounts},
+		})
 	}
 
 	// Display connection information

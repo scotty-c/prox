@@ -379,7 +379,11 @@ SSH (manage ~/.ssh/config entries)
 
 Global config
 - prox config setup -u/--username -p/--password -l/--url [--ca-cert <pem>] [--insecure]
-- Global flags: --profile <name>; --ca-cert <pem>; --insecure; --timeout <duration>; -q/--quiet
+- Global flags: --profile <name>; -o/--output table|json|yaml; --ca-cert <pem>; --insecure; --timeout <duration>; -q/--quiet
+
+Output formats
+- `-o json` or `-o yaml` works on the list and describe commands, plus `status`, `config list` and `ct templates`. YAML uses the same field names as JSON.
+- The existing `--json` flags still work and mean `-o json`.
 
 Waiting for tasks
 - Commands that start a Proxmox task accept both -w/--wait and --no-wait. Defaults are unchanged: vm start, shutdown and delete return immediately; vm clone, vm migrate and the ct commands wait.

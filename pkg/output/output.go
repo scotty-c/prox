@@ -10,21 +10,24 @@ import (
 
 	"github.com/briandowns/spinner"
 	"golang.org/x/term"
+	"gopkg.in/yaml.v3"
 )
 
 // QuietMode indicates whether to suppress non-essential output
 var QuietMode bool
 
-// Info prints informational messages (suppressed in quiet mode)
+// Info prints informational messages (suppressed in quiet mode, and with
+// --output json/yaml so stdout stays machine-readable)
 func Info(format string, a ...interface{}) {
-	if !QuietMode {
+	if !QuietMode && !Structured() {
 		fmt.Printf(format, a...)
 	}
 }
 
-// Infoln prints informational messages with newline (suppressed in quiet mode)
+// Infoln prints informational messages with newline (suppressed in quiet
+// mode, and with --output json/yaml so stdout stays machine-readable)
 func Infoln(a ...interface{}) {
-	if !QuietMode {
+	if !QuietMode && !Structured() {
 		fmt.Println(a...)
 	}
 }
@@ -67,8 +70,60 @@ func SetQuiet(quiet bool) {
 	QuietMode = quiet
 }
 
-// OutputJSON marshals data to JSON and prints it to stdout
+// Output formats for --output
+const (
+	FormatTable = "table"
+	FormatJSON  = "json"
+	FormatYAML  = "yaml"
+)
+
+// format is the --output format for this run
+var format = FormatTable
+
+// SetFormat sets the output format from --output
+func SetFormat(f string) error {
+	switch f {
+	case FormatTable, FormatJSON, FormatYAML:
+		format = f
+		return nil
+	case "":
+		format = FormatTable
+		return nil
+	}
+	return fmt.Errorf("invalid --output %q: use table, json or yaml", f)
+}
+
+// Format returns the output format for this run
+func Format() string {
+	return format
+}
+
+// Structured reports whether output should be JSON or YAML instead of tables
+func Structured() bool {
+	return format == FormatJSON || format == FormatYAML
+}
+
+// OutputJSON prints data to stdout as JSON, or as YAML with --output yaml.
+// YAML uses the same field names as JSON.
 func OutputJSON(data interface{}) error {
+	if format == FormatYAML {
+		// Convert via JSON so YAML keys match the JSON field names
+		raw, err := json.Marshal(data)
+		if err != nil {
+			return err
+		}
+		var generic interface{}
+		if err := json.Unmarshal(raw, &generic); err != nil {
+			return err
+		}
+		enc := yaml.NewEncoder(os.Stdout)
+		enc.SetIndent(2)
+		if err := enc.Encode(generic); err != nil {
+			return err
+		}
+		return enc.Close()
+	}
+
 	encoder := json.NewEncoder(os.Stdout)
 	encoder.SetIndent("", "  ")
 	return encoder.Encode(data)
