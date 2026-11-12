@@ -125,3 +125,18 @@ func waitForTask(ctx context.Context, client c.ProxmoxClientInterface, node, tas
 
 	return c.WaitForTaskInteractive(ctx, client, node, taskID)
 }
+
+// FindByTag returns the VMs that have tag, optionally only on node
+func FindByTag(ctx context.Context, client c.ProxmoxClientInterface, tag, node string) ([]VM, error) {
+	resources, err := client.GetClusterResources(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get cluster resources: %w", err)
+	}
+	var vms []VM
+	for _, r := range resources {
+		if r.Type == "qemu" && r.VMID != nil && hasTag(r.Tags, tag) && (node == "" || r.Node == node) {
+			vms = append(vms, vmFromResource(r))
+		}
+	}
+	return vms, nil
+}

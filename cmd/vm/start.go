@@ -1,9 +1,11 @@
 package cmd
 
 import (
-	"github.com/scotty-c/prox/pkg/cmdutil"
+	"context"
 	"os"
 
+	c "github.com/scotty-c/prox/pkg/client"
+	"github.com/scotty-c/prox/pkg/cmdutil"
 	"github.com/scotty-c/prox/pkg/completion"
 	"github.com/scotty-c/prox/pkg/output"
 	"github.com/scotty-c/prox/pkg/vm"
@@ -20,13 +22,25 @@ var startCmd = &cobra.Command{
 Examples:
   prox vm start myvm
   prox vm start 100
-  prox vm start web-server`,
-	Args:              cobra.ExactArgs(1),
+  prox vm start web-server
+  prox vm start --tag web             # Start every VM tagged 'web' (asks first)`,
+	Args:              cmdutil.NameOrTagArgs,
 	ValidArgsFunction: completion.FirstArgOnly(completion.GetVMNames),
 	Run: func(cmd *cobra.Command, args []string) {
-		nameOrID := args[0]
 		wait := cmdutil.ResolveWait(cmd, false)
 		node, _ := cmd.Flags().GetString("node")
+
+		if tag, _ := cmd.Flags().GetString("tag"); tag != "" {
+			err := runOnTaggedVMs(cmd, "start", func(ctx context.Context, cl c.ProxmoxClientInterface, v vm.VM) error {
+				return vm.StartVMWithWait(ctx, v.ID, v.Node, wait, cl)
+			})
+			if err != nil {
+				output.VMError("start", err)
+				os.Exit(1)
+			}
+			return
+		}
+		nameOrID := args[0]
 
 		// Start the VM
 		if err := vm.StartVMByNameOrIDWithWait(nameOrID, node, wait); err != nil {
@@ -38,6 +52,7 @@ Examples:
 
 func init() {
 	cmdutil.AddWaitFlags(startCmd, false)
+	cmdutil.AddTagFlags(startCmd, "VM")
 	startCmd.Flags().StringP("node", "n", "", "Only match VMs on this node (optional - auto-discovered if not specified)")
 	vmCmd.AddCommand(startCmd)
 	completion.RegisterNodeFlag(startCmd, "node")

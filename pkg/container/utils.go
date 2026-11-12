@@ -257,3 +257,18 @@ func ValidateSSHKeys(sshKeys string) (int, error) {
 
 	return validKeys, nil
 }
+
+// FindByTag returns the containers that have tag
+func FindByTag(ctx context.Context, client c.ProxmoxClientInterface, tag string) ([]Container, error) {
+	resources, err := client.GetClusterResources(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get cluster resources: %w", err)
+	}
+	var containers []Container
+	for _, r := range resources {
+		if r.Type == "lxc" && r.VMID != nil && hasTag(r.Tags, tag) {
+			containers = append(containers, Container{ID: *r.VMID, Name: r.Name, Status: r.Status, Node: r.Node})
+		}
+	}
+	return containers, nil
+}

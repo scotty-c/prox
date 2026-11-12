@@ -1,10 +1,9 @@
 package cmd
 
 import (
-	"fmt"
-	"github.com/scotty-c/prox/pkg/cmdutil"
 	"os"
 
+	"github.com/scotty-c/prox/pkg/cmdutil"
 	"github.com/scotty-c/prox/pkg/completion"
 	"github.com/scotty-c/prox/pkg/container"
 	"github.com/scotty-c/prox/pkg/output"
@@ -23,19 +22,29 @@ Examples:
   prox ct stop 100
   prox container shutdown webapp
   prox lxc stop 101
-  prox ct stop mycontainer --force   # stop immediately`,
-	Args: func(cmd *cobra.Command, args []string) error {
-		if len(args) != 1 {
-			return fmt.Errorf("requires exactly 1 argument: <name|id>")
-		}
-		return nil
-	},
+  prox ct stop mycontainer --force   # stop immediately
+  prox ct stop --tag web             # Stop every container tagged 'web' (asks first)`,
+	Args:              cmdutil.NameOrTagArgs,
 	ValidArgsFunction: completion.FirstArgOnly(completion.GetContainerNames),
 	Run: func(cmd *cobra.Command, args []string) {
 		wait := cmdutil.ResolveWait(cmd, true)
-		nameOrID := args[0]
-
 		force, _ := cmd.Flags().GetBool("force")
+
+		if tag, _ := cmd.Flags().GetString("tag"); tag != "" {
+			verb := "stop"
+			if force {
+				verb = "force stop"
+			}
+			err := runOnTaggedContainers(cmd, verb, func(id string) error {
+				return container.StopContainerWithOptions(id, force, wait)
+			})
+			if err != nil {
+				output.UserError("stopping containers", err)
+				os.Exit(1)
+			}
+			return
+		}
+		nameOrID := args[0]
 
 		// Stop the container
 		err := container.StopContainerWithOptions(nameOrID, force, wait)
@@ -48,6 +57,7 @@ Examples:
 
 func init() {
 	cmdutil.AddWaitFlags(stopCmd, true)
+	cmdutil.AddTagFlags(stopCmd, "container")
 	stopCmd.Flags().BoolP("force", "f", false, "Stop immediately instead of shutting down cleanly (like pulling the power)")
 	ctCmd.AddCommand(stopCmd)
 }

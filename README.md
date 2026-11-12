@@ -143,6 +143,8 @@ VM workflow:
 ```bash
 prox vm list
 prox vm list --tag production # Filter VMs by tag
+prox vm start --tag web       # Start every VM tagged 'web' (lists them and asks first; -y to skip)
+prox ct stop --tag web        # Same for containers: vm start/shutdown, ct start/stop
 prox vm start 100
 prox vm describe 100          # shows IPs, disks, resources
 prox ssh 100                  # Add/update SSH config entry for VM 100

@@ -1,10 +1,9 @@
 package cmd
 
 import (
-	"fmt"
-	"github.com/scotty-c/prox/pkg/cmdutil"
 	"os"
 
+	"github.com/scotty-c/prox/pkg/cmdutil"
 	"github.com/scotty-c/prox/pkg/completion"
 	"github.com/scotty-c/prox/pkg/container"
 	"github.com/scotty-c/prox/pkg/output"
@@ -21,16 +20,23 @@ Examples:
   prox ct start mycontainer
   prox ct start 100
   prox container start webapp
-  prox lxc start 101`,
-	Args: func(cmd *cobra.Command, args []string) error {
-		if len(args) != 1 {
-			return fmt.Errorf("requires exactly 1 argument: <name|id>")
-		}
-		return nil
-	},
+  prox lxc start 101
+  prox ct start --tag web    # Start every container tagged 'web' (asks first)`,
+	Args:              cmdutil.NameOrTagArgs,
 	ValidArgsFunction: completion.FirstArgOnly(completion.GetContainerNames),
 	Run: func(cmd *cobra.Command, args []string) {
 		wait := cmdutil.ResolveWait(cmd, true)
+
+		if tag, _ := cmd.Flags().GetString("tag"); tag != "" {
+			err := runOnTaggedContainers(cmd, "start", func(id string) error {
+				return container.StartContainerWithWait(id, wait)
+			})
+			if err != nil {
+				output.UserError("starting containers", err)
+				os.Exit(1)
+			}
+			return
+		}
 		nameOrID := args[0]
 
 		// Start the container
@@ -44,5 +50,6 @@ Examples:
 
 func init() {
 	cmdutil.AddWaitFlags(startCmd, true)
+	cmdutil.AddTagFlags(startCmd, "container")
 	ctCmd.AddCommand(startCmd)
 }

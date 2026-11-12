@@ -62,3 +62,20 @@ func TestFindByNameOrIDOnNode(t *testing.T) {
 		})
 	}
 }
+
+func TestFindByTag(t *testing.T) {
+	client := &fakeClient{resources: []c.Resource{
+		{Type: "qemu", Node: "pve1", VMID: intPtr(100), Name: "web1", Tags: "prod;web"},
+		{Type: "qemu", Node: "pve2", VMID: intPtr(101), Name: "web2", Tags: "web"},
+		{Type: "qemu", Node: "pve2", VMID: intPtr(102), Name: "db", Tags: "prod"},
+		{Type: "lxc", Node: "pve2", VMID: intPtr(103), Name: "ct-web", Tags: "web"},
+	}}
+	got, _ := FindByTag(context.Background(), client, "web", "")
+	if len(got) != 2 || got[0].ID != 100 || got[1].ID != 101 {
+		t.Fatalf("all nodes: got %+v", got)
+	}
+	got, _ = FindByTag(context.Background(), client, "web", "pve2")
+	if len(got) != 1 || got[0].ID != 101 {
+		t.Fatalf("pve2 only: got %+v", got)
+	}
+}
