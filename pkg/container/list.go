@@ -79,8 +79,8 @@ func fetchContainerIPsConcurrently(client c.ProxmoxClientInterface, containers [
 			defer wg.Done()
 			for job := range jobChan {
 				ip, err := client.GetContainerIPAlternative(context.Background(), job.node, job.ctid)
-				if err != nil {
-					ip = "N/A"
+				if err != nil || ip == "" {
+					ip = "N/A" // shown as-is in tables and JSON
 				}
 				resultChan <- ipLookupResult{
 					index: job.index,

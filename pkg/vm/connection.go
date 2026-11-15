@@ -8,21 +8,6 @@ import (
 	"github.com/scotty-c/prox/pkg/output"
 )
 
-// GetIp gets the IP address of a VM by ID and node
-func GetIp(ctx context.Context, id int, node string) string {
-	client, err := c.CreateClient()
-	if err != nil {
-		return "Error getting IP"
-	}
-
-	ip, err := client.GetVMIP(ctx, node, id)
-	if err != nil {
-		return "Error getting IP"
-	}
-
-	return ip
-}
-
 // TestConnection tests the basic connection to Proxmox
 func TestConnection() error {
 	ctx := context.Background()

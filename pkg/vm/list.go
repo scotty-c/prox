@@ -89,8 +89,8 @@ func fetchIPsConcurrently(client c.ProxmoxClientInterface, vms []VM) {
 			defer wg.Done()
 			for job := range jobChan {
 				ip, err := client.GetVMIP(context.Background(), job.node, job.vmid)
-				if err != nil {
-					ip = "N/A"
+				if err != nil || ip == "" {
+					ip = "N/A" // shown as-is in tables and JSON
 				}
 				resultChan <- ipLookupResult{
 					index: job.index,

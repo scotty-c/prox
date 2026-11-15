@@ -147,7 +147,7 @@ func resolveSSHTarget(ctx context.Context, nameOrID string, info io.Writer) (*ss
 		}
 	}
 
-	if t.IP == "" || t.IP == "N/A" {
+	if t.IP == "" {
 		return nil, fmt.Errorf("no IP address found for %s '%s' (ID: %d). Make sure the resource is running and has an IP assigned", t.Type, t.Name, t.ID)
 	}
 

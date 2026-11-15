@@ -81,7 +81,7 @@ func GetNodeDetails(name string) (*NodeDetails, error) {
 		}
 	}
 
-	if ip, err := c.GetNodeIP(ctx, found.Node); err == nil && ip != "N/A" {
+	if ip, err := c.GetNodeIP(ctx, found.Node); err == nil && ip != "" {
 		details.IP = ip
 	}
 

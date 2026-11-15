@@ -134,7 +134,7 @@ func (c *ProxmoxClient) GetNodeAddress(ctx context.Context, node string) (string
 	if err != nil {
 		return "", err
 	}
-	if ip == "" || ip == "N/A" {
+	if ip == "" {
 		return "", fmt.Errorf("no address found for node %s", node)
 	}
 	return ip, nil

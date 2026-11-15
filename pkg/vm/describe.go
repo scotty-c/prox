@@ -70,10 +70,13 @@ func GetVMDetails(nameOrID string, node string) (*VMDetails, error) {
 		return nil, fmt.Errorf("failed to get VM status: %w", statusErr)
 	}
 
-	// Get VM IP if available
-	vmIP := GetIp(ctx, vm.ID, node)
-	if vmIP == "Error getting IP" {
+	// "N/A" says the VM has no address that can be found; if the lookup itself
+	// failed the IP is left out
+	vmIP, err := client.GetVMIP(ctx, node, vm.ID)
+	if err != nil {
 		vmIP = ""
+	} else if vmIP == "" {
+		vmIP = "N/A"
 	}
 
 	return &VMDetails{

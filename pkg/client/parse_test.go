@@ -1,6 +1,9 @@
 package client
 
-import "testing"
+import (
+	"encoding/json"
+	"testing"
+)
 
 func TestParseDiskSize(t *testing.T) {
 	tests := map[string]uint64{
@@ -50,33 +53,34 @@ func TestValidateVMNameAndID(t *testing.T) {
 }
 
 func TestExtractIPFromInterfaces(t *testing.T) {
-	iface := func(name string, ips ...[2]string) map[string]interface{} {
-		var list []interface{}
-		for _, ip := range ips {
-			list = append(list, map[string]interface{}{"ip-address": ip[0], "ip-address-type": ip[1]})
+	// Decode from JSON, as the guest agent reports them
+	parse := func(js string) []agentInterface {
+		var out []agentInterface
+		if err := json.Unmarshal([]byte(js), &out); err != nil {
+			t.Fatal(err)
 		}
-		return map[string]interface{}{"name": name, "ip-addresses": list}
+		return out
 	}
 
 	tests := []struct {
 		name string
-		in   []interface{}
+		in   string
 		want string
 	}{
-		{"skips loopback, prefers primary", []interface{}{
-			iface("lo", [2]string{"127.0.0.1", "ipv4"}),
-			iface("docker0", [2]string{"172.17.0.1", "ipv4"}),
-			iface("eth0", [2]string{"fe80::1", "ipv6"}, [2]string{"10.0.0.5", "ipv4"}),
-		}, "10.0.0.5"},
-		{"falls back to any IPv4", []interface{}{
-			iface("lo", [2]string{"127.0.0.1", "ipv4"}),
-			iface("wlan0", [2]string{"192.168.1.20", "ipv4"}),
-		}, "192.168.1.20"},
-		{"nothing usable", []interface{}{iface("lo", [2]string{"127.0.0.1", "ipv4"})}, "N/A"},
-		{"malformed entries ignored", []interface{}{"junk", map[string]interface{}{"name": "eth0"}}, "N/A"},
+		{"skips loopback, prefers primary", `[
+			{"name":"lo","ip-addresses":[{"ip-address":"127.0.0.1","ip-address-type":"ipv4"}]},
+			{"name":"docker0","ip-addresses":[{"ip-address":"172.17.0.1","ip-address-type":"ipv4"}]},
+			{"name":"eth0","ip-addresses":[{"ip-address":"fe80::1","ip-address-type":"ipv6"},{"ip-address":"10.0.0.5","ip-address-type":"ipv4"}]}]`, "10.0.0.5"},
+		{"falls back to any IPv4", `[
+			{"name":"lo","ip-addresses":[{"ip-address":"127.0.0.1","ip-address-type":"ipv4"}]},
+			{"name":"wlan0","ip-addresses":[{"ip-address":"192.168.1.20","ip-address-type":"ipv4"}]}]`, "192.168.1.20"},
+		{"nothing usable", `[{"name":"lo","ip-addresses":[{"ip-address":"127.0.0.1","ip-address-type":"ipv4"}]}]`, ""},
+		{"IPv6 only", `[{"name":"eth0","ip-addresses":[{"ip-address":"fe80::1","ip-address-type":"ipv6"}]}]`, ""},
+		{"interface without addresses", `[{"name":"eth0"}]`, ""},
+		{"none at all", `[]`, ""},
 	}
 	for _, tt := range tests {
-		if got := extractIPFromInterfaces(tt.in); got != tt.want {
+		if got := extractIPFromInterfaces(parse(tt.in)); got != tt.want {
 			t.Errorf("%s: got %q, want %q", tt.name, got, tt.want)
 		}
 	}
@@ -90,9 +94,9 @@ func TestIPFromCloudInitConfig(t *testing.T) {
 	}{
 		{"static", map[string]interface{}{"ipconfig0": "ip=192.168.1.100/24,gw=192.168.1.1"}, "192.168.1.100"},
 		{"dhcp then static", map[string]interface{}{"ipconfig0": "ip=dhcp", "ipconfig1": "gw=10.0.0.1,ip=10.0.0.5/16"}, "10.0.0.5"},
-		{"ipv6 only", map[string]interface{}{"ipconfig0": "ip6=auto"}, "N/A"},
-		{"net line is not cloud-init", map[string]interface{}{"net0": "virtio=AA:BB:CC:DD:EE:FF,bridge=vmbr0"}, "N/A"},
-		{"empty", map[string]interface{}{}, "N/A"},
+		{"ipv6 only", map[string]interface{}{"ipconfig0": "ip6=auto"}, ""},
+		{"net line is not cloud-init", map[string]interface{}{"net0": "virtio=AA:BB:CC:DD:EE:FF,bridge=vmbr0"}, ""},
+		{"empty", map[string]interface{}{}, ""},
 	}
 	for _, tt := range tests {
 		if got := ipFromCloudInitConfig(tt.config); got != tt.want {

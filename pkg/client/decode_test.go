@@ -116,3 +116,56 @@ func TestContainerTemplatesAreReadFromTemplateStorageOnly(t *testing.T) {
 		t.Errorf("got %+v, %v", got, err)
 	}
 }
+
+func TestVMIPPrefersTheGuestAgentThenCloudInit(t *testing.T) {
+	c := serve(t, map[string]string{
+		"/nodes/pve1/qemu/100/agent/network-get-interfaces": `{"data":{"result":[
+			{"name":"lo","ip-addresses":[{"ip-address":"127.0.0.1","ip-address-type":"ipv4"}]},
+			{"name":"eth0","ip-addresses":[{"ip-address":"10.0.0.7","ip-address-type":"ipv4"}]}]}}`,
+		"/nodes/pve1/qemu/100/config": `{"data":{"ipconfig0":"ip=192.168.1.9/24"}}`,
+		// 101: no agent, but a static cloud-init address
+		"/nodes/pve1/qemu/101/config": `{"data":{"ipconfig0":"ip=192.168.1.9/24,gw=192.168.1.1"}}`,
+		// 102: no agent and DHCP only
+		"/nodes/pve1/qemu/102/config": `{"data":{"ipconfig0":"ip=dhcp"}}`,
+	})
+	ctx := context.Background()
+	for vmid, want := range map[int]string{100: "10.0.0.7", 101: "192.168.1.9", 102: ""} {
+		got, err := c.GetVMIP(ctx, "pve1", vmid)
+		if err != nil || got != want {
+			t.Errorf("VM %d: got %q, %v; want %q", vmid, got, err, want)
+		}
+	}
+}
+
+func TestUnknownIPIsEmptyNotASentinel(t *testing.T) {
+	c := serve(t, map[string]string{})
+	if ip, err := c.GetVMIP(context.Background(), "pve1", 1); ip != "" || err != nil {
+		t.Errorf("VM: %q, %v", ip, err)
+	}
+	if ip, err := c.GetContainerIP(context.Background(), "pve1", 2); ip != "" || err != nil {
+		t.Errorf("container: %q, %v", ip, err)
+	}
+}
+
+func TestContainerIPComesFromItsInterfaces(t *testing.T) {
+	c := serve(t, map[string]string{
+		"/nodes/pve1/lxc/200/status/current": `{"data":{"status":"running"}}`,
+		"/nodes/pve1/lxc/200/interfaces":     `{"data":[{"name":"lo","inet":"127.0.0.1/8"},{"name":"eth0","inet":"10.0.0.50/24"}]}`,
+	})
+	if ip, err := c.GetContainerIP(context.Background(), "pve1", 200); err != nil || ip != "10.0.0.50" {
+		t.Errorf("got %q, %v", ip, err)
+	}
+}
+
+func TestNodeIPSkipsLoopbackAndStripsThePrefix(t *testing.T) {
+	c := serve(t, map[string]string{
+		"/nodes/pve1/network": `{"data":[{"iface":"lo","address":"127.0.0.1"},{"iface":"vmbr0","cidr":"192.168.1.11/24"}]}`,
+		"/nodes/pve2/network": `{"data":[{"iface":"lo","address":"127.0.0.1"}]}`,
+	})
+	if ip, err := c.GetNodeIP(context.Background(), "pve1"); err != nil || ip != "192.168.1.11" {
+		t.Errorf("pve1: %q, %v", ip, err)
+	}
+	if ip, err := c.GetNodeIP(context.Background(), "pve2"); err != nil || ip != "" {
+		t.Errorf("pve2: %q, %v", ip, err)
+	}
+}

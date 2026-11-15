@@ -56,12 +56,6 @@ type AuthResponse struct {
 	} `json:"data"`
 }
 
-// APIResponse represents a generic API response
-type APIResponse struct {
-	Data   interface{} `json:"data"`
-	Errors interface{} `json:"errors"`
-}
-
 // ClusterResourcesResponse represents the response from cluster resources endpoint
 type ClusterResourcesResponse struct {
 	Data   []Resource  `json:"data"`
@@ -885,284 +879,142 @@ func (c *ProxmoxClient) setCachedIP(node string, vmid int, ip string) {
 	}
 }
 
-// GetVMIP gets the IP address of a VM using multiple methods
+// GetVMIP gets the IP address of a VM, or "" if it has none that can be found
 func (c *ProxmoxClient) GetVMIP(ctx context.Context, node string, vmid int) (string, error) {
-	// Check cache first
 	if cachedIP, found := c.getCachedIP(node, vmid); found {
 		return cachedIP, nil
 	}
 
-	// Method 1: Try QEMU guest agent first (most reliable when available)
-	if ip := c.getVMIPFromGuestAgent(ctx, node, vmid); ip != "N/A" {
-		c.setCachedIP(node, vmid, ip)
-		return ip, nil
+	// The QEMU guest agent is the most reliable source, when it is running
+	ip := c.guestAgentIP(ctx, node, GuestVM, vmid)
+	if ip == "" {
+		// Otherwise use the static address configured with cloud-init, if any
+		ip = c.getVMIPFromConfig(ctx, node, vmid)
 	}
 
-	// Method 2: Use the static IP configured with cloud-init, if any
-	if ip := c.getVMIPFromConfig(ctx, node, vmid); ip != "N/A" {
-		c.setCachedIP(node, vmid, ip)
-		return ip, nil
-	}
-
-	// Cache "N/A" result to avoid repeated lookups for VMs without IPs
-	c.setCachedIP(node, vmid, "N/A")
-	return "N/A", nil
+	// Remember "no address" too, so VMs without one are not looked up again
+	c.setCachedIP(node, vmid, ip)
+	return ip, nil
 }
 
-// extractIPFromInterfaces extracts IP address from guest agent network interfaces
-// Prioritizes primary network interfaces (eth0, ens3, ens18, enp0s3) and filters loopback
-func extractIPFromInterfaces(interfaces []interface{}) string {
-	var primaryIP, anyIP string
+// agentInterface is a network interface as reported by a guest agent
+type agentInterface struct {
+	Name        string `json:"name"`
+	IPAddresses []struct {
+		Address string `json:"ip-address"`
+		Type    string `json:"ip-address-type"`
+	} `json:"ip-addresses"`
+}
+
+// extractIPFromInterfaces picks an IPv4 address from guest agent interfaces,
+// preferring the usual primary interface names (eth0, ens3, ens18, enp0s3) and
+// skipping loopback. It returns "" if there is none.
+func extractIPFromInterfaces(interfaces []agentInterface) string {
+	primaryNames := map[string]bool{"eth0": true, "ens3": true, "ens18": true, "enp0s3": true}
+	var anyIP string
 
 	for _, iface := range interfaces {
-		ifaceMap, ok := iface.(map[string]interface{})
-		if !ok {
-			continue
-		}
-
-		ifaceName, _ := ifaceMap["name"].(string)
-		ipAddresses, ok := ifaceMap["ip-addresses"].([]interface{})
-		if !ok {
-			continue
-		}
-
-		for _, ipData := range ipAddresses {
-			ipMap, ok := ipData.(map[string]interface{})
-			if !ok {
+		for _, addr := range iface.IPAddresses {
+			if addr.Type != "ipv4" || addr.Address == "127.0.0.1" || addr.Address == "::1" || addr.Address == "" {
 				continue
 			}
-
-			ip, ok := ipMap["ip-address"].(string)
-			if !ok {
-				continue
+			if primaryNames[iface.Name] {
+				return addr.Address
 			}
-
-			ipType, ok := ipMap["ip-address-type"].(string)
-			if !ok || ipType != "ipv4" {
-				continue
-			}
-
-			// Skip loopback addresses
-			if ip == "127.0.0.1" || ip == "::1" {
-				continue
-			}
-
-			// Prioritize primary network interfaces
-			if ifaceName == "eth0" || ifaceName == "ens3" || ifaceName == "ens18" || ifaceName == "enp0s3" {
-				primaryIP = ip
-				break
-			}
-
-			// Keep any valid IP as fallback
 			if anyIP == "" {
-				anyIP = ip
+				anyIP = addr.Address
 			}
 		}
-
-		if primaryIP != "" {
-			break
-		}
 	}
-
-	if primaryIP != "" {
-		return primaryIP
-	}
-	if anyIP != "" {
-		return anyIP
-	}
-
-	return "N/A"
+	return anyIP
 }
 
-// getVMIPFromGuestAgent tries to get IP from QEMU guest agent
-func (c *ProxmoxClient) getVMIPFromGuestAgent(ctx context.Context, node string, vmid int) string {
-	path := fmt.Sprintf("/nodes/%s/qemu/%d/agent/network-get-interfaces", url.PathEscape(node), vmid)
-	body, err := c.makeRequest(ctx, "GET", path, nil)
+// guestAgentIP asks a guest agent for the guest's IPv4 address, or "" if it cannot
+func (c *ProxmoxClient) guestAgentIP(ctx context.Context, node, guestType string, vmid int) string {
+	path := fmt.Sprintf("/nodes/%s/%s/%d/agent/network-get-interfaces", url.PathEscape(node), guestType, vmid)
+	data, err := requestData[struct {
+		Result []agentInterface `json:"result"`
+	}](ctx, c, "GET", path, nil, "guest agent interfaces")
 	if err != nil {
-		return "N/A"
+		return ""
 	}
-
-	var resp APIResponse
-	if err := json.Unmarshal(body, &resp); err != nil {
-		return "N/A"
-	}
-
-	result, ok := resp.Data.(map[string]interface{})
-	if !ok {
-		return "N/A"
-	}
-
-	interfaces, ok := result["result"].([]interface{})
-	if !ok {
-		return "N/A"
-	}
-
-	return extractIPFromInterfaces(interfaces)
+	return extractIPFromInterfaces(data.Result)
 }
 
-// GetContainerIP gets the IP address of a container using multiple methods
+// GetContainerIP gets the IP address of a container, or "" if it has none that can be found
 func (c *ProxmoxClient) GetContainerIP(ctx context.Context, node string, vmid int) (string, error) {
-	// Check cache first
 	if cachedIP, found := c.getCachedIP(node, vmid); found {
 		return cachedIP, nil
 	}
 
-	// Method 1: Try LXC guest agent first
-	if ip := c.getContainerIPFromGuestAgent(ctx, node, vmid); ip != "N/A" {
-		c.setCachedIP(node, vmid, ip)
-		return ip, nil
+	ip := c.guestAgentIP(ctx, node, GuestContainer, vmid)
+	if ip == "" {
+		ip, _ = c.GetContainerIPAlternative(ctx, node, vmid)
 	}
 
-	// Method 2: Try alternative methods
-	if ip, err := c.GetContainerIPAlternative(ctx, node, vmid); err == nil && ip != "N/A" {
-		c.setCachedIP(node, vmid, ip)
-		return ip, nil
-	}
-
-	// Cache "N/A" result to avoid repeated lookups
-	c.setCachedIP(node, vmid, "N/A")
-	return "N/A", nil
-}
-
-// getContainerIPFromGuestAgent tries to get IP from LXC guest agent
-func (c *ProxmoxClient) getContainerIPFromGuestAgent(ctx context.Context, node string, vmid int) string {
-	path := fmt.Sprintf("/nodes/%s/lxc/%d/agent/network-get-interfaces", url.PathEscape(node), vmid)
-	body, err := c.makeRequest(ctx, "GET", path, nil)
-	if err != nil {
-		return "N/A"
-	}
-
-	var resp APIResponse
-	if err := json.Unmarshal(body, &resp); err != nil {
-		return "N/A"
-	}
-
-	result, ok := resp.Data.(map[string]interface{})
-	if !ok {
-		return "N/A"
-	}
-
-	interfaces, ok := result["result"].([]interface{})
-	if !ok {
-		return "N/A"
-	}
-
-	return extractIPFromInterfaces(interfaces)
+	c.setCachedIP(node, vmid, ip)
+	return ip, nil
 }
 
 // GetContainerIPAlternative tries to get container IP from various sources
 func (c *ProxmoxClient) GetContainerIPAlternative(ctx context.Context, node string, vmid int) (string, error) {
 	// IMPORTANT: Do not call GetContainerIP here to avoid infinite recursion.
-
-	// Check cache first
 	if cachedIP, found := c.getCachedIP(node, vmid); found {
 		return cachedIP, nil
 	}
 
-	// Try to get IP from container status
 	status, err := c.GetContainerStatus(ctx, node, vmid)
 	if err != nil {
-		return "N/A", nil
+		return "", nil
+	}
+	if ips, ok := status["ips"].(string); ok && ips != "" {
+		c.setCachedIP(node, vmid, ips)
+		return ips, nil
 	}
 
-	// Check if there's IP information in the status
-	if ips, exists := status["ips"]; exists {
-		if ipStr, ok := ips.(string); ok && ipStr != "" {
-			c.setCachedIP(node, vmid, ipStr)
-			return ipStr, nil
-		}
-	}
-
-	// Try to get IP from network interfaces endpoint
-	path := fmt.Sprintf("/nodes/%s/lxc/%d/interfaces", url.PathEscape(node), vmid)
-	body, err := c.makeRequest(ctx, "GET", path, nil)
-	if err != nil {
-		c.setCachedIP(node, vmid, "N/A")
-		return "N/A", nil
-	}
-
-	var resp APIResponse
-	if err := json.Unmarshal(body, &resp); err != nil {
-		c.setCachedIP(node, vmid, "N/A")
-		return "N/A", nil
-	}
-
-	if interfaces, ok := resp.Data.([]interface{}); ok {
+	interfaces, err := requestData[[]struct {
+		Inet string `json:"inet"`
+	}](ctx, c, "GET", fmt.Sprintf("/nodes/%s/lxc/%d/interfaces", url.PathEscape(node), vmid), nil, "container interfaces")
+	ip := ""
+	if err == nil {
 		for _, iface := range interfaces {
-			if ifaceMap, ok := iface.(map[string]interface{}); ok {
-				if inet, exists := ifaceMap["inet"]; exists {
-					if inetStr, ok := inet.(string); ok && inetStr != "" {
-						// Parse IP from CIDR notation if needed
-						if strings.Contains(inetStr, "/") {
-							parts := strings.Split(inetStr, "/")
-							if len(parts) > 0 && parts[0] != "127.0.0.1" {
-								c.setCachedIP(node, vmid, parts[0])
-								return parts[0], nil
-							}
-						} else if inetStr != "127.0.0.1" {
-							c.setCachedIP(node, vmid, inetStr)
-							return inetStr, nil
-						}
-					}
-				}
+			if addr := addressOf(iface.Inet); addr != "" && addr != "127.0.0.1" {
+				ip = addr
+				break
 			}
 		}
 	}
 
-	// Cache "N/A" result to avoid repeated lookups
-	c.setCachedIP(node, vmid, "N/A")
-	return "N/A", nil
+	c.setCachedIP(node, vmid, ip)
+	return ip, nil
 }
 
-// GetNodeIP attempts to get a primary IP address for a Proxmox node.
-// This uses the node network API and returns the first non-loopback IPv4 it finds.
+// addressOf returns the address part of "10.0.0.5/24" (or of a bare address)
+func addressOf(cidr string) string {
+	addr, _, _ := strings.Cut(strings.TrimSpace(cidr), "/")
+	return addr
+}
+
+// GetNodeIP attempts to get a primary IP address for a Proxmox node, or ""
+// if it has none. It uses the node network API and returns the first
+// non-loopback address it finds.
 func (c *ProxmoxClient) GetNodeIP(ctx context.Context, node string) (string, error) {
-	path := fmt.Sprintf("/nodes/%s/network", url.PathEscape(node))
-	body, err := c.makeRequest(ctx, "GET", path, nil)
+	interfaces, err := requestData[[]struct {
+		Address string `json:"address"`
+		CIDR    string `json:"cidr"`
+		Inet    string `json:"inet"`
+	}](ctx, c, "GET", fmt.Sprintf("/nodes/%s/network", url.PathEscape(node)), nil, "node network")
 	if err != nil {
-		return "N/A", err
+		return "", err
 	}
-
-	var resp APIResponse
-	if err := json.Unmarshal(body, &resp); err != nil {
-		return "N/A", err
-	}
-
-	if ifaces, ok := resp.Data.([]interface{}); ok {
-		for _, iface := range ifaces {
-			ifm, ok := iface.(map[string]interface{})
-			if !ok {
-				continue
-			}
-
-			// try common fields: address, cidr, inet
-			if addr, ok := ifm["address"].(string); ok && addr != "" && addr != "127.0.0.1" {
-				// some responses include CIDR; strip if present
-				if strings.Contains(addr, "/") {
-					return strings.Split(addr, "/")[0], nil
-				}
+	for _, iface := range interfaces {
+		for _, candidate := range []string{iface.Address, iface.CIDR, iface.Inet} {
+			if addr := addressOf(candidate); addr != "" && addr != "127.0.0.1" {
 				return addr, nil
-			}
-
-			if cidr, ok := ifm["cidr"].(string); ok && cidr != "" {
-				if strings.Contains(cidr, "/") {
-					parts := strings.Split(cidr, "/")
-					if parts[0] != "127.0.0.1" {
-						return parts[0], nil
-					}
-				}
-			}
-
-			if inet, ok := ifm["inet"].(string); ok && inet != "" && inet != "127.0.0.1" {
-				if strings.Contains(inet, "/") {
-					return strings.Split(inet, "/")[0], nil
-				}
-				return inet, nil
 			}
 		}
 	}
-
-	return "N/A", nil
+	return "", nil
 }
 
 // UpdateVM updates a virtual machine configuration
@@ -1471,7 +1323,7 @@ func parseDiskSize(sizeStr string) uint64 {
 func (c *ProxmoxClient) getVMIPFromConfig(ctx context.Context, node string, vmid int) string {
 	config, err := c.GetVMConfig(ctx, node, vmid)
 	if err != nil {
-		return "N/A"
+		return ""
 	}
 	return ipFromCloudInitConfig(config)
 }
@@ -1495,7 +1347,7 @@ func ipFromCloudInitConfig(config map[string]interface{}) string {
 			}
 		}
 	}
-	return "N/A"
+	return ""
 }
 
 // MigrateVM migrates a virtual machine to another node
