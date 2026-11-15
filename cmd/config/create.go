@@ -19,15 +19,19 @@ var createCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		profile := args[0]
-		username, _ := cmd.Flags().GetString("username")
-		password, _ := cmd.Flags().GetString("password")
-		url, _ := cmd.Flags().GetString("url")
+		username, password, url, err := readCredentialFlags(cmd)
+		if err != nil {
+			return err
+		}
 
 		// On a terminal, ask for anything not given as a flag, as setup does
 		if term.IsTerminal(int(os.Stdin.Fd())) {
-			var err error
 			if username, password, url, err = promptMissing(username, password, url); err != nil {
 				return fmt.Errorf("reading input: %w", err)
+			}
+			// what was typed at the prompt gets the same tidying as a flag
+			if url, _, err = c.NormalizeURL(url); err != nil {
+				return err
 			}
 		}
 		// A profile without these cannot connect, so don't save one
@@ -65,9 +69,7 @@ var createCmd = &cobra.Command{
 }
 
 func init() {
-	createCmd.Flags().StringP("username", "u", "", "Username for the Proxmox VE API")
-	createCmd.Flags().StringP("password", "p", "", "Password for the Proxmox VE API")
-	createCmd.Flags().StringP("url", "l", "", "URL for the Proxmox VE API")
+	addCredentialFlags(createCmd)
 	createCmd.Flags().Bool("use", false, "Switch to this profile after creation")
 	configCmd.AddCommand(createCmd)
 }

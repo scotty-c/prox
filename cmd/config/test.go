@@ -12,7 +12,7 @@ import (
 // testCmd represents the test command
 var testCmd = &cobra.Command{
 	Use:   "test",
-	Short: "Test the configuration by connecting to the Proxmox server",
+	Short: "Check that the saved connection works",
 	Long:  `Validates the current configuration by attempting to connect to the Proxmox server, authenticate, and retrieve basic information.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		output.Resultln("Testing Proxmox configuration...")

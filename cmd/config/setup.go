@@ -15,7 +15,7 @@ import (
 
 var setupCmd = &cobra.Command{
 	Use:   "setup",
-	Short: "This command sets up the configuration file for prox",
+	Short: "Save connection details for the current profile",
 	Long: `Save connection details for the current profile.
 
 Certificates are verified by default. If your Proxmox server uses its default
@@ -25,10 +25,6 @@ from a node, or --insecure to skip verification.
 Example:
   prox config setup -u root@pam -p secret -l https://pve.example.com:8006 --ca-cert ~/pve-root-ca.pem`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		username, _ := cmd.Flags().GetString("username")
-		password, _ := cmd.Flags().GetString("password")
-		url, _ := cmd.Flags().GetString("url")
-
 		if c.Check() {
 			fmt.Printf("Config already exists for profile '%s'. Use 'prox config update' to change it\n", c.GetCurrentProfile())
 			if err := saveTLSFlags(cmd, c.GetCurrentProfile()); err != nil {
@@ -37,12 +33,19 @@ Example:
 			return nil
 		}
 
+		username, password, url, err := readCredentialFlags(cmd)
+		if err != nil {
+			return err
+		}
+
 		// On a terminal, ask for anything not given as a flag rather than
 		// saving an incomplete profile. Scripts are unaffected.
 		if term.IsTerminal(int(os.Stdin.Fd())) {
-			var err error
 			if username, password, url, err = promptMissing(username, password, url); err != nil {
 				return fmt.Errorf("reading input: %w", err)
+			}
+			if url, _, err = c.NormalizeURL(url); err != nil {
+				return err
 			}
 		}
 
@@ -92,8 +95,6 @@ func promptMissing(username, password, url string) (string, string, string, erro
 }
 
 func init() {
-	setupCmd.Flags().StringP("username", "u", "", "Username for the Proxmox VE API")
-	setupCmd.Flags().StringP("password", "p", "", "Password for the Proxmox VE API")
-	setupCmd.Flags().StringP("url", "l", "", "URL for the Proxmox VE API")
+	addCredentialFlags(setupCmd)
 	configCmd.AddCommand(setupCmd)
 }

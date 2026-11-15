@@ -11,12 +11,19 @@ import (
 
 var updateCmd = &cobra.Command{
 	Use:   "update",
-	Short: "This command updates the configuration file for prox",
-	Long:  ``,
+	Short: "Change details saved in the current profile",
+	Long: `Change the URL, user, password or TLS settings saved in the current profile.
+Only what you give is changed.
+
+Examples:
+  prox config update --url https://pve2.example.com:8006
+  echo "$TOKEN_SECRET" | prox config update -u 'ci@pve!deploy' --password-stdin
+  prox config update --ca-cert ~/pve-root-ca.pem`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		username, _ := cmd.Flags().GetString("username")
-		password, _ := cmd.Flags().GetString("password")
-		url, _ := cmd.Flags().GetString("url")
+		username, password, url, err := readCredentialFlags(cmd)
+		if err != nil {
+			return err
+		}
 
 		if err := saveTLSFlags(cmd, c.GetCurrentProfile()); err != nil {
 			return err
@@ -29,8 +36,6 @@ var updateCmd = &cobra.Command{
 }
 
 func init() {
-	updateCmd.Flags().StringP("username", "u", "", "Username for the Proxmox VE API")
-	updateCmd.Flags().StringP("password", "p", "", "Password for the Proxmox VE API")
-	updateCmd.Flags().StringP("url", "l", "", "URL for the Proxmox VE API")
+	addCredentialFlags(updateCmd)
 	configCmd.AddCommand(updateCmd)
 }

@@ -148,6 +148,38 @@ func ListProfiles() ([]string, error) {
 	return profiles, nil
 }
 
+// ProfileInfo describes a saved profile for listing. The password is never
+// included; if the profile cannot be read (for example its credentials were
+// encrypted on another machine) Error says why and the other fields are empty.
+type ProfileInfo struct {
+	Name    string
+	URL     string
+	User    string
+	Current bool
+	Error   string
+}
+
+// ProfileInfos describes every saved profile, marking the current one
+func ProfileInfos() ([]ProfileInfo, error) {
+	names, err := ListProfiles()
+	if err != nil {
+		return nil, err
+	}
+	current := GetCurrentProfile()
+	infos := make([]ProfileInfo, 0, len(names))
+	for _, name := range names {
+		info := ProfileInfo{Name: name, Current: name == current}
+		user, _, url, err := ReadProfile(name)
+		if err != nil {
+			info.Error = err.Error()
+		} else {
+			info.User, info.URL = user, url
+		}
+		infos = append(infos, info)
+	}
+	return infos, nil
+}
+
 // ProfileExists checks if a profile exists
 func ProfileExists(profile string) bool {
 	profilePath, err := GetProfilePath(profile)

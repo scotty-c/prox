@@ -1277,3 +1277,125 @@ func TestTemplatePullDownloadsAShortcutAndSkipsOnesThatAreThere(t *testing.T) {
 		t.Errorf("nothing should be downloaded again: %v", srv2.Requests())
 	}
 }
+
+// config: --password-stdin, URL tidying, richer list
+
+func TestConfigListShowsURLAndUserButNeverThePassword(t *testing.T) {
+	home, srv := t.TempDir(), fakepve.New(t)
+	runInHome(t, home, srv, "", "config", "create", "lab", "-u", "root@pam", "-p", "s3cret-lab", "-l", "https://lab.example.com:8006")
+	runInHome(t, home, srv, "", "config", "create", "prod", "-u", "ci@pve!deploy", "-p", "s3cret-prod", "-l", "https://prod.example.com:8006", "--use")
+
+	r := runInHome(t, home, srv, "", "config", "list")
+	if r.code != 0 {
+		t.Fatalf("exit %d: %s", r.code, r.stderr)
+	}
+	contains(t, "list", r.stdout, "lab", "https://lab.example.com:8006", "root@pam", "prod", "https://prod.example.com:8006", "ci@pve!deploy")
+	excludes(t, "list", r.stdout+r.stderr, "s3cret")
+	for _, line := range strings.Split(r.stdout, "\n") {
+		if strings.Contains(line, "prod") && !strings.Contains(line, "*") {
+			t.Errorf("the profile in use should be marked: %q", line)
+		}
+		if strings.Contains(line, "lab.example.com") && strings.Contains(line, "*") {
+			t.Errorf("lab is not in use: %q", line)
+		}
+	}
+
+	r = runInHome(t, home, srv, "", "config", "list", "-o", "json")
+	var rows []struct {
+		Name, URL, User string
+		Current         bool
+	}
+	if err := json.Unmarshal([]byte(r.stdout), &rows); err != nil || len(rows) != 2 {
+		t.Fatalf("%v\n%s", err, r.stdout)
+	}
+	excludes(t, "json", r.stdout, "s3cret", "password")
+	for _, row := range rows {
+		if row.Name == "prod" && (!row.Current || row.User != "ci@pve!deploy" || row.URL != "https://prod.example.com:8006") {
+			t.Errorf("prod = %+v", row)
+		}
+	}
+}
+
+func TestPasswordStdinKeepsThePasswordOffTheCommandLine(t *testing.T) {
+	home, srv := t.TempDir(), fakepve.New(t)
+	r := runInHome(t, home, srv, "from-stdin\n", "config", "create", "lab", "-u", "u@pam", "-l", "https://pve:8006", "--password-stdin")
+	if r.code != 0 {
+		t.Fatalf("exit %d: %s", r.code, r.stderr)
+	}
+	r = runInHome(t, home, srv, "", "config", "read", "--profile", "lab", "--show-password")
+	contains(t, "config read", r.stdout, "from-stdin")
+
+	// update can change it the same way
+	runInHome(t, home, srv, "", "config", "use", "lab")
+	if r := runInHome(t, home, srv, "second-secret\n", "config", "update", "--password-stdin"); r.code != 0 {
+		t.Fatalf("update: exit %d: %s", r.code, r.stderr)
+	}
+	r = runInHome(t, home, srv, "", "config", "read", "--show-password")
+	contains(t, "config read", r.stdout, "second-secret")
+}
+
+func TestPasswordStdinMistakesAreReported(t *testing.T) {
+	srv := fakepve.New(t)
+	r := runInHome(t, t.TempDir(), srv, "x\n", "config", "create", "lab", "-u", "u@pam", "-l", "https://pve:8006", "-p", "a", "--password-stdin")
+	if r.code != 1 {
+		t.Errorf("both given: exit %d, want 1", r.code)
+	}
+	contains(t, "stderr", r.stderr, "either --password or --password-stdin")
+
+	home := t.TempDir()
+	r = runInHome(t, home, srv, "", "config", "create", "lab", "-u", "u@pam", "-l", "https://pve:8006", "--password-stdin")
+	if r.code != 1 {
+		t.Errorf("nothing on stdin: exit %d, want 1", r.code)
+	}
+	contains(t, "stderr", r.stderr, "no password received on stdin")
+	if got := profiles(t, home, srv); len(got) != 0 {
+		t.Errorf("nothing should be saved: %v", got)
+	}
+
+	r = runInHome(t, home, srv, "\n", "config", "create", "lab", "-u", "u@pam", "-l", "https://pve:8006", "--password-stdin")
+	contains(t, "stderr", r.stderr, "is empty")
+}
+
+func TestURLsAreTidiedBeforeTheyAreSaved(t *testing.T) {
+	srv := fakepve.New(t)
+	for in, want := range map[string]string{
+		"pve.example.com:8006":                   "https://pve.example.com:8006",
+		"https://pve.example.com:8006/":          "https://pve.example.com:8006",
+		"https://pve.example.com:8006/api2/json": "https://pve.example.com:8006",
+	} {
+		home := t.TempDir()
+		if r := runInHome(t, home, srv, "", "config", "create", "lab", "-u", "u@pam", "-p", "pw", "-l", in); r.code != 0 {
+			t.Fatalf("%q: exit %d: %s", in, r.code, r.stderr)
+		}
+		r := runInHome(t, home, srv, "", "config", "read", "--profile", "lab")
+		contains(t, "saved URL for "+in, r.stdout, want)
+	}
+}
+
+func TestURLWithoutAPortGetsANoteButIsNotChanged(t *testing.T) {
+	home, srv := t.TempDir(), fakepve.New(t)
+	r := runInHome(t, home, srv, "", "config", "create", "lab", "-u", "u@pam", "-p", "pw", "-l", "https://pve.example.com")
+	if r.code != 0 {
+		t.Fatalf("exit %d: %s", r.code, r.stderr)
+	}
+	contains(t, "stderr", r.stderr, "Note:", "8006", "reverse proxy")
+	contains(t, "config read", runInHome(t, home, srv, "", "config", "read", "--profile", "lab").stdout, "https://pve.example.com")
+}
+
+func TestAnUnusableURLIsRejectedBeforeAnythingIsSaved(t *testing.T) {
+	home, srv := t.TempDir(), fakepve.New(t)
+	r := runInHome(t, home, srv, "", "config", "create", "lab", "-u", "u@pam", "-p", "pw", "-l", "ftp://pve:8006")
+	if r.code != 1 {
+		t.Errorf("exit %d, want 1", r.code)
+	}
+	contains(t, "stderr", r.stderr, "must start with https://")
+	if got := profiles(t, home, srv); len(got) != 0 {
+		t.Errorf("nothing should be saved: %v", got)
+	}
+}
+
+func TestConfigHelpHasRealDescriptions(t *testing.T) {
+	r := run(t, fakepve.New(t), "", "config", "--help")
+	excludes(t, "config help", r.stdout, "This command")
+	contains(t, "config help", r.stdout, "Save connection details", "Change details saved in the current profile")
+}

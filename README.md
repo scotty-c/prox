@@ -105,10 +105,16 @@ prox config setup -u admin@pam -p secret -l https://proxmox.example.com:8006
 # Or create multiple profiles for different environments
 prox config create homelab -u admin@pam -p secret -l https://homelab:8006
 prox config create production -u admin@pam -p secret -l https://prod:8006 --use
-prox config list                    # List all profiles
+prox config list                    # List profiles with their URL and user (never the password)
 prox config use homelab             # Switch to homelab profile
 prox --profile production vm list   # Use specific profile for one command
 ```
+
+`-p` puts the password in your shell history and in `ps`. To keep it out of both, leave `-p` off and either type it at the prompt (on a terminal) or pipe it in:
+```bash
+echo "$PVE_PASSWORD" | prox config create ci -u 'automation@pve!ci' -l https://pve.example.com:8006 --password-stdin
+```
+URLs are tidied before they are saved: `pve.example.com:8006` becomes `https://pve.example.com:8006`, and a trailing `/` or `/api2/json` is dropped. A URL without a port gets a note (Proxmox listens on 8006) but is kept as you wrote it, since one behind a reverse proxy has none.
 
 ### API tokens
 API tokens are recommended for automation: they can be scoped, revoked, and work

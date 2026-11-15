@@ -11,7 +11,7 @@ import (
 
 var migrateCmd = &cobra.Command{
 	Use:   "migrate",
-	Short: "This command migrates an existing plain text config to encrypted format",
+	Short: "Encrypt credentials saved in an old plain-text format",
 	Long:  `This command will detect if your configuration file contains plain text credentials and migrate them to encrypted format for improved security.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if err := c.MigrateConfig(); err != nil {

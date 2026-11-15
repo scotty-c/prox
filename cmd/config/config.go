@@ -13,7 +13,7 @@ import (
 var configCmd = &cobra.Command{
 	Use:     "config",
 	GroupID: "core",
-	Short:   "Set up, read, and delete the configuration file for prox",
+	Short:   "Manage connection profiles and saved credentials",
 	Long:    ``,
 }
 

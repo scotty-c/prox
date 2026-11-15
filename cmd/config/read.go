@@ -11,7 +11,7 @@ import (
 
 var readCmd = &cobra.Command{
 	Use:   "read",
-	Short: "This command reads the configuration file for prox",
+	Short: "Show the current profile's saved connection details",
 	Long: `Show the current profile's saved configuration.
 
 The password is masked unless --show-password is given.`,
