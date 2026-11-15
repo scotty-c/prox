@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/zalando/go-keyring"
 )
@@ -16,10 +17,19 @@ const keychainService = "prox"
 type keychainItem struct {
 	Username string `json:"username"`
 	Password string `json:"password"`
+
+	// the last login, if one was kept (see Session)
+	Ticket string `json:"ticket,omitempty"`
+	CSRF   string `json:"csrf,omitempty"`
+	Saved  int64  `json:"saved,omitempty"` // Unix seconds
 }
 
 func keychainSet(profile string, creds Credentials) error {
-	data, err := json.Marshal(keychainItem{Username: creds.Username, Password: creds.Password})
+	item := keychainItem{Username: creds.Username, Password: creds.Password}
+	if s := creds.Session; s.Ticket != "" {
+		item.Ticket, item.CSRF, item.Saved = s.Ticket, s.CSRF, s.Saved.Unix()
+	}
+	data, err := json.Marshal(item)
 	if err != nil {
 		return err
 	}
@@ -41,7 +51,11 @@ func keychainGet(profile string) (Credentials, error) {
 	if err := json.Unmarshal([]byte(data), &item); err != nil {
 		return Credentials{}, fmt.Errorf("the keychain item is not in the expected format: %w", err)
 	}
-	return Credentials{Username: item.Username, Password: item.Password}, nil
+	creds := Credentials{Username: item.Username, Password: item.Password}
+	if item.Ticket != "" && item.Saved > 0 {
+		creds.Session = Session{Ticket: item.Ticket, CSRF: item.CSRF, Saved: time.Unix(item.Saved, 0)}
+	}
+	return creds, nil
 }
 
 // keychainDelete removes the profile's item; an item that is not there is fine

@@ -172,12 +172,12 @@ func TestOldProfilesStillOpen(t *testing.T) {
 	derivedPass, _ := crypto.Encrypt("old-secret")
 
 	got, method, err := Open("old", map[string]string{"username": derivedUser, "password": derivedPass})
-	if err != nil || got != (Credentials{"root@pam", "old-secret"}) || method != MethodLegacy {
+	if err != nil || got != (Credentials{Username: "root@pam", Password: "old-secret"}) || method != MethodLegacy {
 		t.Errorf("legacy: %+v, %q, %v", got, method, err)
 	}
 
 	got, method, err = Open("plain", map[string]string{"username": "root@pam", "password": "short pw"})
-	if err != nil || got != (Credentials{"root@pam", "short pw"}) || method != MethodPlaintext {
+	if err != nil || got != (Credentials{Username: "root@pam", Password: "short pw"}) || method != MethodPlaintext {
 		t.Errorf("plaintext: %+v, %q, %v", got, method, err)
 	}
 

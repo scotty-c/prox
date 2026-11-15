@@ -53,7 +53,7 @@ Guiding principles:
 `cmd.Context()` reaches every API request, so Ctrl-C stops whatever is in flight. Waiting for a task has its own message: the task keeps running on the server and the error shows the `prox logs --follow` command. `--timeout` bounds only the wait.
 
 ## The Client (`pkg/client`)
-- Password logins use a ticket and CSRF token; usernames containing `!` are API tokens and send an `Authorization` header instead.
+- Password logins use a ticket and CSRF token; usernames containing `!` are API tokens and send an `Authorization` header instead. For a profile in the keychain the last ticket is kept in the same keychain item (`secrets.Session`) and used while it is under ~110 minutes old; `newClient` applies it and passes each fresh login to `connection.SaveSession`. A rejected ticket still costs one re-login.
 - TLS is verified unless `--insecure`/`PROX_INSECURE`/the profile says otherwise; a CA file can be trusted with `--ca-cert`.
 - Responses are decoded straight into types (`requestData[T]`). A missing task ID or config is an error, not an empty value. Some values arrive as strings or numbers depending on the Proxmox version, so `ConfigNumber`/`ConfigFlag` accept both.
 - The cluster listing (needed by every name lookup) is fetched once and kept for ten seconds; `ClearClusterResourcesCache` forgets it after a command creates a guest.

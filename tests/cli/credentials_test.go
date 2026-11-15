@@ -244,3 +244,37 @@ func TestSetupSaysWhereTheCredentialsWentToo(t *testing.T) {
 	}
 	contains(t, "setup output", r.stdout, "Config setup completed successfully (credentials stored sealed with a key file)")
 }
+
+func TestKeyFileProfilesLogInEveryRunAndKeepNoSession(t *testing.T) {
+	home, srv := t.TempDir(), fakepve.New(t)
+	runInHome(t, home, srv, "", "config", "create", "default", "-u", "root@pam", "-p", "pw", "-l", srv.URL)
+
+	for i := 1; i <= 2; i++ {
+		if r := runWithProfile(t, home, "", "vm", "list"); r.code != 0 {
+			t.Fatalf("run %d: exit %d: %s", i, r.code, r.stderr)
+		}
+	}
+	if n := srv.Count("POST", "/access/ticket"); n != 2 {
+		t.Errorf("%d logins over 2 runs, want 2: only keychain profiles keep a session", n)
+	}
+
+	// the login's ticket is "T" in the fake; nothing under home may hold it
+	filepath.Walk(home, func(path string, info os.FileInfo, err error) error {
+		if err == nil && !info.IsDir() {
+			if data, _ := os.ReadFile(path); strings.Contains(string(data), "CSRFPreventionToken") || strings.Contains(string(data), "PVEAuthCookie") {
+				t.Errorf("%s looks like it holds a session", path)
+			}
+		}
+		return nil
+	})
+}
+
+func TestEnvironmentCredentialsLogInEveryRun(t *testing.T) {
+	srv := fakepve.New(t)
+	for i := 0; i < 2; i++ {
+		run(t, srv, "", "vm", "list") // run() uses PROX_URL/PROX_USER/PROX_PASSWORD
+	}
+	if n := srv.Count("POST", "/access/ticket"); n != 2 {
+		t.Errorf("%d logins over 2 runs, want 2", n)
+	}
+}

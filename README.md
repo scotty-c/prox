@@ -241,7 +241,7 @@ Pro tips:
 **Performance Optimizations:**
 - **Parallel operations**: VM/container describe operations run config and status fetches concurrently (5-10x faster)
 - **One cluster listing per command**: name lookups, suggestions and tags all share a single `/cluster/resources` request (kept for 10 seconds, cleared when a command creates a guest)
-- **One login per command**: every part of a command uses the same client, so the configuration is read and the ticket requested once
+- **One login per command, and often none**: every part of a command uses the same client, so the configuration is read and the ticket requested once. A profile stored in the keychain also keeps the last login there for up to ~110 minutes, so consecutive commands and TAB completion skip the login altogether (`PROX_SESSION_CACHE=off` turns this off; see SECURITY.md)
 - **Concurrent workers**: IP lookups for `vm list --ip` and `ct list` run on a pool of 10 workers
 
 **Real-time Feedback:**

@@ -36,6 +36,15 @@ Per platform:
 
 If that is not enough, do not save the password: use an **API token** with only the privileges you need (it can be revoked on its own), and supply it through your secret manager as `PROX_USER`, `PROX_PASSWORD` and `PROX_URL`, which prox prefers over any profile. This is the right choice for CI.
 
+### The kept login
+
+Logging in to Proxmox costs a request on every run, and every TAB press. For a profile whose login is in the keychain, prox keeps the **ticket and CSRF token** from the last login in the same keychain item as the username and password, and uses them for later runs until they are about 110 minutes old (Proxmox tickets last two hours). A ticket the server turns down, for example after a password change, simply causes one new login.
+
+- A ticket is a session credential: anyone who can read the keychain item can act as you until it expires. It is no more exposed than the password stored beside it, and it is never written to a file.
+- Nothing is kept for profiles stored with a key file, for credentials from `PROX_URL`/`PROX_USER`/`PROX_PASSWORD`, or for API tokens (which have no login).
+- Saving the profile again (`config create`, `setup`, `update`) discards the kept ticket.
+- To turn it off, set `PROX_SESSION_CACHE=off`; every run then logs in afresh.
+
 ### Profiles saved by older versions
 
 Earlier versions encrypted the login with a key derived from your user ID, user name, host name and OS. Anything running as you can recompute that key, so it only hid the password from casual inspection, and renaming the machine made it unreadable. Those profiles still work. prox says so (once per run, on stderr) and `prox config migrate` moves them to the keychain or key file. Each profile is read back after it is written, and is left as it was if that fails. A profile that has been moved cannot be read by an older prox.

@@ -18,6 +18,7 @@ import (
 
 	"github.com/scotty-c/prox/pkg/apierr"
 	"github.com/scotty-c/prox/pkg/config"
+	"github.com/scotty-c/prox/pkg/secrets"
 )
 
 // ProxmoxClient represents a client for Proxmox VE API
@@ -29,6 +30,10 @@ type ProxmoxClient struct {
 	ticket     string
 	csrfToken  string
 	authMu     sync.Mutex // guards ticket and csrfToken
+
+	// onLogin, if set, is told about each new login so it can be kept for the
+	// next run
+	onLogin func(ticket, csrf string)
 
 	// The cluster listing is fetched once and shared by the lookups a command
 	// makes; resourcesMu also stops concurrent callers fetching it twice
@@ -289,6 +294,9 @@ func (c *ProxmoxClient) authenticateLocked(ctx context.Context) error {
 
 	c.ticket = authResp.Data.Ticket
 	c.csrfToken = authResp.Data.CSRFPreventionToken
+	if c.onLogin != nil {
+		c.onLogin(c.ticket, c.csrfToken)
+	}
 
 	return nil
 }
@@ -732,16 +740,31 @@ func (c *ProxmoxClient) getTaskLogPage(ctx context.Context, node, upid string, s
 // warnPartialEnvOnce prints the partial environment warning only once per run
 var warnPartialEnvOnce sync.Once
 
-// ReadConfig reads configuration from environment variables or file
-func ReadConfig() (string, string, string, error) {
-	// Check environment variables first (for CI/CD scenarios)
+// connection is what a client needs to connect
+type connection struct {
+	URL      string
+	User     string
+	Password string
+
+	// Session is the login kept from an earlier run, if there is one that may
+	// be used
+	Session secrets.Session
+	// SaveSession keeps a new login for the next run. It is nil when there is
+	// nowhere to keep one.
+	SaveSession func(ticket, csrf string)
+}
+
+// readConnection works out how to connect: from the environment if
+// PROX_URL, PROX_USER and PROX_PASSWORD are all set (for CI), otherwise from
+// the current profile. Only a profile whose login is in the keychain can keep
+// a session between runs, and PROX_SESSION_CACHE=off stops that too.
+func readConnection() (connection, error) {
 	envURL := os.Getenv("PROX_URL")
 	envUser := os.Getenv("PROX_USER")
 	envPass := os.Getenv("PROX_PASSWORD")
 
-	// If all environment variables are set, use them
 	if envURL != "" && envUser != "" && envPass != "" {
-		return envUser, envPass, envURL, nil
+		return connection{URL: envURL, User: envUser, Password: envPass}, nil
 	}
 
 	// Some but not all set is almost always a mistake; say why they're ignored
@@ -751,8 +774,43 @@ func ReadConfig() (string, string, string, error) {
 		})
 	}
 
-	// Fall back to config file
-	return config.Read()
+	detail, err := config.ReadDetail()
+	if err != nil {
+		return connection{}, err
+	}
+	conn := connection{URL: detail.URL, User: detail.Username, Password: detail.Password}
+	if detail.Method == secrets.MethodKeychain && secrets.SessionCacheEnabled() {
+		conn.Session = detail.Session
+		profile := detail.Profile
+		conn.SaveSession = func(ticket, csrf string) {
+			_ = config.SaveSession(profile, ticket, csrf) // optional: failing only costs the next run a login
+		}
+	}
+	return conn, nil
+}
+
+// newClient makes the client for conn. A kept session that is still fresh is
+// used in place of logging in; each login the client does make is passed to
+// conn.SaveSession. API tokens have no login, so they get neither.
+func newClient(conn connection, tlsOpts TLSOptions) (*ProxmoxClient, error) {
+	client, err := NewClientWithTLS(conn.URL, conn.User, conn.Password, tlsOpts)
+	if err != nil {
+		return nil, err
+	}
+	if client.usesAPIToken() {
+		return client, nil
+	}
+	if conn.Session.Fresh(time.Now()) {
+		client.ticket, client.csrfToken = conn.Session.Ticket, conn.Session.CSRF
+	}
+	client.onLogin = conn.SaveSession
+	return client, nil
+}
+
+// ReadConfig reads configuration from environment variables or file
+func ReadConfig() (string, string, string, error) {
+	conn, err := readConnection()
+	return conn.User, conn.Password, conn.URL, err
 }
 
 // CreateClient returns the Proxmox client for this run, creating it from the
@@ -765,7 +823,7 @@ func CreateClient() (ProxmoxClientInterface, error) {
 		return sharedClient, nil
 	}
 
-	user, pass, url, err := ReadConfig()
+	conn, err := readConnection()
 	if err != nil {
 		return nil, fmt.Errorf("failed to read config: %w", err)
 	}
@@ -773,7 +831,7 @@ func CreateClient() (ProxmoxClientInterface, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to read TLS settings: %w", err)
 	}
-	client, err := NewClientWithTLS(url, user, pass, tlsOpts)
+	client, err := newClient(conn, tlsOpts)
 	if err != nil {
 		return nil, err
 	}

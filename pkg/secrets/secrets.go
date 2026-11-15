@@ -23,15 +23,50 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/scotty-c/prox/pkg/crypto"
 )
 
 // Credentials are what a profile logs in with: a username and a password, or
-// an API token ID and its secret
+// an API token ID and its secret. Session is the login Proxmox last gave
+// prox for them, if it was kept (only profiles in the keychain keep one).
 type Credentials struct {
 	Username string
 	Password string
+	Session  Session
+}
+
+// Session is a login that was kept so the next run can skip logging in: the
+// ticket and CSRF token Proxmox issued, and when
+type Session struct {
+	Ticket string
+	CSRF   string
+	Saved  time.Time
+}
+
+// SessionMaxAge is how long prox trusts a kept session. Proxmox tickets last
+// two hours; stopping a little short avoids using one that is about to expire.
+// A ticket the server turns down earlier (say after a password change) is
+// handled by logging in again.
+const SessionMaxAge = 110 * time.Minute
+
+// Fresh reports whether the session is complete and young enough to use at now
+func (s Session) Fresh(now time.Time) bool {
+	age := now.Sub(s.Saved)
+	return s.Ticket != "" && s.CSRF != "" && !s.Saved.IsZero() && age >= 0 && age < SessionMaxAge
+}
+
+// EnvSessionCache turns the kept session off when set to off, 0, false or no
+const EnvSessionCache = "PROX_SESSION_CACHE"
+
+// SessionCacheEnabled reports whether prox may keep and reuse a session
+func SessionCacheEnabled() bool {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv(EnvSessionCache))) {
+	case "off", "0", "false", "no":
+		return false
+	}
+	return true
 }
 
 // Method says how credentials are, or were, protected
@@ -204,4 +239,17 @@ func Forget(profile string, entries map[string]string) error {
 		return fmt.Errorf("could not remove the keychain item for profile '%s': %w", profile, err)
 	}
 	return nil
+}
+
+// SaveSession keeps a session in the profile's keychain item, next to the
+// credentials, so the next run can skip logging in. Only keychain profiles can
+// keep one; for any other profile it does nothing. Failing to save is not
+// serious (the next run just logs in), so callers may ignore the error.
+func SaveSession(profile string, session Session) error {
+	creds, err := keychainGet(profile)
+	if err != nil {
+		return err
+	}
+	creds.Session = session
+	return keychainSet(profile, creds)
 }

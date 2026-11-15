@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/scotty-c/prox/pkg/apierr"
 	"github.com/scotty-c/prox/pkg/crypto"
@@ -263,6 +264,7 @@ func createProfile(profile, username, password, url string) (secrets.Method, err
 		fmt.Fprintf(&content, "%s %s\n", fingerprintComment, sealed.Fingerprint)
 	}
 
+	forgetOpened()
 	if err := writeProfileFile(profilePath, content.String()); err != nil {
 		if !existed {
 			_ = secrets.Forget(profile, sealed.Entries) // don't leave an orphaned keychain item
@@ -306,6 +308,8 @@ func DeleteProfile(profile string) error {
 		return err
 	}
 
+	forgetOpened()
+
 	// what the profile says about where its credentials are, before it goes
 	entries, _, _ := readProfileFile(profilePath)
 
@@ -345,10 +349,12 @@ func currentProfileSetting() string {
 
 // ProfileDetail is a saved profile with its credentials opened
 type ProfileDetail struct {
+	Profile  string
 	Username string
 	Password string
 	URL      string
-	Method   secrets.Method // how the credentials are protected
+	Method   secrets.Method  // how the credentials are protected
+	Session  secrets.Session // the last login, if the keychain item kept one
 }
 
 // OpenProfile reads a profile and opens its credentials, whichever way they
@@ -375,7 +381,7 @@ func OpenProfile(profile string) (ProfileDetail, error) {
 		}
 		return ProfileDetail{}, err
 	}
-	return ProfileDetail{Username: creds.Username, Password: creds.Password, URL: values["url"], Method: method}, nil
+	return ProfileDetail{Profile: profile, Username: creds.Username, Password: creds.Password, URL: values["url"], Method: method, Session: creds.Session}, nil
 }
 
 // ReadProfile reads a specific profile's configuration
@@ -384,12 +390,64 @@ func ReadProfile(profile string) (string, string, string, error) {
 	if err != nil {
 		return "", "", "", err
 	}
+	noteIfLegacy(detail)
+	return detail.Username, detail.Password, detail.URL, nil
+}
+
+// noteIfLegacy points a profile that still uses an old storage scheme at the
+// command that upgrades it, once per run
+func noteIfLegacy(detail ProfileDetail) {
 	if detail.Method == secrets.MethodLegacy || detail.Method == secrets.MethodPlaintext {
 		legacyNote.Do(func() {
-			output.Info("Note: the credentials of profile '%s' use the old storage scheme (%s). Run 'prox config migrate' to move them into the keychain.\n", profile, detail.Method)
+			output.Info("Note: the credentials of profile '%s' use the old storage scheme (%s). Run 'prox config migrate' to move them into the keychain.\n", detail.Profile, detail.Method)
 		})
 	}
-	return detail.Username, detail.Password, detail.URL, nil
+}
+
+// opened remembers the current profile once it has been read, so that the
+// several parts of a command that ask for the connection settings cost one
+// read of the keychain, not one each. Writing or deleting a profile forgets it.
+var opened struct {
+	sync.Mutex
+	detail ProfileDetail
+	ok     bool
+}
+
+func forgetOpened() {
+	opened.Lock()
+	defer opened.Unlock()
+	opened.ok = false
+}
+
+// ReadDetail reads the current profile for connecting: its login and, if the
+// keychain item kept one, the last session. It is read once per run.
+func ReadDetail() (ProfileDetail, error) {
+	// Try to migrate old config if it exists
+	// Ignore migration errors: migration might not be needed, and reading the
+	// profile below reports any real problem
+	_ = MigrateToProfiles()
+
+	profile := GetCurrentProfile()
+
+	opened.Lock()
+	defer opened.Unlock()
+	if opened.ok && opened.detail.Profile == profile {
+		return opened.detail, nil
+	}
+	detail, err := OpenProfile(profile)
+	if err != nil {
+		return ProfileDetail{}, err
+	}
+	noteIfLegacy(detail)
+	opened.detail, opened.ok = detail, true
+	return detail, nil
+}
+
+// SaveSession keeps a login in the profile's keychain item so the next run can
+// skip logging in. It does nothing useful for a profile that is not in the
+// keychain, and an error means only that the next run will log in again.
+func SaveSession(profile, ticket, csrf string) error {
+	return secrets.SaveSession(profile, secrets.Session{Ticket: ticket, CSRF: csrf, Saved: time.Now()})
 }
 
 // legacyNote makes the nudge to migrate appear once per run
@@ -528,13 +586,11 @@ func Create(username string, password string, url string) (secrets.Method, error
 
 // Read reads the current profile's config file and decrypts sensitive data
 func Read() (string, string, string, error) {
-	// Try to migrate old config if it exists
-	// Ignore migration errors: migration might not be needed, and reading the
-	// profile below reports any real problem
-	_ = MigrateToProfiles()
-
-	profile := GetCurrentProfile()
-	return ReadProfile(profile)
+	detail, err := ReadDetail()
+	if err != nil {
+		return "", "", "", err
+	}
+	return detail.Username, detail.Password, detail.URL, nil
 }
 
 // Update updates the current profile's config file with encrypted data
