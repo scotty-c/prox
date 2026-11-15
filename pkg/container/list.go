@@ -7,31 +7,10 @@ import (
 
 	"github.com/jedib0t/go-pretty/v6/table"
 	c "github.com/scotty-c/prox/pkg/client"
+	"github.com/scotty-c/prox/pkg/guest"
 	"github.com/scotty-c/prox/pkg/output"
 	"github.com/scotty-c/prox/pkg/util"
 )
-
-// fetchContainerIPs looks up the IP address of every running container,
-// several at a time, and stores it in the container. Containers without a
-// known address show as N/A.
-func fetchContainerIPs(ctx context.Context, client c.ProxmoxClientInterface, containers []Container) {
-	var running []int
-	for i := range containers {
-		if containers[i].Status == "running" {
-			running = append(running, i)
-		}
-	}
-	util.ForEach(len(running), c.MaxConcurrentIPLookups, func(k int) {
-		ct := &containers[running[k]]
-		ip, err := client.GetContainerIPAlternative(ctx, ct.Node, ct.ID)
-		if err != nil || ip == "" {
-			ip = "N/A" // shown as-is in tables and in "ip"
-		} else {
-			ct.IPAddress = ip
-		}
-		ct.IP = ip
-	})
-}
 
 // ListContainers lists all LXC containers
 func ListContainers(ctx context.Context, node string, runningOnly bool, jsonOutput bool, tag string) error {
@@ -77,7 +56,7 @@ func ListContainers(ctx context.Context, node string, runningOnly bool, jsonOutp
 			continue
 		}
 
-		container := containerFromResource(resource)
+		container := guest.FromResource(resource)
 
 		containers = append(containers, container)
 	}
@@ -86,7 +65,7 @@ func ListContainers(ctx context.Context, node string, runningOnly bool, jsonOutp
 	sort.SliceStable(containers, func(i, j int) bool { return containers[i].ID < containers[j].ID })
 
 	// Fetch IP addresses concurrently for all running containers
-	fetchContainerIPs(ctx, client, containers)
+	guest.LookupIPs(ctx, containers, client.GetContainerIPAlternative)
 
 	if jsonOutput {
 		if containers == nil {
@@ -123,48 +102,21 @@ func displayContainersTable(containers []Container, runningOnly bool) {
 	t.AppendHeader(table.Row{"NAME", "ID", "STATUS", "CPU%", "MEMORY", "DISK", "UPTIME", "IP", "NODE"})
 
 	for _, container := range containers {
-		// Format memory usage
-		var memoryStr string
-		if container.MaxMemory > 0 {
-			memUsed := util.FormatSize(container.Memory)
-			memMax := util.FormatSize(container.MaxMemory)
-			memPercent := float64(container.Memory) / float64(container.MaxMemory) * 100
-			memoryStr = fmt.Sprintf("%s/%s (%.1f%%)", memUsed, memMax, memPercent)
-		} else {
-			memoryStr = "N/A"
-		}
-
 		// Format disk usage
-		var diskStr string
+		diskStr := "N/A"
 		if container.MaxDisk > 0 {
-			diskUsed := util.FormatSize(container.Disk)
-			diskMax := util.FormatSize(container.MaxDisk)
-			diskPercent := float64(container.Disk) / float64(container.MaxDisk) * 100
-			diskStr = fmt.Sprintf("%s/%s (%.1f%%)", diskUsed, diskMax, diskPercent)
-		} else {
-			diskStr = "N/A"
-		}
-
-		// Format CPU usage
-		cpuStr := fmt.Sprintf("%d%%", container.CPUs)
-		if container.CPUs == 0 {
-			cpuStr = "0%"
-		}
-
-		// Format uptime
-		uptimeStr := container.Uptime
-		if uptimeStr == "" {
-			uptimeStr = "N/A"
+			diskStr = fmt.Sprintf("%s/%s (%.1f%%)", util.FormatSize(container.Disk), util.FormatSize(container.MaxDisk),
+				float64(container.Disk)/float64(container.MaxDisk)*100)
 		}
 
 		t.AppendRow(table.Row{
 			container.Name,
 			container.ID,
 			container.Status,
-			cpuStr,
-			memoryStr,
+			container.CPUText(),
+			container.MemoryText(),
 			diskStr,
-			uptimeStr,
+			container.UptimeText(),
 			container.IP,
 			container.Node,
 		})
@@ -177,42 +129,4 @@ func displayContainersTable(containers []Container, runningOnly bool) {
 	} else {
 		output.Result("Found %d container(s)\n", len(containers))
 	}
-}
-
-// containerFromResource converts a cluster resource into a Container for
-// display and lookup
-func containerFromResource(resource c.Resource) Container {
-	ct := Container{
-		ID:      *resource.VMID,
-		Name:    resource.Name,
-		Status:  resource.Status,
-		Node:    resource.Node,
-		Tags:    resource.Tags,
-		TagList: util.SplitTags(resource.Tags),
-		IP:      "N/A", // until looked up
-	}
-	if resource.MaxMem != nil {
-		ct.MaxMemory = uint64(*resource.MaxMem)
-	}
-	if resource.Mem != nil {
-		ct.Memory = uint64(*resource.Mem)
-	}
-	if resource.MaxDisk != nil {
-		ct.MaxDisk = uint64(*resource.MaxDisk)
-	}
-	if resource.Disk != nil {
-		ct.Disk = uint64(*resource.Disk)
-	}
-	if resource.CPU != nil {
-		ct.CPUPercent = *resource.CPU * c.CPUPercentageMultiplier
-		ct.CPUs = int(ct.CPUPercent)
-	}
-	if resource.MaxCPU != nil {
-		ct.CPUCount = *resource.MaxCPU
-	}
-	if resource.Uptime != nil {
-		ct.Uptime = util.FormatUptime(*resource.Uptime)
-		ct.UptimeSeconds = *resource.Uptime
-	}
-	return ct
 }

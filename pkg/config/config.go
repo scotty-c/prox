@@ -1,7 +1,6 @@
 package config
 
 import (
-	"bufio"
 	"errors"
 	"fmt"
 	"os"
@@ -310,47 +309,11 @@ func ReadProfile(profile string) (string, string, string, error) {
 		return "", "", "", fmt.Errorf("%w: profile '%s' does not exist", apierr.ErrNoConfig, profile)
 	}
 
-	file, err := os.Open(profilePath)
+	values, fingerprint, err := readProfileFile(profilePath)
 	if err != nil {
-		return "", "", "", fmt.Errorf("failed to open profile file: %w", err)
+		return "", "", "", fmt.Errorf("failed to read profile '%s': %w", profile, err)
 	}
-	defer file.Close()
-
-	// Read the file line by line to handle comments and parse key=value pairs
-	scanner := bufio.NewScanner(file)
-	var username, password, url, fingerprint string
-
-	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-		if fp, ok := strings.CutPrefix(line, fingerprintComment); ok {
-			fingerprint = strings.TrimSpace(fp)
-			continue
-		}
-		if line == "" || strings.HasPrefix(line, "#") {
-			continue
-		}
-
-		parts := strings.SplitN(line, "=", 2)
-		if len(parts) != 2 {
-			continue
-		}
-
-		key := strings.TrimSpace(parts[0])
-		value := strings.TrimSpace(parts[1])
-
-		switch key {
-		case "username":
-			username = value
-		case "password":
-			password = value
-		case "url":
-			url = value
-		}
-	}
-
-	if err := scanner.Err(); err != nil {
-		return "", "", "", fmt.Errorf("error reading profile file: %w", err)
-	}
+	username, password, url := values["username"], values["password"], values["url"]
 
 	// Decrypt sensitive data
 	decryptedUsername, err := crypto.Decrypt(username)
@@ -442,43 +405,11 @@ func readOldConfig() (string, string, string, error) {
 	}
 	configFile := filepath.Join(home, ".prox", "config")
 
-	file, err := os.Open(configFile)
+	values, _, err := readProfileFile(configFile)
 	if err != nil {
-		return "", "", "", fmt.Errorf("failed to open config file: %w", err)
+		return "", "", "", fmt.Errorf("failed to read config file: %w", err)
 	}
-	defer file.Close()
-
-	// Read the file line by line to handle comments and parse key=value pairs
-	scanner := bufio.NewScanner(file)
-	var username, password, url string
-
-	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-		if line == "" || strings.HasPrefix(line, "#") {
-			continue
-		}
-
-		parts := strings.SplitN(line, "=", 2)
-		if len(parts) != 2 {
-			continue
-		}
-
-		key := strings.TrimSpace(parts[0])
-		value := strings.TrimSpace(parts[1])
-
-		switch key {
-		case "username":
-			username = value
-		case "password":
-			password = value
-		case "url":
-			url = value
-		}
-	}
-
-	if err := scanner.Err(); err != nil {
-		return "", "", "", fmt.Errorf("error reading config file: %w", err)
-	}
+	username, password, url := values["username"], values["password"], values["url"]
 
 	// Decrypt sensitive data
 	decryptedUsername, err := crypto.Decrypt(username)

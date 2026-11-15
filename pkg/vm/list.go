@@ -7,6 +7,7 @@ import (
 
 	"github.com/jedib0t/go-pretty/v6/table"
 	c "github.com/scotty-c/prox/pkg/client"
+	"github.com/scotty-c/prox/pkg/guest"
 	"github.com/scotty-c/prox/pkg/output"
 	"github.com/scotty-c/prox/pkg/util"
 )
@@ -19,27 +20,6 @@ type ListVMsOptions struct {
 	Detailed    bool   // Show detailed disk information (slower)
 	JSONOutput  bool   // Output as JSON instead of table
 	Tag         string // Filter by tag (empty for all VMs)
-}
-
-// fetchIPs looks up the IP address of every running VM, several at a time,
-// and stores it in the VM. VMs without a known address show as N/A.
-func fetchIPs(ctx context.Context, client c.ProxmoxClientInterface, vms []VM) {
-	var running []int
-	for i := range vms {
-		if vms[i].Status == "running" {
-			running = append(running, i)
-		}
-	}
-	util.ForEach(len(running), c.MaxConcurrentIPLookups, func(k int) {
-		vm := &vms[running[k]]
-		ip, err := client.GetVMIP(ctx, vm.Node, vm.ID)
-		if err != nil || ip == "" {
-			ip = "N/A" // shown as-is in tables and in "ip"
-		} else {
-			vm.IPAddress = ip
-		}
-		vm.IP = ip
-	})
 }
 
 // ListVMs lists virtual machines with the provided options
@@ -86,7 +66,7 @@ func ListVMs(ctx context.Context, opts ListVMsOptions) error {
 			continue
 		}
 
-		vm := vmFromResource(resource)
+		vm := guest.FromResource(resource)
 
 		// Use detailed disk info if requested (slower but more accurate)
 		if opts.Detailed && (vm.MaxDisk == 0 || vm.Disk == 0) {
@@ -108,7 +88,7 @@ func ListVMs(ctx context.Context, opts ListVMsOptions) error {
 
 	// Fetch IPs concurrently if requested (for performance)
 	if opts.ShowIPs && len(vms) > 0 {
-		fetchIPs(ctx, client, vms)
+		guest.LookupIPs(ctx, vms, client.GetVMIP)
 	}
 
 	if opts.JSONOutput {
@@ -171,41 +151,18 @@ func displayVMsTable(vms []VM, runningOnly bool, showIPs bool, showDisk bool) {
 	t.AppendHeader(table.Row(header))
 
 	for _, vm := range vms {
-		// Format memory usage
-		var memoryStr string
-		if vm.MaxMemory > 0 {
-			memUsed := util.FormatSize(vm.Memory)
-			memMax := util.FormatSize(vm.MaxMemory)
-			memPercent := float64(vm.Memory) / float64(vm.MaxMemory) * 100
-			memoryStr = fmt.Sprintf("%s/%s (%.1f%%)", memUsed, memMax, memPercent)
-		} else {
-			memoryStr = "N/A"
-		}
-
 		// Format disk usage (only if showing disk column)
 		var diskStr string
 		if showDisk {
 			diskStr = formatDiskUsage(vm.Disk, vm.MaxDisk)
 		}
 
-		// Format CPU usage
-		cpuStr := fmt.Sprintf("%d%%", vm.CPUs)
-		if vm.CPUs == 0 {
-			cpuStr = "0%"
-		}
-
-		// Format uptime
-		uptimeStr := vm.Uptime
-		if uptimeStr == "" {
-			uptimeStr = "N/A"
-		}
-
 		// Build row dynamically based on flags
-		row := []interface{}{vm.Name, vm.ID, vm.Status, cpuStr, memoryStr}
+		row := []interface{}{vm.Name, vm.ID, vm.Status, vm.CPUText(), vm.MemoryText()}
 		if showDisk {
 			row = append(row, diskStr)
 		}
-		row = append(row, uptimeStr)
+		row = append(row, vm.UptimeText())
 		if showIPs {
 			row = append(row, vm.IP)
 		}

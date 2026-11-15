@@ -1,7 +1,6 @@
 package config
 
 import (
-	"bufio"
 	"fmt"
 	"os"
 	"strconv"
@@ -30,29 +29,16 @@ func ReadTLSOptions(profile string) (TLSOptions, error) {
 	if err != nil {
 		return opts, err
 	}
-	file, err := os.Open(path)
+	values, _, err := readProfileFile(path)
 	if os.IsNotExist(err) {
 		return opts, nil
 	}
 	if err != nil {
-		return opts, fmt.Errorf("failed to open profile file: %w", err)
+		return opts, fmt.Errorf("failed to read profile file: %w", err)
 	}
-	defer file.Close()
-
-	scanner := bufio.NewScanner(file)
-	for scanner.Scan() {
-		key, value, ok := strings.Cut(strings.TrimSpace(scanner.Text()), "=")
-		if !ok {
-			continue
-		}
-		switch strings.TrimSpace(key) {
-		case insecureKey:
-			opts.Insecure, _ = strconv.ParseBool(strings.TrimSpace(value))
-		case caCertKey:
-			opts.CACert = strings.TrimSpace(value)
-		}
-	}
-	return opts, scanner.Err()
+	opts.Insecure, _ = strconv.ParseBool(values[insecureKey])
+	opts.CACert = values[caCertKey]
+	return opts, nil
 }
 
 // SetTLSOptions saves TLS settings in an existing profile, keeping everything else

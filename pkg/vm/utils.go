@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	c "github.com/scotty-c/prox/pkg/client"
+	"github.com/scotty-c/prox/pkg/guest"
 	"github.com/scotty-c/prox/pkg/lookup"
 	"github.com/scotty-c/prox/pkg/util"
 )
@@ -21,45 +22,8 @@ func FindByNameOrIDOnNode(ctx context.Context, client c.ProxmoxClientInterface, 
 	if err != nil {
 		return nil, err
 	}
-	vm := vmFromResource(resource)
+	vm := guest.FromResource(resource)
 	return &vm, nil
-}
-
-// vmFromResource converts a cluster resource into a VM for display and lookup
-func vmFromResource(resource c.Resource) VM {
-	vm := VM{
-		ID:      *resource.VMID,
-		Name:    resource.Name,
-		Status:  resource.Status,
-		Node:    resource.Node,
-		Tags:    resource.Tags,
-		TagList: util.SplitTags(resource.Tags),
-		IP:      "N/A", // until looked up (and only on request)
-	}
-	if resource.MaxMem != nil {
-		vm.MaxMemory = uint64(*resource.MaxMem)
-	}
-	if resource.Mem != nil {
-		vm.Memory = uint64(*resource.Mem)
-	}
-	if resource.MaxDisk != nil {
-		vm.MaxDisk = uint64(*resource.MaxDisk)
-	}
-	if resource.Disk != nil {
-		vm.Disk = uint64(*resource.Disk)
-	}
-	if resource.CPU != nil {
-		vm.CPUPercent = *resource.CPU * c.CPUPercentageMultiplier
-		vm.CPUs = int(vm.CPUPercent)
-	}
-	if resource.MaxCPU != nil {
-		vm.CPUCount = *resource.MaxCPU
-	}
-	if resource.Uptime != nil {
-		vm.Uptime = util.FormatUptime(*resource.Uptime)
-		vm.UptimeSeconds = *resource.Uptime
-	}
-	return vm
 }
 
 // FindByTag returns the VMs that have tag, optionally only on node
@@ -71,7 +35,7 @@ func FindByTag(ctx context.Context, client c.ProxmoxClientInterface, tag, node s
 	var vms []VM
 	for _, r := range resources {
 		if r.Type == "qemu" && r.VMID != nil && util.HasTag(r.Tags, tag) && (node == "" || r.Node == node) {
-			vms = append(vms, vmFromResource(r))
+			vms = append(vms, guest.FromResource(r))
 		}
 	}
 	return vms, nil
