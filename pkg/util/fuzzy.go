@@ -1,6 +1,7 @@
 package util
 
 import (
+	"sort"
 	"strings"
 )
 
@@ -50,20 +51,6 @@ func levenshteinDistance(s1, s2 string) int {
 	return d[m][n]
 }
 
-// min returns the minimum of three integers
-func min(a, b, c int) int {
-	if a < b {
-		if a < c {
-			return a
-		}
-		return c
-	}
-	if b < c {
-		return b
-	}
-	return c
-}
-
 // FindSimilarStrings finds strings similar to the target using fuzzy matching
 // Returns up to maxResults strings sorted by similarity (most similar first)
 func FindSimilarStrings(target string, candidates []string, maxResults int) []string {
@@ -111,14 +98,8 @@ func FindSimilarStrings(target string, candidates []string, maxResults int) []st
 		}
 	}
 
-	// Sort by distance (most similar first)
-	for i := 0; i < len(matches); i++ {
-		for j := i + 1; j < len(matches); j++ {
-			if matches[j].distance < matches[i].distance {
-				matches[i], matches[j] = matches[j], matches[i]
-			}
-		}
-	}
+	// Most similar first; ties keep the order they were given in
+	sort.SliceStable(matches, func(i, j int) bool { return matches[i].distance < matches[j].distance })
 
 	// Return up to maxResults
 	var results []string

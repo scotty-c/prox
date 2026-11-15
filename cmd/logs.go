@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/scotty-c/prox/pkg/client"
@@ -134,30 +135,12 @@ func followTaskLogs(ctx context.Context, c client.ProxmoxClientInterface, node, 
 	return nil
 }
 
+// parseUPIDNode returns the node a task ran on. A UPID looks like
+// UPID:node:pid:pstart:starttime:type:id:user:
 func parseUPIDNode(upid string) (string, error) {
-	// UPID format: UPID:node:pid:pstart:starttime:type:id:user:
-	// We need to extract the node part
-	parts := []rune{}
-	colonCount := 0
-
-	for _, char := range upid {
-		if char == ':' {
-			colonCount++
-			if colonCount == 2 {
-				// We've collected the node part
-				break
-			}
-			continue
-		}
-
-		if colonCount == 1 {
-			parts = append(parts, char)
-		}
-	}
-
-	if len(parts) == 0 {
+	parts := strings.Split(upid, ":")
+	if len(parts) < 2 || parts[0] != "UPID" || parts[1] == "" {
 		return "", fmt.Errorf("invalid UPID format: expected UPID:node:... got %s", upid)
 	}
-
-	return string(parts), nil
+	return parts[1], nil
 }

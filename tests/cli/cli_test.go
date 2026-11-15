@@ -972,3 +972,28 @@ func TestTextModeIsUnchangedByTheStructuredOption(t *testing.T) {
 		t.Errorf("text mode printed JSON:\n%s", r.stdout)
 	}
 }
+
+// ct create --node
+
+func TestContainerCreateOnANodeWithoutTheTemplateFailsInsteadOfMovingNodes(t *testing.T) {
+	srv := fakepve.New(t)
+	r := run(t, srv, "", "ct", "create", "web2", "debian:12", "--node", "pve2")
+	if r.code != 1 {
+		t.Errorf("exit %d, want 1", r.code)
+	}
+	contains(t, "stderr", r.stderr, "is not on node pve2", "it is on pve1", "prox ct templates pull", "--node pve2")
+	if srv.Count("POST", "/nodes/") != 0 {
+		t.Errorf("nothing should have been created: %v", srv.Requests())
+	}
+}
+
+func TestContainerCreateOnTheNodeThatHasTheTemplateWorks(t *testing.T) {
+	srv := fakepve.New(t)
+	r := run(t, srv, "", "ct", "create", "web2", "debian:12", "--node", "pve1")
+	if r.code != 0 {
+		t.Fatalf("exit %d: %s", r.code, r.stderr)
+	}
+	if srv.Count("POST", "/nodes/pve1/lxc") != 1 {
+		t.Errorf("container should be created on pve1: %v", srv.Requests())
+	}
+}

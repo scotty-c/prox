@@ -60,11 +60,12 @@ func CreateContainerWithOptions(ctx context.Context, opts CreateOptions) error {
 		node = resolvedTemplate.Node
 		output.Info("Using node: %s (where template is located)\n", node)
 	} else {
-		// If user specified a node, verify the template exists on that node
+		// The user chose a node, so don't quietly create the container on
+		// another one. With shared template storage the template is found on
+		// every node, so this only triggers when it really is not there.
 		if node != resolvedTemplate.Node {
-			output.Error("WARNING: Template is on node %s, but you specified node %s. Using template's node %s\n",
-				resolvedTemplate.Node, node, resolvedTemplate.Node)
-			node = resolvedTemplate.Node
+			return fmt.Errorf("template %s is not on node %s (it is on %s); download it there with 'prox ct templates pull %s --node %s', or leave out --node to use %s",
+				template, node, resolvedTemplate.Node, template, node, resolvedTemplate.Node)
 		}
 		output.Info("Using node: %s\n", node)
 	}

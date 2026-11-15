@@ -4,132 +4,81 @@ This document explains how Prox is structured so you can navigate, extend, and t
 
 ## High-level Design
 
-Prox is a thin CLI layer (Cobra) over a modular domain layer that wraps the Proxmox VE API. Responsibilities are deliberately separated:
+Prox is a Cobra CLI over packages that wrap the Proxmox VE API. A command parses its flags and calls a package; the package does the work and prints the result; any error is returned to `main`, which reports it once.
 
-| Layer | Responsibility |
-|-------|----------------|
-| `cmd/` | CLI command wiring, flags, argument parsing, human UX formatting orchestration only |
-| `pkg/client/` | HTTP + auth + session handling + low-level endpoint helpers |
-| `pkg/vm/` | VM-centric operations (lifecycle, clone, migrate, describe, list, edit) + task wait helpers |
-| `pkg/container/` | LXC lifecycle + creation + template resolution + SSH key validation |
-| `pkg/config/` | Secure config persistence (encryption, migration) |
-| `pkg/conversion/` | Format & unit conversions for display |
-| `tests/` | Unit + E2E harness (bash driven) |
+| Package | Responsibility |
+|---------|----------------|
+| `cmd/` (`cmd/vm`, `cmd/ct`, `cmd/config`, `cmd/node`) | Command wiring: flags, arguments, completion hooks. Commands are `RunE` and return errors; they do not print errors or call `os.Exit`. |
+| `pkg/client` | HTTP, authentication (ticket or API token), TLS, typed API calls, task polling |
+| `pkg/apierr` | Error kinds (`ErrUnreachable`, `ErrAuth`, `ErrPermission`, `ErrCertificate`, `ErrNoConfig`, `ErrNotFound`, `ErrAmbiguous`) used with `errors.Is` |
+| `pkg/lookup` | Finding a VM or container by name or ID (shared by both), and the "is this ID free?" check |
+| `pkg/vm`, `pkg/container` | Operations on VMs and containers: lifecycle, clone, migrate, edit, describe, list, create, templates. They print their own tables and result lines through `pkg/output`. |
+| `pkg/snapshot` | Snapshot commands for both VMs and containers (one implementation, parameterised by guest type) |
+| `pkg/node` | Node listing details |
+| `pkg/cmdutil` | Helpers shared by commands: wait flags, `FinishTask`, confirmation prompts, bulk (`--tag`) operations, running `ssh` |
+| `pkg/completion` | Shell completion (names, IDs, nodes, profiles) |
+| `pkg/config`, `pkg/crypto` | Profiles under `~/.prox/profiles/` with encrypted credentials |
+| `pkg/output` | Everything that writes to the terminal: results, progress, errors with tips, spinners, `-o json/yaml` |
+| `pkg/sshconfig` | Editing `~/.ssh/config` without disturbing the rest of the file |
+| `pkg/util` | Small shared helpers (size and uptime formatting, fuzzy matching, tags, a bounded worker pool) |
+| `internal/fakepve` | A fake Proxmox API for tests |
+| `tests/cli`, `tests/e2e` | Tests that run the real binary (against the fake, and against a real cluster) |
 
 Guiding principles:
 - Single responsibility per file/package
-- Shallow, composable functions (prefer small orchestrators over deep inheritance trees)
-- Deterministic output & explicit errors
-- Human friendly CLI output (tables) separated from core logic
+- Shallow, composable functions
+- One implementation for VMs and containers where Proxmox treats them alike (`lookup`, `snapshot`, `cmdutil`)
+- Errors are values: returned, wrapped, classified with `errors.Is`, and printed once
 
 ## Data Flow (Typical Command)
-1. Cobra command receives positional args & flags.
-2. Command constructs / loads config (lazy decrypt).
-3. Client authenticates or reuses ticket.
-4. Domain package (vm/container) performs operation (start, list, etc.).
-5. Domain returns structured data (structs) NOT formatted strings.
-6. Command layer formats for terminal (tables, lines) and exits with appropriate code.
+1. `cmd.Execute` creates a context that Ctrl-C cancels and runs the Cobra command.
+2. `PersistentPreRunE` applies the global flags (`--profile`, `--output`, `--insecure`, `--timeout`, `--quiet`).
+3. The command's `RunE` calls a package function with `cmd.Context()`.
+4. The package asks `client.CreateClient()` for the run's client. The first call reads the configuration (environment variables, else the current profile) and builds the client; later calls return the same one. The client logs in lazily on its first request and logs in again once if the ticket has expired.
+5. The package finds the target with `lookup`, calls the API, waits for the task if asked (`cmdutil.FinishTask`), and prints the result.
+6. A failure is returned up. `Execute` prints it once, with a tip chosen from the error's kind, and exits 1 (130 after Ctrl-C).
 
-## Packages
+## Output Rules
+- **stdout is the result** (a table, a line such as `VM web (ID 100) started in 1.2s`, or JSON/YAML). **stderr is everything else**: progress (`output.Info`), warnings, errors and tips. Piping a command therefore gives only its result.
+- `--quiet` silences progress. `-o json` and `-o yaml` make list/describe commands print structured data, and commands that start a Proxmox task print one `TaskResult` object (see the README). Machine-friendly fields are added next to the human-formatted ones, never in place of them.
+- Tables are rendered in the packages that own the data, with `go-pretty`.
 
-### `pkg/client`
-Responsibilities:
-- Build & issue HTTP requests (GET/POST/DELETE) to Proxmox API
-- Session ticket / CSRF management
-- Error normalization (convert HTTP / API errors into Go `error`)
-- Thin typed helpers around common endpoints
+## Errors
+- Fail fast: return errors upward, wrapping them with what was being done (`fmt.Errorf("start failed: %w", err)`).
+- The client classifies failures with the kinds in `pkg/apierr` (an unreachable server is not an authentication failure). `output.Fail` picks the tip from the kind, never by searching the message text.
+- Lookup failures say whether a name was not found or is ambiguous, and include suggestions.
+- Prompts that cannot be answered (stdin closed) are errors that name the flag to pass (`--yes`), not a silent "no".
 
-Key concepts:
-- Minimal caching (stateless for predictability)
-- Central place to update API schema changes
+## Context and Cancellation
+`cmd.Context()` reaches every API request, so Ctrl-C stops whatever is in flight. Waiting for a task has its own message: the task keeps running on the server and the error shows the `prox logs --follow` command. `--timeout` bounds only the wait.
 
-### `pkg/vm`
-Responsibilities:
-- VM lifecycle (start, shutdown, delete)
-- Clone (full vs linked)
-- Migration (online/offline, local disk flag) with task status polling
-- Describe (rich aggregation: config, resources, IP detection)
-- Edit (CPU, memory, rename, etc.)
-- Listing (table-friendly slice)
+## The Client (`pkg/client`)
+- Password logins use a ticket and CSRF token; usernames containing `!` are API tokens and send an `Authorization` header instead.
+- TLS is verified unless `--insecure`/`PROX_INSECURE`/the profile says otherwise; a CA file can be trusted with `--ca-cert`.
+- Responses are decoded straight into types (`requestData[T]`). A missing task ID or config is an error, not an empty value. Some values arrive as strings or numbers depending on the Proxmox version, so `ConfigNumber`/`ConfigFlag` accept both.
+- The cluster listing (needed by every name lookup) is fetched once and kept for ten seconds; `ClearClusterResourcesCache` forgets it after a command creates a guest.
+- "Unknown" is the empty string (an IP address that cannot be found, for example). The packages that display it decide how to show it (`N/A`).
 
-Implementation notes:
-- Uses Proxmox task IDs: `waitForTask` polls until completion or timeout
-- IP resolution tries guest agent, then network config fallbacks
-- Separation between fetch stage and render stage to enable reuse by tests or future APIs (JSON output possibility)
-
-### `pkg/container`
-Responsibilities:
-- Container lifecycle: start, stop
-- Create (template lookup, resource params, SSH keys injection)
-- Describe & list operations
-- Template shortcuts (e.g. `ubuntu:22.04`) mapped to actual storage paths
-- SSH key validation (length, format, supported types) before submission
-
-### `pkg/config`
-Responsibilities:
-- Persist credentials & URL to `~/.prox/config`
-- Encrypt/decrypt sensitive fields (AES-256-GCM)
-- Detect & migrate legacy plaintext
-- Expose simple load/save API returning domain struct
-
-### `pkg/conversion`
-Utility helpers for:
-- Human size formatting (MiB, GiB)
-- Duration / uptime formatting
-- Percentage & resource usage conversions
-
-### CLI (`cmd/`)
-Per resource group subfolder holds cohesive commands:
-- `vm` commands attach verbs (list, start, clone, migrate ...)
-- `ct` (containers) commands for list, templates, create, describe, start/stop
-- `config` commands for setup/read/update/delete/migrate
-
-Design rules:
-- Keep logic minimal; delegate to packages
-- Only assemble arguments, call domain, format output
-
-## Error Handling Strategy
-- Fail fast: return errors upward; CLI prints concise message
-- Wrap context (e.g., VM ID, node) in errors for clarity
-- User-level messages avoid leaking raw HTTP internals unless helpful
-- Exit codes: non-zero on operational failure; 0 when expected errors are part of tests (handled in E2E harness separately)
-
-## Security Model
-- Encryption key derivation ties config file to host/user
-- Only credentials (username/password) encrypted; URL stays plaintext
-- File perms enforced (600)
-- See `docs/SECURITY.md` for details
-
-## Migration Flow (VM)
-Short path for `prox vm migrate <id> <target>`:
-1. Auto-discover source node (if omitted)
-2. Validate target (and local disk flag if provided)
-3. Fire migration task (online/offline)
-4. Poll task -> progress -> final status
-5. Return success / error
+## Configuration and Security
+- Profiles live in `~/.prox/profiles/<name>`; `current-profile` names the active one. Only the username and password are encrypted (AES-256-GCM, key derived from user and host); the URL and TLS settings are plain text. Files are written 0600 through a temporary file and a rename.
+- Environment variables (`PROX_URL`, `PROX_USER`, `PROX_PASSWORD`) take precedence over a profile when all three are set.
+- See `docs/SECURITY.md` for the threat model.
 
 ## Extensibility Guidelines
-When adding a new feature:
-1. Add core logic in domain package (return structs)
-2. Add Cobra command wiring
-3. Provide tests (unit or E2E) exercising success + failure path
-4. Update docs if user-facing
+When adding a command:
+1. Put the logic in the package that owns the resource, taking a `context.Context` first.
+2. Find targets with `lookup`, end task commands with `cmdutil.FinishTask`, and return errors instead of printing them.
+3. Wire the Cobra command as `RunE`, with completion and `--wait`/`--no-wait` or `--yes` flags as appropriate (`cmdutil.AddWaitFlags`, `AddYesFlag`).
+4. Add a test in `tests/cli` that runs the command against `internal/fakepve` and checks output, exit code and the requests made. Extend the fake if the endpoint is missing.
+5. Update the README if it is user-facing.
 
 Avoid:
-- Embedding formatting inside logic packages
-- Hidden global state
-- Exporting unnecessary symbols
+- Printing errors from a package, or calling `os.Exit` outside `cmd.Execute` and the `ssh` exit-code passthrough
+- Writing progress to stdout
+- Package-level mutable state (the few process-wide settings set once from flags are the exception)
+- Exporting symbols nothing outside the package uses
 
 ## Testing Layers
-- Unit: fast validation of parsing, key validation, conversions
-- E2E: real cluster operations (parallelizable sections, resource cleanup, leftover detection)
-- Future: potential JSON output mode for machine verification
-
-## Future Improvements (Ideas)
-- JSON output flag for automation
-- Parallel multi-VM operations (batch start/stop)
-- Structured logging (debug JSON mode)
-- Pluggable credential providers (env vault / secret store)
-
----
-This should give you enough context to confidently navigate & extend Prox.
+- **Unit** (`go test ./pkg/...`): parsing, formatting, lookup, client decoding against `httptest`.
+- **CLI** (`tests/cli`): the real binary against `internal/fakepve`; see `docs/TESTING.md`.
+- **E2E** (`tests/e2e`): real cluster operations, driven by a bash harness.

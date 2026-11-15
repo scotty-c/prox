@@ -34,7 +34,7 @@ Key capabilities:
 - Modular Go codebase (easy to extend) + Makefile automation
 
 ## Install
-Prereqs: Go 1.21.6+, access to Proxmox VE.
+Prereqs: Go 1.23+, access to Proxmox VE.
 ```bash
 git clone https://github.com/scotty-c/prox.git
 cd prox
