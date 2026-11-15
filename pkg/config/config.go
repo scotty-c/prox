@@ -6,10 +6,12 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/scotty-c/prox/pkg/apierr"
 	"github.com/scotty-c/prox/pkg/crypto"
 	"github.com/scotty-c/prox/pkg/output"
+	"github.com/scotty-c/prox/pkg/secrets"
 )
 
 // Config writes a local file to $HOME/.prox/config to hold sensitive information
@@ -155,6 +157,7 @@ type ProfileInfo struct {
 	URL     string
 	User    string
 	Current bool
+	Storage string // how the credentials are protected: keychain, key file, legacy, plain text
 	Error   string
 }
 
@@ -168,11 +171,11 @@ func ProfileInfos() ([]ProfileInfo, error) {
 	infos := make([]ProfileInfo, 0, len(names))
 	for _, name := range names {
 		info := ProfileInfo{Name: name, Current: name == current}
-		user, _, url, err := ReadProfile(name)
+		detail, err := OpenProfile(name)
 		if err != nil {
 			info.Error = err.Error()
 		} else {
-			info.User, info.URL = user, url
+			info.User, info.URL, info.Storage = detail.Username, detail.URL, string(detail.Method)
 		}
 		infos = append(infos, info)
 	}
@@ -189,48 +192,84 @@ func ProfileExists(profile string) bool {
 	return err == nil
 }
 
-// CreateProfile creates a new profile with the given credentials
+// CreateProfile creates a profile with the given credentials, or replaces the
+// credentials of an existing one (keeping its TLS settings). The credentials
+// are protected by package secrets: in the OS keychain when there is one,
+// otherwise sealed with a key file.
 func CreateProfile(profile, username, password, url string) error {
+	_, err := createProfile(profile, username, password, url)
+	return err
+}
+
+// SaveProfile is CreateProfile, also reporting how the credentials were
+// protected so the caller can tell the user
+func SaveProfile(profile, username, password, url string) (secrets.Method, error) {
+	return createProfile(profile, username, password, url)
+}
+
+// DescribeMethod says in a sentence where credentials protected by method live
+func DescribeMethod(m secrets.Method) string {
+	switch m {
+	case secrets.MethodKeychain:
+		return "in the OS keychain"
+	case secrets.MethodKeyFile:
+		return "sealed with a key file"
+	}
+	return "using the " + string(m) + " scheme"
+}
+
+// createProfile is CreateProfile, also reporting how the credentials were
+// protected
+func createProfile(profile, username, password, url string) (secrets.Method, error) {
 	if profile == "" {
-		return fmt.Errorf("profile name cannot be empty")
+		return "", fmt.Errorf("profile name cannot be empty")
 	}
 
 	profilePath, err := GetProfilePath(profile)
 	if err != nil {
-		return err
+		return "", err
 	}
+	_, statErr := os.Stat(profilePath)
+	existed := statErr == nil
 
 	// Ensure profiles directory exists
 	profilesDir := filepath.Dir(profilePath)
 	if err := os.MkdirAll(profilesDir, 0700); err != nil {
-		return fmt.Errorf("failed to create profiles directory: %w", err)
+		return "", fmt.Errorf("failed to create profiles directory: %w", err)
 	}
 
-	// Encrypt sensitive data
-	encryptedUsername, err := crypto.Encrypt(username)
+	sealed, err := secrets.Seal(profile, secrets.Credentials{Username: username, Password: password})
 	if err != nil {
-		return fmt.Errorf("failed to encrypt username: %w", err)
+		return "", fmt.Errorf("failed to protect the credentials: %w", err)
 	}
-
-	encryptedPassword, err := crypto.Encrypt(password)
-	if err != nil {
-		return fmt.Errorf("failed to encrypt password: %w", err)
+	if sealed.Note != "" {
+		output.Errorln("Note: " + sealed.Note)
 	}
 
 	// Keep TLS settings from an existing profile with the same name
 	tlsOpts, _ := ReadTLSOptions(profile)
 
 	var content strings.Builder
-	fmt.Fprintf(&content, "username=%s\n", encryptedUsername)
-	fmt.Fprintf(&content, "password=%s\n", encryptedPassword)
+	if marker, ok := sealed.Entries["credentials"]; ok {
+		fmt.Fprintf(&content, "credentials=%s\n", marker)
+	} else {
+		fmt.Fprintf(&content, "username=%s\n", sealed.Entries["username"])
+		fmt.Fprintf(&content, "password=%s\n", sealed.Entries["password"])
+	}
 	fmt.Fprintf(&content, "url=%s\n", url)
 	writeTLSOptions(&content, tlsOpts)
+	if sealed.Fingerprint != "" {
+		// helps diagnose a key file that has been replaced
+		fmt.Fprintf(&content, "%s %s\n", fingerprintComment, sealed.Fingerprint)
+	}
 
-	// Add a marker to indicate this config uses encryption
-	fingerprint, _ := crypto.GetKeyFingerprint()
-	fmt.Fprintf(&content, "%s %s\n", fingerprintComment, fingerprint)
-
-	return writeProfileFile(profilePath, content.String())
+	if err := writeProfileFile(profilePath, content.String()); err != nil {
+		if !existed {
+			_ = secrets.Forget(profile, sealed.Entries) // don't leave an orphaned keychain item
+		}
+		return "", err
+	}
+	return sealed.Method, nil
 }
 
 // writeProfileFile writes a profile with 0600 permissions from the start, via
@@ -260,12 +299,15 @@ func writeProfileFile(path, content string) error {
 	return nil
 }
 
-// DeleteProfile deletes a profile
+// DeleteProfile deletes a profile, including its keychain item if it has one
 func DeleteProfile(profile string) error {
 	profilePath, err := GetProfilePath(profile)
 	if err != nil {
 		return err
 	}
+
+	// what the profile says about where its credentials are, before it goes
+	entries, _, _ := readProfileFile(profilePath)
 
 	if err := os.Remove(profilePath); err != nil {
 		return fmt.Errorf("failed to delete profile: %w", err)
@@ -281,6 +323,9 @@ func DeleteProfile(profile string) error {
 		}
 	}
 
+	if err := secrets.Forget(profile, entries); err != nil {
+		return fmt.Errorf("the profile was deleted, but %w", err)
+	}
 	return nil
 }
 
@@ -298,36 +343,57 @@ func currentProfileSetting() string {
 	return strings.TrimSpace(string(data))
 }
 
-// ReadProfile reads a specific profile's configuration
-func ReadProfile(profile string) (string, string, string, error) {
+// ProfileDetail is a saved profile with its credentials opened
+type ProfileDetail struct {
+	Username string
+	Password string
+	URL      string
+	Method   secrets.Method // how the credentials are protected
+}
+
+// OpenProfile reads a profile and opens its credentials, whichever way they
+// were protected
+func OpenProfile(profile string) (ProfileDetail, error) {
 	profilePath, err := GetProfilePath(profile)
 	if err != nil {
-		return "", "", "", err
+		return ProfileDetail{}, err
 	}
 
 	if _, err := os.Stat(profilePath); os.IsNotExist(err) {
-		return "", "", "", fmt.Errorf("%w: profile '%s' does not exist", apierr.ErrNoConfig, profile)
+		return ProfileDetail{}, fmt.Errorf("%w: profile '%s' does not exist", apierr.ErrNoConfig, profile)
 	}
 
 	values, fingerprint, err := readProfileFile(profilePath)
 	if err != nil {
-		return "", "", "", fmt.Errorf("failed to read profile '%s': %w", profile, err)
+		return ProfileDetail{}, fmt.Errorf("failed to read profile '%s': %w", profile, err)
 	}
-	username, password, url := values["username"], values["password"], values["url"]
 
-	// Decrypt sensitive data
-	decryptedUsername, err := crypto.Decrypt(username)
+	creds, method, err := secrets.Open(profile, values)
 	if err != nil {
-		return "", "", "", decryptError(profile, fingerprint, err)
+		if errors.Is(err, crypto.ErrWrongKey) { // the older scheme, tied to the host name
+			return ProfileDetail{}, decryptError(profile, fingerprint, err)
+		}
+		return ProfileDetail{}, err
 	}
-
-	decryptedPassword, err := crypto.Decrypt(password)
-	if err != nil {
-		return "", "", "", decryptError(profile, fingerprint, err)
-	}
-
-	return decryptedUsername, decryptedPassword, url, nil
+	return ProfileDetail{Username: creds.Username, Password: creds.Password, URL: values["url"], Method: method}, nil
 }
+
+// ReadProfile reads a specific profile's configuration
+func ReadProfile(profile string) (string, string, string, error) {
+	detail, err := OpenProfile(profile)
+	if err != nil {
+		return "", "", "", err
+	}
+	if detail.Method == secrets.MethodLegacy || detail.Method == secrets.MethodPlaintext {
+		legacyNote.Do(func() {
+			output.Info("Note: the credentials of profile '%s' use the old storage scheme (%s). Run 'prox config migrate' to move them into the keychain.\n", profile, detail.Method)
+		})
+	}
+	return detail.Username, detail.Password, detail.URL, nil
+}
+
+// legacyNote makes the nudge to migrate appear once per run
+var legacyNote sync.Once
 
 // fingerprintComment is the comment written to profile files recording the key fingerprint
 const fingerprintComment = "# Encrypted config - key fingerprint:"
@@ -444,18 +510,20 @@ func Check() bool {
 	return true
 }
 
-// Create writes a config for the current profile with encrypted credentials
-func Create(username string, password string, url string) error {
+// Create writes a config for the current profile, makes it the current
+// profile, and reports how the credentials were protected
+func Create(username string, password string, url string) (secrets.Method, error) {
 	profile := GetCurrentProfile()
-	if err := CreateProfile(profile, username, password, url); err != nil {
-		return err
+	method, err := SaveProfile(profile, username, password, url)
+	if err != nil {
+		return "", err
 	}
 
 	// Make it the current profile. Failure here is not fatal: the profile
 	// was created, and GetCurrentProfile already resolves to it.
 	_ = SetCurrentProfile(profile)
 
-	return nil
+	return method, nil
 }
 
 // Read reads the current profile's config file and decrypts sensitive data
@@ -507,67 +575,82 @@ func Update(username string, password string, url string) error {
 	return nil
 }
 
-// MigrateConfig migrates an existing plain text config to encrypted format
-func MigrateConfig() error {
-	if !Check() {
-		return fmt.Errorf("config file does not exist")
-	}
-
-	// Try to read with the new method first
-	username, password, url, err := Read()
-	if err != nil {
-		// If new read fails, try legacy read and migrate
-		legacyUsername, legacyPassword, legacyURL := readLegacy()
-		if legacyUsername == "" && legacyPassword == "" && legacyURL == "" {
-			return fmt.Errorf("failed to read config in any format")
-		}
-
-		// Create new encrypted config
-		if err := Create(legacyUsername, legacyPassword, legacyURL); err != nil {
-			return fmt.Errorf("failed to migrate config: %w", err)
-		}
-
-		output.Resultln("Config migrated to encrypted format")
-		return nil
-	}
-
-	// If we can read it successfully, check if it needs encryption
-	_, wasEncrypted1, err := crypto.MigrateToEncrypted(username)
-	if err != nil {
-		return fmt.Errorf("failed to encrypt username: %w", err)
-	}
-
-	_, wasEncrypted2, err := crypto.MigrateToEncrypted(password)
-	if err != nil {
-		return fmt.Errorf("failed to encrypt password: %w", err)
-	}
-
-	if wasEncrypted1 || wasEncrypted2 {
-		// Re-create config with encrypted values
-		if err := Create(username, password, url); err != nil {
-			return fmt.Errorf("failed to update config with encryption: %w", err)
-		}
-		output.Resultln("Config updated with encryption")
-	}
-
-	return nil
+// UpgradeResult is what happened to one profile in UpgradeProfiles
+type UpgradeResult struct {
+	Profile string
+	From    secrets.Method
+	To      secrets.Method // the same as From if nothing was done
+	Err     error
 }
 
-// readLegacy reads config in the old plain text format
-func readLegacy() (string, string, string) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", "", ""
+// UpgradeProfiles moves profiles whose credentials use an old scheme (a key
+// derived from the user and host name, or plain text) to the current one: the
+// keychain, or the key file where there is none. only names one profile; ""
+// means all of them.
+//
+// Each profile is checked after it is written: its credentials must read back
+// the same, or the original file is put back and the new keychain item
+// removed, so a failed upgrade leaves the profile as it was.
+func UpgradeProfiles(only string) ([]UpgradeResult, error) {
+	names := []string{only}
+	if only == "" {
+		var err error
+		if names, err = ListProfiles(); err != nil {
+			return nil, err
+		}
 	}
-	configFile := filepath.Join(home, ".prox", "config")
 
-	file, err := os.Open(configFile)
-	if err != nil {
-		return "", "", ""
+	var results []UpgradeResult
+	for _, name := range names {
+		results = append(results, upgradeProfile(name))
 	}
-	defer file.Close()
+	return results, nil
+}
 
-	var username, password, url string
-	_, _ = fmt.Fscanf(file, "username=%s\npassword=%s\nurl=%s\n", &username, &password, &url)
-	return username, password, url
+func upgradeProfile(profile string) UpgradeResult {
+	result := UpgradeResult{Profile: profile}
+
+	before, err := OpenProfile(profile)
+	if err != nil {
+		result.Err = err
+		return result
+	}
+	result.From, result.To = before.Method, before.Method
+	if before.Method.Current() {
+		return result // already protected properly
+	}
+
+	path, err := GetProfilePath(profile)
+	if err != nil {
+		result.Err = err
+		return result
+	}
+	original, err := os.ReadFile(path)
+	if err != nil {
+		result.Err = fmt.Errorf("failed to read profile '%s': %w", profile, err)
+		return result
+	}
+
+	method, err := createProfile(profile, before.Username, before.Password, before.URL)
+	if err != nil {
+		// the original file is untouched; don't leave a keychain item behind
+		_ = secrets.Forget(profile, map[string]string{"credentials": "keychain"})
+		result.Err = err
+		return result
+	}
+
+	// Read it back before trusting it
+	after, err := OpenProfile(profile)
+	if err != nil || after.Username != before.Username || after.Password != before.Password || after.URL != before.URL {
+		if err == nil {
+			err = fmt.Errorf("the credentials did not read back the same")
+		}
+		// put everything back as it was
+		_ = writeProfileFile(path, string(original))
+		_ = secrets.Forget(profile, map[string]string{"credentials": "keychain"})
+		result.Err = fmt.Errorf("the upgrade of profile '%s' was undone: %w", profile, err)
+		return result
+	}
+	result.To = method
+	return result
 }

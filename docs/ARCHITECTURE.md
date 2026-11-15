@@ -17,7 +17,7 @@ Prox is a Cobra CLI over packages that wrap the Proxmox VE API. A command parses
 | `pkg/node` | Node listing details |
 | `pkg/cmdutil` | Helpers shared by commands: wait flags, `FinishTask`, confirmation prompts, bulk (`--tag`) operations, running `ssh` |
 | `pkg/completion` | Shell completion (names, IDs, nodes, profiles) |
-| `pkg/config`, `pkg/crypto` | Profiles under `~/.prox/profiles/` with encrypted credentials |
+| `pkg/config`, `pkg/secrets`, `pkg/crypto` | Profiles under `~/.prox/profiles/`; `secrets` keeps the login in the OS keychain or seals it with a key file (and still reads the older derived-key format); `crypto` has the AES-GCM primitives |
 | `pkg/output` | Everything that writes to the terminal: results, progress, errors with tips, spinners, `-o json/yaml` |
 | `pkg/sshconfig` | Editing `~/.ssh/config` without disturbing the rest of the file |
 | `pkg/util` | Small shared helpers (size and uptime formatting, fuzzy matching, tags, a bounded worker pool) |
@@ -60,7 +60,7 @@ Guiding principles:
 - "Unknown" is the empty string (an IP address that cannot be found, for example). The packages that display it decide how to show it (`N/A`).
 
 ## Configuration and Security
-- Profiles live in `~/.prox/profiles/<name>`; `current-profile` names the active one. Only the username and password are encrypted (AES-256-GCM, key derived from user and host); the URL and TLS settings are plain text. Files are written 0600 through a temporary file and a rename.
+- Profiles live in `~/.prox/profiles/<name>`; `current-profile` names the active one. The login is kept by `pkg/secrets`: in the OS keychain (`credentials=keychain` in the profile, no secret in the file) or, with no keychain, sealed with a random key in `<user config dir>/prox/key` (`enc:v2:` values). Profiles from older versions (key derived from user and host) are read and upgraded by `prox config migrate`. The URL and TLS settings are plain text. Files are written 0600 through a temporary file and a rename.
 - Environment variables (`PROX_URL`, `PROX_USER`, `PROX_PASSWORD`) take precedence over a profile when all three are set.
 - See `docs/SECURITY.md` for the threat model.
 

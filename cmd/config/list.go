@@ -15,7 +15,8 @@ type profileRow struct {
 	Current bool   `json:"current"`
 	URL     string `json:"url,omitempty"`
 	User    string `json:"user,omitempty"`
-	Error   string `json:"error,omitempty"` // why the profile could not be read
+	Storage string `json:"storage,omitempty"` // keychain, key file, legacy or plain text
+	Error   string `json:"error,omitempty"`   // why the profile could not be read
 }
 
 // listCmd represents the list command to show all profiles
@@ -33,7 +34,7 @@ as, and mark the one in use. Passwords are never shown.`,
 		if output.Structured() {
 			rows := make([]profileRow, 0, len(infos))
 			for _, in := range infos {
-				rows = append(rows, profileRow{Name: in.Name, Current: in.Current, URL: in.URL, User: in.User, Error: in.Error})
+				rows = append(rows, profileRow{Name: in.Name, Current: in.Current, URL: in.URL, User: in.User, Storage: in.Storage, Error: in.Error})
 			}
 			return output.OutputJSON(rows)
 		}
@@ -45,16 +46,19 @@ as, and mark the one in use. Passwords are never shown.`,
 
 		t := table.NewWriter()
 		t.SetTitle("Profiles")
-		t.AppendHeader(table.Row{"PROFILE", "URL", "USER", "IN USE"})
+		t.AppendHeader(table.Row{"PROFILE", "URL", "USER", "STORED IN", "IN USE"})
 		for _, in := range infos {
-			url, user, inUse := in.URL, in.User, ""
+			url, user, inUse, stored := in.URL, in.User, "", in.Storage
 			if in.Error != "" {
-				url, user = "(cannot be read)", ""
+				url, user, stored = "(cannot be read)", "", ""
+			}
+			if stored == "legacy" || stored == "plain text" {
+				stored += " (run 'prox config migrate')"
 			}
 			if in.Current {
 				inUse = "*"
 			}
-			t.AppendRow(table.Row{in.Name, url, user, inUse})
+			t.AppendRow(table.Row{in.Name, url, user, stored, inUse})
 		}
 		t.SetStyle(table.StyleRounded)
 		fmt.Println(t.Render())

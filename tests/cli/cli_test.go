@@ -292,7 +292,7 @@ func TestMissingPrivilegeGetsAPermissionTip(t *testing.T) {
 
 func TestNoSavedConfigSaysHowToSetOneUp(t *testing.T) {
 	cmd := exec.Command(binary, "vm", "list")
-	cmd.Env = []string{"HOME=" + t.TempDir(), "PATH=" + os.Getenv("PATH")}
+	cmd.Env = []string{"HOME=" + t.TempDir(), "PATH=" + os.Getenv("PATH"), "PROX_CREDENTIAL_STORE=file"}
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err == nil {

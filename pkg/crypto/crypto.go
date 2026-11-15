@@ -138,30 +138,6 @@ func decryptWithKey(key []byte, ciphertext string) (string, error) {
 	return string(plaintext), nil
 }
 
-// MigrateToEncrypted encrypts plain text values if they aren't already encrypted
-func MigrateToEncrypted(value string) (string, bool, error) {
-	if value == "" {
-		return "", false, nil
-	}
-
-	// If it decrypts to something different, it's already encrypted
-	plain, err := Decrypt(value)
-	if err != nil {
-		return "", false, err
-	}
-	if plain != value {
-		return value, false, nil
-	}
-
-	// If we get here, it's likely plain text, so encrypt it
-	encrypted, err := Encrypt(value)
-	if err != nil {
-		return "", false, fmt.Errorf("failed to encrypt value: %w", err)
-	}
-
-	return encrypted, true, nil
-}
-
 // GetKeyFingerprint returns a fingerprint of the encryption key for verification
 func GetKeyFingerprint() (string, error) {
 	key, err := generateKey()

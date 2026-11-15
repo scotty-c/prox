@@ -25,7 +25,7 @@ Key capabilities:
 - VM: list | create (from cloud-init template) | start | shutdown | reboot | clone (full/linked) | migrate (online/offline, local disks) | edit | describe | delete | snapshot
 - Container (LXC): create (template shortcuts + SSH key injection), list, start/stop, reboot, clone, migrate, edit, describe, snapshot
 - Rich describe output: IP discovery (guest agent / DHCP / static), disks, resources, uptime
-- Secure encrypted credential storage (AES‑256, automatic legacy migration)
+- Credentials in your OS keychain (macOS, Windows, Linux), or sealed with a random key file where there is none; older profiles keep working and move with `prox config migrate`
 - Multiple configuration profiles (homelab, production, etc.) with easy switching
 - SSH key validation (file or stdin, multi‑key, type checks)
 - **Smart UX**: fuzzy matching suggestions ("Did you mean?"), context-aware error messages, real-time progress spinners
@@ -97,7 +97,7 @@ prox vm migrate myv<TAB>     # Completes VM names starting with "myv"
 ```
 
 ## Quick Start
-Configure (stored encrypted with profile support):
+Configure (saved in your keychain, with profile support):
 ```bash
 # Set up the default profile
 prox config setup -u admin@pam -p secret -l https://proxmox.example.com:8006
@@ -431,15 +431,17 @@ Waiting for tasks
 Tip: run any command with --help for full details.
 
 ## Security
-- AES‑256 encryption for stored credentials (system/user bound)
-- Plaintext legacy configs auto‑migrated to profile system
+- Saved logins are stored in the OS keychain, or sealed (AES‑256‑GCM) with a random key file kept outside `~/.prox` when there is no keychain; profile files hold no readable secret
+- Profiles saved by older versions (key derived from your user and host name) still work; `prox config migrate` upgrades them
 - Profiles stored in `~/.prox/profiles/` with secure file perms (600)
 - Automatic migration from old single-config format to profiles
 - TLS certificates are verified; see [TLS certificates](#tls-certificates) for self-signed servers
-- See SECURITY.md for encryption details & migration command
+- See SECURITY.md for what this does and does not protect against
 ```bash
-prox config migrate   # migrate legacy plaintext if present
+prox config list      # how each profile is stored
+prox config migrate   # move older profiles into the keychain / key file
 ```
+For CI, prefer an API token supplied through environment variables over a saved profile.
 
 ## Advanced Docs
 - [Architecture & package layout](docs/ARCHITECTURE.md)

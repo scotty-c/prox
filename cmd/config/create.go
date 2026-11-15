@@ -46,14 +46,15 @@ var createCmd = &cobra.Command{
 			return fmt.Errorf("a profile needs a URL, username and password; missing %s (run on a terminal to be prompted)", strings.Join(missing, ", "))
 		}
 
-		if err := c.CreateProfile(profile, username, password, url); err != nil {
+		method, err := c.SaveProfile(profile, username, password, url)
+		if err != nil {
 			return fmt.Errorf("creating profile: %w", err)
 		}
 
 		if err := saveTLSFlags(cmd, profile); err != nil {
 			return err
 		}
-		fmt.Printf("Profile '%s' created successfully\n", profile)
+		fmt.Printf("Profile '%s' created successfully (credentials stored %s)\n", profile, c.DescribeMethod(method))
 
 		// Ask if they want to switch to this profile
 		switchToNew, _ := cmd.Flags().GetBool("use")

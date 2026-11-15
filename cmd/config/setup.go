@@ -49,13 +49,14 @@ Example:
 			}
 		}
 
-		if err := c.Create(username, password, url); err != nil {
+		method, err := c.Create(username, password, url)
+		if err != nil {
 			return fmt.Errorf("setting up config: %w", err)
 		}
 		if err := saveTLSFlags(cmd, c.GetCurrentProfile()); err != nil {
 			return err
 		}
-		fmt.Println("Config setup completed successfully")
+		fmt.Printf("Config setup completed successfully (credentials stored %s)\n", c.DescribeMethod(method))
 		return nil
 	},
 }

@@ -36,9 +36,10 @@ docker run --rm --env-file ~/.prox/docker.env prox:latest vm list
 ```
 
 ### Why not mount `~/.prox`?
-Saved profiles are encrypted with a key derived from your username and hostname.
-Both are different inside the container, so a profile created on the host can't
-be decrypted there. Use environment variables instead.
+A profile's login lives in the host's keychain, or is sealed with a key file kept
+outside `~/.prox`. Neither is inside the container, so a profile created on the
+host can't be opened there, and mounting `~/.prox` alone would only show the URL.
+Use environment variables instead.
 
 ## Interactive Shell
 ```bash

@@ -85,6 +85,8 @@ func runInHome(t *testing.T, home string, srv *fakepve.Server, stdin string, arg
 		"PROX_URL=" + srv.URL,
 		"PROX_USER=root@pam",
 		"PROX_PASSWORD=secret",
+		"PROX_CREDENTIAL_STORE=file", // never touch the real keychain
+		"XDG_CONFIG_HOME=" + filepath.Join(home, ".config"),
 	}
 	cmd.Stdin = strings.NewReader(stdin)
 	var stdout, stderr bytes.Buffer
@@ -144,13 +146,16 @@ func excludes(t *testing.T, what, s string, nots ...string) {
 // the middle of it), then sends Ctrl-C. It returns what prox did.
 func startInterrupted(t *testing.T, srv *fakepve.Server, waitFor string, args ...string) (result, time.Duration) {
 	t.Helper()
+	home := t.TempDir()
 	cmd := exec.Command(binary, args...)
 	cmd.Env = []string{
-		"HOME=" + t.TempDir(),
+		"HOME=" + home,
 		"PATH=" + os.Getenv("PATH"),
 		"PROX_URL=" + srv.URL,
 		"PROX_USER=root@pam",
 		"PROX_PASSWORD=secret",
+		"PROX_CREDENTIAL_STORE=file", // never touch the real keychain
+		"XDG_CONFIG_HOME=" + filepath.Join(home, ".config"),
 	}
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
@@ -186,4 +191,28 @@ func startInterrupted(t *testing.T, srv *fakepve.Server, waitFor string, args ..
 		t.Fatalf("prox did not stop within 5s of Ctrl-C; stderr:\n%s", stderr.String())
 		return result{}, 0
 	}
+}
+
+// runWithProfile runs prox with no PROX_URL/PROX_USER/PROX_PASSWORD, so that it
+// uses the saved profile in home, as a real user's would
+func runWithProfile(t *testing.T, home, stdin string, args ...string) result {
+	t.Helper()
+	cmd := exec.Command(binary, args...)
+	cmd.Env = []string{
+		"HOME=" + home,
+		"PATH=" + os.Getenv("PATH"),
+		"PROX_CREDENTIAL_STORE=file", // never touch the real keychain
+		"XDG_CONFIG_HOME=" + filepath.Join(home, ".config"),
+	}
+	cmd.Stdin = strings.NewReader(stdin)
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout, cmd.Stderr = &stdout, &stderr
+	err := cmd.Run()
+	code := 0
+	if exitErr, ok := err.(*exec.ExitError); ok {
+		code = exitErr.ExitCode()
+	} else if err != nil {
+		t.Fatalf("running prox %v: %v", args, err)
+	}
+	return result{stdout.String(), stderr.String(), code}
 }
