@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"strconv"
 
@@ -31,7 +30,7 @@ Examples:
 		if err != nil {
 			return err
 		}
-		ct, err := container.FindByNameOrID(context.Background(), cl, args[0])
+		ct, err := container.FindByNameOrID(cmd.Context(), cl, args[0])
 		if err != nil {
 			return err
 		}

@@ -19,8 +19,7 @@ type ContainerDetails struct {
 }
 
 // GetContainerDetails fetches detailed container information
-func GetContainerDetails(nameOrID string) (*ContainerDetails, error) {
-	ctx := context.Background()
+func GetContainerDetails(ctx context.Context, nameOrID string) (*ContainerDetails, error) {
 	client, err := c.CreateClient()
 	if err != nil {
 		return nil, fmt.Errorf("error creating client: %w", err)
@@ -72,8 +71,8 @@ func GetContainerDetails(nameOrID string) (*ContainerDetails, error) {
 }
 
 // DescribeContainer shows detailed information about a container
-func DescribeContainer(nameOrID string) error {
-	details, err := GetContainerDetails(nameOrID)
+func DescribeContainer(ctx context.Context, nameOrID string) error {
+	details, err := GetContainerDetails(ctx, nameOrID)
 	if err != nil {
 		return err
 	}

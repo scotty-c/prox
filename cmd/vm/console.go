@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"strconv"
 
@@ -31,7 +30,7 @@ Examples:
 		if err != nil {
 			return err
 		}
-		v, err := vm.FindByNameOrIDOnNode(context.Background(), cl, args[0], node)
+		v, err := vm.FindByNameOrIDOnNode(cmd.Context(), cl, args[0], node)
 		if err != nil {
 			return err
 		}

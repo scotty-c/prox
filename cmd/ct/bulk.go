@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"strconv"
 
@@ -21,7 +20,7 @@ func runOnTaggedContainers(cmd *cobra.Command, verb string, fn func(id string) e
 	if err != nil {
 		return fmt.Errorf("failed to create client: %w", err)
 	}
-	containers, err := container.FindByTag(context.Background(), cl, tag)
+	containers, err := container.FindByTag(cmd.Context(), cl, tag)
 	if err != nil {
 		return err
 	}

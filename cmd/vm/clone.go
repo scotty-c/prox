@@ -53,7 +53,7 @@ Examples:
 			return fmt.Errorf("a name for the new VM is required: give NAME as an argument or use --name")
 		}
 
-		if err := vm.CloneVMByNameOrIDWithWait(sourceNameOrID, node, name, newID, full, wait); err != nil {
+		if err := vm.CloneVMByNameOrIDWithWait(cmd.Context(), sourceNameOrID, node, name, newID, full, wait); err != nil {
 			return err
 		}
 		return nil

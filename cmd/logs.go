@@ -32,7 +32,7 @@ Examples:
 		follow, _ := cmd.Flags().GetBool("follow")
 		tail, _ := cmd.Flags().GetInt("tail")
 
-		if err := viewTaskLogs(upid, follow, tail); err != nil {
+		if err := viewTaskLogs(cmd.Context(), upid, follow, tail); err != nil {
 			return fmt.Errorf("%w", err)
 		}
 		return nil
@@ -45,8 +45,7 @@ func init() {
 	RootCmd.AddCommand(logsCmd)
 }
 
-func viewTaskLogs(upid string, follow bool, tail int) error {
-	ctx := context.Background()
+func viewTaskLogs(ctx context.Context, upid string, follow bool, tail int) error {
 
 	// Parse UPID to extract node
 	node, err := parseUPIDNode(upid)

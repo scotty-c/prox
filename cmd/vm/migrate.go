@@ -49,7 +49,7 @@ Examples:
 		}
 
 		// Perform the migration
-		if err := vm.MigrateVMByNameOrIDWithWait(nameOrID, sourceNode, targetNode, online, withLocalDisks, wait); err != nil {
+		if err := vm.MigrateVMByNameOrIDWithWait(cmd.Context(), nameOrID, sourceNode, targetNode, online, withLocalDisks, wait); err != nil {
 			return err
 		}
 		return nil

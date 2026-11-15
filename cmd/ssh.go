@@ -77,7 +77,7 @@ Examples:
 		}
 
 		if deleteFlag {
-			return deleteSSHConfigEntry(nameOrID, dryRun)
+			return deleteSSHConfigEntry(cmd.Context(), nameOrID, dryRun)
 		}
 
 		// Get other flags
@@ -87,9 +87,9 @@ Examples:
 		skipHostKeyCheck, _ := cmd.Flags().GetBool("no-host-key-check")
 
 		if printFlag || connectFlag {
-			return runSSH(nameOrID, username, port, keyPath, skipHostKeyCheck, connectFlag)
+			return runSSH(cmd.Context(), nameOrID, username, port, keyPath, skipHostKeyCheck, connectFlag)
 		}
-		return setupSSHConfig(nameOrID, username, port, keyPath, dryRun, skipHostKeyCheck)
+		return setupSSHConfig(cmd.Context(), nameOrID, username, port, keyPath, dryRun, skipHostKeyCheck)
 	},
 }
 
@@ -203,12 +203,12 @@ func validateSSHOptions(port int, keyPath string) error {
 	return nil
 }
 
-func setupSSHConfig(nameOrID, username string, port int, keyPath string, dryRun bool, skipHostKeyCheck bool) error {
+func setupSSHConfig(ctx context.Context, nameOrID, username string, port int, keyPath string, dryRun bool, skipHostKeyCheck bool) error {
 	if err := validateSSHOptions(port, keyPath); err != nil {
 		return err
 	}
 
-	target, err := resolveSSHTarget(context.Background(), nameOrID, os.Stdout)
+	target, err := resolveSSHTarget(ctx, nameOrID, os.Stdout)
 	if err != nil {
 		return err
 	}
@@ -283,12 +283,12 @@ func shellQuote(s string) string {
 
 // runSSH prints or runs an ssh command for a VM or container without
 // touching ~/.ssh/config
-func runSSH(nameOrID, username string, port int, keyPath string, skipHostKeyCheck, connect bool) error {
+func runSSH(ctx context.Context, nameOrID, username string, port int, keyPath string, skipHostKeyCheck, connect bool) error {
 	if err := validateSSHOptions(port, keyPath); err != nil {
 		return err
 	}
 	// Status messages go to stderr so --print output can be used directly
-	target, err := resolveSSHTarget(context.Background(), nameOrID, os.Stderr)
+	target, err := resolveSSHTarget(ctx, nameOrID, os.Stderr)
 	if err != nil {
 		return err
 	}
@@ -388,8 +388,7 @@ func addToSSHConfig(hostAlias, configEntry string) error {
 	return nil
 }
 
-func deleteSSHConfigEntry(nameOrID string, dryRun bool) error {
-	ctx := context.Background()
+func deleteSSHConfigEntry(ctx context.Context, nameOrID string, dryRun bool) error {
 
 	if nameOrID == "" {
 		return fmt.Errorf("VM or container name/ID cannot be empty")

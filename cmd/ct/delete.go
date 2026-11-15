@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"strconv"
 
@@ -30,7 +29,7 @@ var deleteCmd = &cobra.Command{
 			return err
 		}
 		// Look the container up first so the question says exactly what will be deleted
-		target, err := container.FindByNameOrID(context.Background(), cl, nameOrID)
+		target, err := container.FindByNameOrID(cmd.Context(), cl, nameOrID)
 		if err != nil {
 			return err
 		}
@@ -45,7 +44,7 @@ var deleteCmd = &cobra.Command{
 		}
 
 		// Delete by ID: the name may be shared by another container
-		if err := container.DeleteContainerWithWait(strconv.Itoa(target.ID), wait); err != nil {
+		if err := container.DeleteContainerWithWait(cmd.Context(), strconv.Itoa(target.ID), wait); err != nil {
 			return fmt.Errorf("deleting container: %w", err)
 		}
 		return nil

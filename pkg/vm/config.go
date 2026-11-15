@@ -202,8 +202,7 @@ func primaryDisk(config map[string]interface{}) (string, bool) {
 
 // EditVMByNameOrID edits a VM by name or ID.
 // If node is not empty, only VMs on that node are considered.
-func EditVMByNameOrID(nameOrID string, node string, name string, cores int, mem int, diskSize int) error {
-	ctx := context.Background()
+func EditVMByNameOrID(ctx context.Context, nameOrID string, node string, name string, cores int, mem int, diskSize int) error {
 	client, err := c.CreateClient()
 	if err != nil {
 		return fmt.Errorf("failed to create client: %w", err)

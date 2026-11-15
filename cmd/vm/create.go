@@ -51,7 +51,7 @@ Examples:
 			opts.SSHKeys = keys
 		}
 
-		if err := vm.CreateFromTemplate(opts); err != nil {
+		if err := vm.CreateFromTemplate(cmd.Context(), opts); err != nil {
 			return err
 		}
 		return nil

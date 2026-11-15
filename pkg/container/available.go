@@ -101,8 +101,7 @@ func firstOnlineNode(ctx context.Context, client c.ProxmoxClientInterface, node 
 
 // ListAvailableTemplates prints the templates node (or the first online
 // node) can download
-func ListAvailableTemplates(node string) error {
-	ctx := context.Background()
+func ListAvailableTemplates(ctx context.Context, node string) error {
 	client, err := c.CreateClient()
 	if err != nil {
 		return fmt.Errorf("failed to create client: %w", err)
@@ -139,8 +138,7 @@ func ListAvailableTemplates(node string) error {
 
 // PullTemplate downloads a template to node (or the first online node).
 // want is a file name or an os:version shortcut. storage "" picks one.
-func PullTemplate(want, node, storage string, wait bool) error {
-	ctx := context.Background()
+func PullTemplate(ctx context.Context, want, node, storage string, wait bool) error {
 	client, err := c.CreateClient()
 	if err != nil {
 		return fmt.Errorf("failed to create client: %w", err)

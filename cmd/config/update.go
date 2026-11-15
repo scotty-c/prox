@@ -29,8 +29,8 @@ var updateCmd = &cobra.Command{
 }
 
 func init() {
-	updateCmd.Flags().StringVarP(&username, "username", "u", "", "Username for the Proxmox VE API")
-	updateCmd.Flags().StringVarP(&password, "password", "p", "", "Password for the Proxmox VE API")
-	updateCmd.Flags().StringVarP(&url, "url", "l", "", "URL for the Proxmox VE API")
+	updateCmd.Flags().StringP("username", "u", "", "Username for the Proxmox VE API")
+	updateCmd.Flags().StringP("password", "p", "", "Password for the Proxmox VE API")
+	updateCmd.Flags().StringP("url", "l", "", "URL for the Proxmox VE API")
 	configCmd.AddCommand(updateCmd)
 }

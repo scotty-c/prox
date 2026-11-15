@@ -30,7 +30,7 @@ Examples:
 		node, _ := cmd.Flags().GetString("node")
 
 		// Edit the VM
-		if err := vm.EditVMByNameOrID(nameOrID, node, name, cpu, memory, diskSize); err != nil {
+		if err := vm.EditVMByNameOrID(cmd.Context(), nameOrID, node, name, cpu, memory, diskSize); err != nil {
 			return err
 		}
 		return nil

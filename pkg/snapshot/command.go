@@ -51,7 +51,7 @@ Examples:
 		case 0:
 			return names(cmd, args, toComplete)
 		case 1:
-			return snapshotNames(guestType, args[0], node(cmd))
+			return snapshotNames(cmd.Context(), guestType, args[0], node(cmd))
 		}
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	}
@@ -70,7 +70,7 @@ Examples:
 		Args:              cobra.ExactArgs(1),
 		ValidArgsFunction: completion.FirstArgOnly(names),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return wrap("listing snapshots", List(guestType, args[0], node(cmd)))
+			return wrap("listing snapshots", List(cmd.Context(), guestType, args[0], node(cmd)))
 		},
 	}
 	addNode(list)
@@ -87,7 +87,7 @@ Examples:
 				vmState, _ = cmd.Flags().GetBool("vmstate")
 			}
 			wait := cmdutil.ResolveWait(cmd, true)
-			return wrap("creating snapshot", Create(guestType, args[0], node(cmd), args[1], description, vmState, wait))
+			return wrap("creating snapshot", Create(cmd.Context(), guestType, args[0], node(cmd), args[1], description, vmState, wait))
 		},
 	}
 	create.Flags().StringP("description", "d", "", "Snapshot description")
@@ -105,7 +105,7 @@ Examples:
 		ValidArgsFunction: complete,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if !cmdutil.SkipConfirm(cmd) {
-				_, _, t, err := prepare(guestType, args[0], node(cmd))
+				_, t, err := prepare(cmd.Context(), guestType, args[0], node(cmd))
 				if err != nil {
 					return wrap("rolling back", err)
 				}
@@ -117,7 +117,7 @@ Examples:
 				}
 			}
 			wait := cmdutil.ResolveWait(cmd, true)
-			return wrap("rolling back", Rollback(guestType, args[0], node(cmd), args[1], wait))
+			return wrap("rolling back", Rollback(cmd.Context(), guestType, args[0], node(cmd), args[1], wait))
 		},
 	}
 	rollback.Flags().BoolP("force", "f", false, "Skip the confirmation prompt (same as --yes)")
@@ -133,7 +133,7 @@ Examples:
 		ValidArgsFunction: complete,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if !cmdutil.SkipConfirm(cmd) {
-				_, _, t, err := prepare(guestType, args[0], node(cmd))
+				_, t, err := prepare(cmd.Context(), guestType, args[0], node(cmd))
 				if err != nil {
 					return wrap("deleting snapshot", err)
 				}
@@ -145,7 +145,7 @@ Examples:
 				}
 			}
 			wait := cmdutil.ResolveWait(cmd, true)
-			return wrap("deleting snapshot", Delete(guestType, args[0], node(cmd), args[1], wait))
+			return wrap("deleting snapshot", Delete(cmd.Context(), guestType, args[0], node(cmd), args[1], wait))
 		},
 	}
 	del.Flags().BoolP("force", "f", false, "Skip the confirmation prompt (same as --yes)")
@@ -158,8 +158,7 @@ Examples:
 }
 
 // snapshotNames completes snapshot names for a VM or container
-func snapshotNames(guestType, nameOrID, node string) ([]string, cobra.ShellCompDirective) {
-	ctx := context.Background()
+func snapshotNames(ctx context.Context, guestType, nameOrID, node string) ([]string, cobra.ShellCompDirective) {
 	cl, err := c.CreateClient()
 	if err != nil {
 		return nil, cobra.ShellCompDirectiveError

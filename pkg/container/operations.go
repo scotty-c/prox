@@ -10,8 +10,7 @@ import (
 )
 
 // StartContainerWithWait starts a container, optionally without waiting
-func StartContainerWithWait(nameOrID string, wait bool) error {
-	ctx := context.Background()
+func StartContainerWithWait(ctx context.Context, nameOrID string, wait bool) error {
 	client, err := c.CreateClient()
 	if err != nil {
 		return fmt.Errorf("error creating client: %w", err)
@@ -46,8 +45,7 @@ func StartContainerWithWait(nameOrID string, wait bool) error {
 // StopContainerWithOptions stops a container by name or ID. With force, the
 // container is stopped immediately instead of being shut down cleanly.
 // Without wait it returns as soon as the task has started.
-func StopContainerWithOptions(nameOrID string, force bool, wait bool) error {
-	ctx := context.Background()
+func StopContainerWithOptions(ctx context.Context, nameOrID string, force bool, wait bool) error {
 	client, err := c.CreateClient()
 	if err != nil {
 		return fmt.Errorf("error creating client: %w", err)
@@ -85,8 +83,7 @@ func StopContainerWithOptions(nameOrID string, force bool, wait bool) error {
 }
 
 // DeleteContainerWithWait deletes a container, optionally without waiting
-func DeleteContainerWithWait(nameOrID string, wait bool) error {
-	ctx := context.Background()
+func DeleteContainerWithWait(ctx context.Context, nameOrID string, wait bool) error {
 	client, err := c.CreateClient()
 	if err != nil {
 		return fmt.Errorf("error creating client: %w", err)

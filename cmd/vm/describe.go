@@ -42,7 +42,7 @@ Examples:
 		// Get flags
 		node, _ := cmd.Flags().GetString("node")
 		if cmdutil.StructuredOutput(cmd) {
-			details, err := vm.GetVMDetails(nameOrID, node)
+			details, err := vm.GetVMDetails(cmd.Context(), nameOrID, node)
 			if err != nil {
 				return fmt.Errorf("getting VM details: %w", err)
 			}
@@ -53,7 +53,7 @@ Examples:
 		}
 
 		// Describe the VM
-		err := vm.DescribeVM(nameOrID, node)
+		err := vm.DescribeVM(cmd.Context(), nameOrID, node)
 		if err != nil {
 			return fmt.Errorf("describing VM: %w", err)
 		}

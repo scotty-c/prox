@@ -34,7 +34,7 @@ Examples:
 		nameOrID := args[0]
 
 		if cmdutil.StructuredOutput(cmd) {
-			details, err := container.GetContainerDetails(nameOrID)
+			details, err := container.GetContainerDetails(cmd.Context(), nameOrID)
 			if err != nil {
 				return fmt.Errorf("getting container details: %w", err)
 			}
@@ -45,7 +45,7 @@ Examples:
 		}
 
 		// Describe the container
-		err := container.DescribeContainer(nameOrID)
+		err := container.DescribeContainer(cmd.Context(), nameOrID)
 		if err != nil {
 			return fmt.Errorf("describing container: %w", err)
 		}

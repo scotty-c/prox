@@ -21,7 +21,7 @@ Examples:
 	RunE: func(cmd *cobra.Command, args []string) error {
 		node, _ := cmd.Flags().GetString("node")
 		wait := cmdutil.ResolveWait(cmd, false)
-		if err := vm.RebootVMByNameOrID(args[0], node, wait); err != nil {
+		if err := vm.RebootVMByNameOrID(cmd.Context(), args[0], node, wait); err != nil {
 			return err
 		}
 		return nil

@@ -12,7 +12,7 @@ import (
 )
 
 // ListTemplates lists all available container templates
-func ListTemplates(node string) error {
+func ListTemplates(ctx context.Context, node string) error {
 	client, err := c.CreateClient()
 	if err != nil {
 		return fmt.Errorf("failed to create client: %w", err)
@@ -26,7 +26,7 @@ func ListTemplates(node string) error {
 		nodes = append(nodes, node)
 	} else {
 		// Get all nodes in the cluster
-		clusterNodes, err := getClusterNodes(client)
+		clusterNodes, err := getClusterNodes(ctx, client)
 		if err != nil {
 			return fmt.Errorf("failed to get cluster nodes: %w", err)
 		}
@@ -35,7 +35,7 @@ func ListTemplates(node string) error {
 
 	var allTemplates []Template
 	for _, nodeName := range nodes {
-		templates, err := getNodeTemplates(client, nodeName)
+		templates, err := getNodeTemplates(ctx, client, nodeName)
 		if err != nil {
 			output.Error("WARNING: Could not get templates from node %s: %v\n", nodeName, err)
 			continue
@@ -61,8 +61,8 @@ func ListTemplates(node string) error {
 }
 
 // getNodeTemplates gets templates from a specific node
-func getNodeTemplates(client c.ProxmoxClientInterface, node string) ([]Template, error) {
-	templates, err := client.GetContainerTemplates(context.Background(), node)
+func getNodeTemplates(ctx context.Context, client c.ProxmoxClientInterface, node string) ([]Template, error) {
+	templates, err := client.GetContainerTemplates(ctx, node)
 	if err != nil {
 		return nil, err
 	}
@@ -108,7 +108,7 @@ func displayTemplatesTable(templates []Template) {
 // ResolveTemplateOnNode resolves a template like ResolveTemplate. If preferredNode
 // is not empty and the template is available on that node (for example on shared
 // storage), that node is used; otherwise the first node holding the template is used.
-func ResolveTemplateOnNode(shortName string, preferredNode string) (*ResolvedTemplate, error) {
+func ResolveTemplateOnNode(ctx context.Context, shortName string, preferredNode string) (*ResolvedTemplate, error) {
 	// Check if it's a short format (os:version) without full path
 	if !strings.Contains(shortName, ":") {
 		return nil, fmt.Errorf("template must be in format 'os:version' (e.g., 'ubuntu:22.04') or full format 'storage:vztmpl/template-name'")
@@ -121,7 +121,7 @@ func ResolveTemplateOnNode(shortName string, preferredNode string) (*ResolvedTem
 	}
 
 	// Get all nodes once
-	nodes, err := getClusterNodes(client)
+	nodes, err := getClusterNodes(ctx, client)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get cluster nodes: %w", err)
 	}
@@ -129,7 +129,7 @@ func ResolveTemplateOnNode(shortName string, preferredNode string) (*ResolvedTem
 	// Get all templates from all nodes once
 	var allTemplates []Template
 	for _, node := range nodes {
-		templates, err := getNodeTemplates(client, node)
+		templates, err := getNodeTemplates(ctx, client, node)
 		if err != nil {
 			continue // Skip nodes that are not accessible
 		}

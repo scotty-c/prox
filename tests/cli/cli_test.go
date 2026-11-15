@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/scotty-c/prox/internal/fakepve"
 )
@@ -678,5 +679,34 @@ func TestVMTestCommandIsHidden(t *testing.T) {
 	excludes(t, "vm help", r.stdout, "Test connection to Proxmox server")
 	if r := run(t, fakepve.New(t), "", "vm", "test"); r.code != 0 {
 		t.Errorf("hidden command should still work: exit %d\n%s", r.code, r.stderr)
+	}
+}
+
+// Ctrl-C
+
+func TestCtrlCStopsARequestThatIsStuck(t *testing.T) {
+	srv := fakepve.New(t)
+	srv.Hang("GET /cluster/resources")
+	r, took := startInterrupted(t, srv, "GET /cluster/resources", "vm", "list")
+	if r.code != 130 {
+		t.Errorf("exit %d, want 130 (the usual status after Ctrl-C)\n%s", r.code, r.stderr)
+	}
+	contains(t, "stderr", r.stderr, "Interrupted")
+	excludes(t, "stderr", r.stderr, "Error:", "context canceled")
+	if took > 3*time.Second {
+		t.Errorf("took %s to stop", took)
+	}
+}
+
+func TestCtrlCWhileWaitingForATaskSaysTheTaskKeepsRunning(t *testing.T) {
+	srv := fakepve.New(t)
+	srv.Hang("GET /nodes/pve1/tasks/")
+	r, _ := startInterrupted(t, srv, "GET /nodes/pve1/tasks/", "vm", "start", "100", "--wait")
+	if r.code == 0 {
+		t.Errorf("exit 0 after being interrupted")
+	}
+	contains(t, "stderr", r.stderr, "stopped waiting (interrupted)", "the task is still running on the server", "prox logs --follow "+upid)
+	if n := srv.Count("POST", "/nodes/pve1/qemu/100/status/start"); n != 1 {
+		t.Errorf("the start request was sent %d times, want once", n)
 	}
 }

@@ -34,7 +34,7 @@ Examples:
 				verb = "force stop"
 			}
 			err := runOnTaggedContainers(cmd, verb, func(id string) error {
-				return container.StopContainerWithOptions(id, force, wait)
+				return container.StopContainerWithOptions(cmd.Context(), id, force, wait)
 			})
 			if err != nil {
 				return fmt.Errorf("stopping containers: %w", err)
@@ -44,7 +44,7 @@ Examples:
 		nameOrID := args[0]
 
 		// Stop the container
-		err := container.StopContainerWithOptions(nameOrID, force, wait)
+		err := container.StopContainerWithOptions(cmd.Context(), nameOrID, force, wait)
 		if err != nil {
 			return fmt.Errorf("stopping container: %w", err)
 		}

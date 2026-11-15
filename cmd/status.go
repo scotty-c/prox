@@ -27,7 +27,7 @@ Examples:
   prox status                    # Show cluster status
   prox status --quiet            # Show minimal output`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return showStatus()
+		return showStatus(cmd.Context())
 	},
 }
 
@@ -52,7 +52,7 @@ type statusCounts struct {
 	Counts map[string]int `json:"by_status"`
 }
 
-func showStatus() error {
+func showStatus(ctx context.Context) error {
 	// Read config (environment variables take precedence over the config file)
 	_, _, url, err := client.ReadConfig()
 	if err != nil {
@@ -69,8 +69,6 @@ func showStatus() error {
 	if err != nil {
 		return fmt.Errorf("failed to connect to Proxmox VE: %w", err)
 	}
-
-	ctx := context.Background()
 
 	// Get version info
 	version, err := cl.GetVersion(ctx)

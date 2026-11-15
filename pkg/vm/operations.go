@@ -342,8 +342,7 @@ func MigrateVMWithWait(ctx context.Context, id int, sourceNode, targetNode strin
 
 // StartVMByNameOrIDWithWait starts a VM by name or ID with optional wait.
 // If node is not empty, only VMs on that node are considered.
-func StartVMByNameOrIDWithWait(nameOrID string, node string, wait bool) error {
-	ctx := context.Background()
+func StartVMByNameOrIDWithWait(ctx context.Context, nameOrID string, node string, wait bool) error {
 	client, err := c.CreateClient()
 	if err != nil {
 		return fmt.Errorf("failed to create client: %w", err)
@@ -364,8 +363,7 @@ func StartVMByNameOrIDWithWait(nameOrID string, node string, wait bool) error {
 
 // ShutdownVMByNameOrIDWithOptions shuts down a VM by name or ID. With force,
 // the VM is stopped immediately instead of being asked to shut down cleanly.
-func ShutdownVMByNameOrIDWithOptions(nameOrID string, node string, wait bool, force bool) error {
-	ctx := context.Background()
+func ShutdownVMByNameOrIDWithOptions(ctx context.Context, nameOrID string, node string, wait bool, force bool) error {
 	client, err := c.CreateClient()
 	if err != nil {
 		return fmt.Errorf("failed to create client: %w", err)
@@ -386,8 +384,7 @@ func ShutdownVMByNameOrIDWithOptions(nameOrID string, node string, wait bool, fo
 
 // CloneVMByNameOrIDWithWait clones a VM by name or ID with optional wait.
 // If node is not empty, only source VMs on that node are considered.
-func CloneVMByNameOrIDWithWait(sourceNameOrID string, node string, name string, newID int, full bool, wait bool) error {
-	ctx := context.Background()
+func CloneVMByNameOrIDWithWait(ctx context.Context, sourceNameOrID string, node string, name string, newID int, full bool, wait bool) error {
 	client, err := c.CreateClient()
 	if err != nil {
 		return fmt.Errorf("failed to create client: %w", err)
@@ -405,8 +402,7 @@ func CloneVMByNameOrIDWithWait(sourceNameOrID string, node string, name string, 
 
 // MigrateVMByNameOrIDWithWait migrates a VM by name or ID, optionally without
 // waiting for the migration to finish
-func MigrateVMByNameOrIDWithWait(nameOrID string, sourceNode, targetNode string, online bool, withLocalDisks bool, wait bool) error {
-	ctx := context.Background()
+func MigrateVMByNameOrIDWithWait(ctx context.Context, nameOrID string, sourceNode, targetNode string, online bool, withLocalDisks bool, wait bool) error {
 	client, err := c.CreateClient()
 	if err != nil {
 		return fmt.Errorf("failed to create client: %w", err)
@@ -429,8 +425,7 @@ func MigrateVMByNameOrIDWithWait(nameOrID string, sourceNode, targetNode string,
 
 // RebootVMByNameOrID reboots a running VM cleanly (ACPI or guest agent).
 // If node is not empty, only VMs on that node are considered.
-func RebootVMByNameOrID(nameOrID, node string, wait bool) error {
-	ctx := context.Background()
+func RebootVMByNameOrID(ctx context.Context, nameOrID, node string, wait bool) error {
 	client, err := c.CreateClient()
 	if err != nil {
 		return fmt.Errorf("failed to create client: %w", err)

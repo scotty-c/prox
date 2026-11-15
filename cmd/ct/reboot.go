@@ -16,7 +16,7 @@ var rebootCmd = &cobra.Command{
 	ValidArgsFunction: completion.FirstArgOnly(completion.GetContainerNames),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		wait := cmdutil.ResolveWait(cmd, true)
-		if err := container.RebootContainer(args[0], wait); err != nil {
+		if err := container.RebootContainer(cmd.Context(), args[0], wait); err != nil {
 			return fmt.Errorf("rebooting container: %w", err)
 		}
 		return nil

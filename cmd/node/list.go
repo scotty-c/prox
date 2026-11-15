@@ -1,7 +1,6 @@
 package node
 
 import (
-	"context"
 	"fmt"
 	"sort"
 
@@ -25,7 +24,7 @@ var listCmd = &cobra.Command{
 			return fmt.Errorf("Failed to create client: %w", err)
 		}
 
-		nodes, err := c.GetNodes(context.Background())
+		nodes, err := c.GetNodes(cmd.Context())
 		if err != nil {
 			return fmt.Errorf("Failed to list nodes: %w", err)
 		}

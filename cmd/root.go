@@ -4,8 +4,12 @@ Copyright © 2024 prox contributors
 package cmd
 
 import (
+	"context"
+	"errors"
+	"fmt"
 	"github.com/scotty-c/prox/pkg/completion"
 	"os"
+	"os/signal"
 
 	"github.com/scotty-c/prox/cmd/node"
 	"github.com/scotty-c/prox/pkg/client"
@@ -108,14 +112,31 @@ Use "prox [command] --help" for more information about a command.`,
 // Execute adds all child commands to the root command and sets flags appropriately.
 // This is called by main.main(). It only needs to happen once to the rootCmd.
 func Execute() {
+	// Ctrl-C cancels this context, so a request in flight stops instead of
+	// the process waiting for it. A second Ctrl-C ends the process at once.
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+	defer stop()
+	go func() {
+		<-ctx.Done()
+		stop() // restore the default, so another Ctrl-C kills us
+	}()
+
+	RootCmd.SetContext(ctx)
 	cmd, err := RootCmd.ExecuteC()
 	if err != nil {
+		if errors.Is(err, context.Canceled) {
+			fmt.Fprintln(os.Stderr, "Interrupted")
+			os.Exit(exitInterrupted)
+		}
 		if cmd.SilenceErrors {
 			output.Fail(err)
 		}
 		os.Exit(1)
 	}
 }
+
+// exitInterrupted is the conventional exit status for a process ended by Ctrl-C
+const exitInterrupted = 130
 
 func init() {
 	// Add persistent flags available to all commands

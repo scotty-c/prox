@@ -23,7 +23,7 @@ type NodeDetails struct {
 }
 
 // GetNodeDetails fetches detailed node information
-func GetNodeDetails(name string) (*NodeDetails, error) {
+func GetNodeDetails(ctx context.Context, name string) (*NodeDetails, error) {
 	if strings.TrimSpace(name) == "" {
 		return nil, fmt.Errorf("node name required")
 	}
@@ -32,8 +32,6 @@ func GetNodeDetails(name string) (*NodeDetails, error) {
 	if err != nil {
 		return nil, fmt.Errorf("create client: %w", err)
 	}
-
-	ctx := context.Background()
 
 	nodes, err := c.GetNodes(ctx)
 	if err != nil {
@@ -91,8 +89,8 @@ func GetNodeDetails(name string) (*NodeDetails, error) {
 
 // DescribeNode fetches details for a single node and prints a concise
 // human-friendly description. Returns an error on failure.
-func DescribeNode(name string) error {
-	details, err := GetNodeDetails(name)
+func DescribeNode(ctx context.Context, name string) error {
+	details, err := GetNodeDetails(ctx, name)
 	if err != nil {
 		return err
 	}

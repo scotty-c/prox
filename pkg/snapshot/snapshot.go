@@ -43,22 +43,21 @@ func resolve(ctx context.Context, cl c.ProxmoxClientInterface, guestType, nameOr
 }
 
 // prepare creates a client and resolves the target
-func prepare(guestType, nameOrID, node string) (context.Context, c.ProxmoxClientInterface, *target, error) {
-	ctx := context.Background()
+func prepare(ctx context.Context, guestType, nameOrID, node string) (c.ProxmoxClientInterface, *target, error) {
 	cl, err := c.CreateClient()
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("failed to create client: %w", err)
+		return nil, nil, fmt.Errorf("failed to create client: %w", err)
 	}
 	t, err := resolve(ctx, cl, guestType, nameOrID, node)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, err
 	}
-	return ctx, cl, t, nil
+	return cl, t, nil
 }
 
 // List prints the snapshots of a VM or container
-func List(guestType, nameOrID, node string) error {
-	ctx, cl, t, err := prepare(guestType, nameOrID, node)
+func List(ctx context.Context, guestType, nameOrID, node string) error {
+	cl, t, err := prepare(ctx, guestType, nameOrID, node)
 	if err != nil {
 		return err
 	}
@@ -110,11 +109,11 @@ func formatSnapTime(ts int64) string {
 }
 
 // Create takes a snapshot. vmState also saves a VM's memory.
-func Create(guestType, nameOrID, node, name, description string, vmState, wait bool) error {
+func Create(ctx context.Context, guestType, nameOrID, node, name, description string, vmState, wait bool) error {
 	if err := c.ValidateSnapshotName(name); err != nil {
 		return err
 	}
-	ctx, cl, t, err := prepare(guestType, nameOrID, node)
+	cl, t, err := prepare(ctx, guestType, nameOrID, node)
 	if err != nil {
 		return err
 	}
@@ -127,8 +126,8 @@ func Create(guestType, nameOrID, node, name, description string, vmState, wait b
 }
 
 // Rollback returns a VM or container to a snapshot, discarding changes since
-func Rollback(guestType, nameOrID, node, name string, wait bool) error {
-	ctx, cl, t, err := prepare(guestType, nameOrID, node)
+func Rollback(ctx context.Context, guestType, nameOrID, node, name string, wait bool) error {
+	cl, t, err := prepare(ctx, guestType, nameOrID, node)
 	if err != nil {
 		return err
 	}
@@ -141,8 +140,8 @@ func Rollback(guestType, nameOrID, node, name string, wait bool) error {
 }
 
 // Delete removes a snapshot
-func Delete(guestType, nameOrID, node, name string, wait bool) error {
-	ctx, cl, t, err := prepare(guestType, nameOrID, node)
+func Delete(ctx context.Context, guestType, nameOrID, node, name string, wait bool) error {
+	cl, t, err := prepare(ctx, guestType, nameOrID, node)
 	if err != nil {
 		return err
 	}

@@ -22,8 +22,7 @@ type VMDetails struct {
 }
 
 // GetVMDetails fetches detailed VM information
-func GetVMDetails(nameOrID string, node string) (*VMDetails, error) {
-	ctx := context.Background()
+func GetVMDetails(ctx context.Context, nameOrID string, node string) (*VMDetails, error) {
 	client, err := c.CreateClient()
 	if err != nil {
 		return nil, fmt.Errorf("error creating client: %w", err)
@@ -90,8 +89,8 @@ func GetVMDetails(nameOrID string, node string) (*VMDetails, error) {
 }
 
 // DescribeVM displays detailed VM information in a modern, sectioned format
-func DescribeVM(nameOrID string, node string) error {
-	details, err := GetVMDetails(nameOrID, node)
+func DescribeVM(ctx context.Context, nameOrID string, node string) error {
+	details, err := GetVMDetails(ctx, nameOrID, node)
 	if err != nil {
 		return err
 	}
@@ -99,13 +98,13 @@ func DescribeVM(nameOrID string, node string) error {
 	output.Info("Getting VM details for %s...\n", nameOrID)
 
 	// Display VM information
-	displayVMDetails(details.ID, details.Name, details.Node, details.Config, details.Status, details.IP)
+	displayVMDetails(ctx, details.ID, details.Name, details.Node, details.Config, details.Status, details.IP)
 
 	return nil
 }
 
 // displayVMDetails displays detailed VM information
-func displayVMDetails(id int, name, node string, config, status map[string]interface{}, ip string) {
+func displayVMDetails(ctx context.Context, id int, name, node string, config, status map[string]interface{}, ip string) {
 	output.Result("\nVirtual Machine Details\n")
 	output.Result("═══════════════════════════════════════════════════════════════════════════════════════\n")
 
@@ -217,7 +216,7 @@ func displayVMDetails(id int, name, node string, config, status map[string]inter
 			// Use improved disk info method
 			diskClient, err := c.CreateClient()
 			if err == nil {
-				if maxDisk, usedDisk, err := diskClient.GetVMDiskInfo(context.Background(), node, id); err == nil {
+				if maxDisk, usedDisk, err := diskClient.GetVMDiskInfo(ctx, node, id); err == nil {
 					if maxDisk > 0 {
 						diskMax = float64(maxDisk)
 						diskMaxOk = true

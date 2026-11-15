@@ -20,7 +20,7 @@ var describeCmd = &cobra.Command{
 		name := args[0]
 
 		if cmdutil.StructuredOutput(cmd) {
-			details, err := node.GetNodeDetails(name)
+			details, err := node.GetNodeDetails(cmd.Context(), name)
 			if err != nil {
 				return fmt.Errorf("getting node details: %w", err)
 			}
@@ -30,7 +30,7 @@ var describeCmd = &cobra.Command{
 			return nil
 		}
 
-		if err := node.DescribeNode(name); err != nil {
+		if err := node.DescribeNode(cmd.Context(), name); err != nil {
 			return fmt.Errorf("describing node: %w", err)
 		}
 		return nil

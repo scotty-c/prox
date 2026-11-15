@@ -92,7 +92,7 @@ func encodeSSHKeys(keys string) string {
 }
 
 // CreateFromTemplate clones a cloud-init template and configures the new VM
-func CreateFromTemplate(opts CreateOptions) error {
+func CreateFromTemplate(ctx context.Context, opts CreateOptions) error {
 	if err := ValidateNewVMName(opts.Name); err != nil {
 		return err
 	}
@@ -101,7 +101,6 @@ func CreateFromTemplate(opts CreateOptions) error {
 		return err
 	}
 
-	ctx := context.Background()
 	client, err := c.CreateClient()
 	if err != nil {
 		return fmt.Errorf("failed to create client: %w", err)

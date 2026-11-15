@@ -27,7 +27,7 @@ Examples:
 
 		if tag, _ := cmd.Flags().GetString("tag"); tag != "" {
 			err := runOnTaggedContainers(cmd, "start", func(id string) error {
-				return container.StartContainerWithWait(id, wait)
+				return container.StartContainerWithWait(cmd.Context(), id, wait)
 			})
 			if err != nil {
 				return fmt.Errorf("starting containers: %w", err)
@@ -37,7 +37,7 @@ Examples:
 		nameOrID := args[0]
 
 		// Start the container
-		err := container.StartContainerWithWait(nameOrID, wait)
+		err := container.StartContainerWithWait(cmd.Context(), nameOrID, wait)
 		if err != nil {
 			return fmt.Errorf("starting container: %w", err)
 		}

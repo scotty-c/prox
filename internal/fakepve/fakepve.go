@@ -34,6 +34,8 @@ type Server struct {
 	failures map[string]failure
 	bodies   map[string]string        // last request body per "METHOD /path"
 	created  []map[string]interface{} // guests made by create or clone requests
+	hung     []string                 // "METHOD /path" prefixes whose requests never answer
+	release  chan struct{}            // closed at the end of the test to free hung requests
 }
 
 type failure struct {
@@ -44,9 +46,12 @@ type failure struct {
 // New starts a fake Proxmox API that is shut down when the test ends
 func New(t testing.TB) *Server {
 	t.Helper()
-	s := &Server{failures: map[string]failure{}, bodies: map[string]string{}}
+	s := &Server{failures: map[string]failure{}, bodies: map[string]string{}, release: make(chan struct{})}
 	s.Server = httptest.NewServer(http.HandlerFunc(s.handle))
-	t.Cleanup(s.Close)
+	t.Cleanup(func() {
+		close(s.release) // httptest's Close waits for requests that are still open
+		s.Close()
+	})
 	return s
 }
 
@@ -62,6 +67,15 @@ func (s *Server) FailRequestWithStatus(methodAndPath string, status int, msg str
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.failures[methodAndPath] = failure{status, msg}
+}
+
+// Hang makes requests whose "METHOD /path" starts with prefix (path without
+// /api2/json) block without answering until the test ends, as a stuck server
+// would
+func (s *Server) Hang(prefix string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.hung = append(s.hung, prefix)
 }
 
 // Body returns the body of the last request to "METHOD /path" (the path
@@ -136,7 +150,18 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 	s.bodies[r.Method+" "+p] = string(body)
 	s.requests = append(s.requests, r.Method+" "+strings.TrimPrefix(r.URL.RequestURI(), "/api2/json"))
 	f, failed := s.failures[r.Method+" "+p]
+	hang := false
+	for _, prefix := range s.hung {
+		hang = hang || strings.HasPrefix(r.Method+" "+p, prefix)
+	}
 	s.mu.Unlock()
+	if hang {
+		select {
+		case <-s.release:
+		case <-r.Context().Done():
+		}
+		return
+	}
 	if failed {
 		reply(w, nil, f.status, f.msg)
 		return

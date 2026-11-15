@@ -32,7 +32,7 @@ Examples:
 	RunE: func(cmd *cobra.Command, args []string) error {
 		restart, _ := cmd.Flags().GetBool("restart")
 		wait := cmdutil.ResolveWait(cmd, true)
-		if err := container.MigrateContainer(args[0], args[1], restart, wait); err != nil {
+		if err := container.MigrateContainer(cmd.Context(), args[0], args[1], restart, wait); err != nil {
 			return fmt.Errorf("migrating container: %w", err)
 		}
 		return nil

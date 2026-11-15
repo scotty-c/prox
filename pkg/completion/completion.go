@@ -9,6 +9,16 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// commandContext is the context of the command being completed. cobra sets
+// it when running a command, and during completion on newer versions; fall
+// back to a background context rather than panic if it is missing.
+func commandContext(cmd *cobra.Command) context.Context {
+	if cmd != nil && cmd.Context() != nil {
+		return cmd.Context()
+	}
+	return context.Background()
+}
+
 // GetVMNames returns a list of VM names for shell completion
 func GetVMNames(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 	client, err := c.CreateClient()
@@ -16,7 +26,7 @@ func GetVMNames(cmd *cobra.Command, args []string, toComplete string) ([]string,
 		return nil, cobra.ShellCompDirectiveError
 	}
 
-	resources, err := client.GetClusterResources(context.Background())
+	resources, err := client.GetClusterResources(commandContext(cmd))
 	if err != nil {
 		return nil, cobra.ShellCompDirectiveError
 	}
@@ -45,7 +55,7 @@ func GetContainerNames(cmd *cobra.Command, args []string, toComplete string) ([]
 		return nil, cobra.ShellCompDirectiveError
 	}
 
-	resources, err := client.GetClusterResources(context.Background())
+	resources, err := client.GetClusterResources(commandContext(cmd))
 	if err != nil {
 		return nil, cobra.ShellCompDirectiveError
 	}
@@ -74,7 +84,7 @@ func GetNodeNames(cmd *cobra.Command, args []string, toComplete string) ([]strin
 		return nil, cobra.ShellCompDirectiveError
 	}
 
-	resources, err := client.GetClusterResources(context.Background())
+	resources, err := client.GetClusterResources(commandContext(cmd))
 	if err != nil {
 		return nil, cobra.ShellCompDirectiveError
 	}

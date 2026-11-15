@@ -1,7 +1,6 @@
 package cmdutil
 
 import (
-	"context"
 	"fmt"
 
 	c "github.com/scotty-c/prox/pkg/client"
@@ -27,7 +26,7 @@ func RunOnNode(cmd *cobra.Command, cl c.ProxmoxClientInterface, node string, rem
 
 	if host == "" {
 		var err error
-		if host, err = cl.GetNodeAddress(context.Background(), node); err != nil {
+		if host, err = cl.GetNodeAddress(cmd.Context(), node); err != nil {
 			return fmt.Errorf("couldn't find an address for node %s (use --host): %w", node, err)
 		}
 	}

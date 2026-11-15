@@ -13,8 +13,7 @@ import (
 
 // CloneContainer clones a container. newID 0 uses the next free ID. full
 // makes a full copy; a linked clone is only possible from a template.
-func CloneContainer(sourceNameOrID string, newID int, name string, full, wait bool) error {
-	ctx := context.Background()
+func CloneContainer(ctx context.Context, sourceNameOrID string, newID int, name string, full, wait bool) error {
 	client, err := c.CreateClient()
 	if err != nil {
 		return fmt.Errorf("error creating client: %w", err)
@@ -52,8 +51,7 @@ func CloneContainer(sourceNameOrID string, newID int, name string, full, wait bo
 
 // MigrateContainer moves a container to targetNode. A running container is
 // only moved with restart (stopped, moved and started again).
-func MigrateContainer(nameOrID, targetNode string, restart, wait bool) error {
-	ctx := context.Background()
+func MigrateContainer(ctx context.Context, nameOrID, targetNode string, restart, wait bool) error {
 	client, err := c.CreateClient()
 	if err != nil {
 		return fmt.Errorf("error creating client: %w", err)
@@ -80,12 +78,11 @@ func MigrateContainer(nameOrID, targetNode string, restart, wait bool) error {
 
 // EditContainer changes a container's hostname, cores or memory, and grows
 // its root disk by diskGB. Zero values are left unchanged.
-func EditContainer(nameOrID, hostname string, cores, memoryMB, diskGB int) error {
+func EditContainer(ctx context.Context, nameOrID, hostname string, cores, memoryMB, diskGB int) error {
 	if hostname == "" && cores <= 0 && memoryMB <= 0 && diskGB <= 0 {
 		return fmt.Errorf("no changes specified: use --name, --cpu, --memory or --disk")
 	}
 
-	ctx := context.Background()
 	client, err := c.CreateClient()
 	if err != nil {
 		return fmt.Errorf("error creating client: %w", err)
@@ -128,8 +125,7 @@ func EditContainer(nameOrID, hostname string, cores, memoryMB, diskGB int) error
 }
 
 // RebootContainer reboots a running container
-func RebootContainer(nameOrID string, wait bool) error {
-	ctx := context.Background()
+func RebootContainer(ctx context.Context, nameOrID string, wait bool) error {
 	client, err := c.CreateClient()
 	if err != nil {
 		return fmt.Errorf("error creating client: %w", err)

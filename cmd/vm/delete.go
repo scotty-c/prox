@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 
 	c "github.com/scotty-c/prox/pkg/client"
@@ -33,7 +32,7 @@ Examples:
 		// Get flags
 		node, _ := cmd.Flags().GetString("node")
 
-		ctx := context.Background()
+		ctx := cmd.Context()
 		cl, err := c.CreateClient()
 		if err != nil {
 			return err

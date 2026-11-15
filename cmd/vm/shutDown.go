@@ -47,7 +47,7 @@ Examples:
 		nameOrID := args[0]
 
 		// Shutdown the VM
-		if err := vm.ShutdownVMByNameOrIDWithOptions(nameOrID, node, wait, force); err != nil {
+		if err := vm.ShutdownVMByNameOrIDWithOptions(cmd.Context(), nameOrID, node, wait, force); err != nil {
 			return err
 		}
 		return nil

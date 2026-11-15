@@ -13,10 +13,6 @@ import (
 
 // setupCmd represents the setup command
 
-var username string
-var password string
-var url string
-
 var setupCmd = &cobra.Command{
 	Use:   "setup",
 	Short: "This command sets up the configuration file for prox",
@@ -96,8 +92,8 @@ func promptMissing(username, password, url string) (string, string, string, erro
 }
 
 func init() {
-	setupCmd.Flags().StringVarP(&username, "username", "u", "", "Username for the Proxmox VE API")
-	setupCmd.Flags().StringVarP(&password, "password", "p", "", "Password for the Proxmox VE API")
-	setupCmd.Flags().StringVarP(&url, "url", "l", "", "URL for the Proxmox VE API")
+	setupCmd.Flags().StringP("username", "u", "", "Username for the Proxmox VE API")
+	setupCmd.Flags().StringP("password", "p", "", "Password for the Proxmox VE API")
+	setupCmd.Flags().StringP("url", "l", "", "URL for the Proxmox VE API")
 	configCmd.AddCommand(setupCmd)
 }

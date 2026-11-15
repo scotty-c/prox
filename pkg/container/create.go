@@ -31,7 +31,7 @@ type CreateOptions struct {
 }
 
 // CreateContainerWithOptions creates a new LXC container
-func CreateContainerWithOptions(opts CreateOptions) error {
+func CreateContainerWithOptions(ctx context.Context, opts CreateOptions) error {
 	node, name, template, vmid := opts.Node, opts.Name, opts.Template, opts.VMID
 	memory, disk, cores := opts.Memory, opts.Disk, opts.Cores
 	password, sshKeys, storage, wait := opts.Password, opts.SSHKeys, opts.Storage, opts.Wait
@@ -41,7 +41,6 @@ func CreateContainerWithOptions(opts CreateOptions) error {
 		return err
 	}
 
-	ctx := context.Background()
 	client, err := c.CreateClient()
 	if err != nil {
 		return fmt.Errorf("error creating client: %w", err)
@@ -50,7 +49,7 @@ func CreateContainerWithOptions(opts CreateOptions) error {
 	output.Info("Creating container %s...\n", name)
 
 	// Resolve template if it's in short format
-	resolvedTemplate, err := ResolveTemplateOnNode(template, node)
+	resolvedTemplate, err := ResolveTemplateOnNode(ctx, template, node)
 	if err != nil {
 		return fmt.Errorf("failed to resolve template: %w", err)
 	}
@@ -140,7 +139,7 @@ func CreateContainerWithOptions(opts CreateOptions) error {
 		// have the new container in it
 		client.ClearClusterResourcesCache()
 		// By ID: the name may be shared with another container
-		if err := StartContainerWithWait(strconv.Itoa(vmid), true); err != nil {
+		if err := StartContainerWithWait(ctx, strconv.Itoa(vmid), true); err != nil {
 			return fmt.Errorf("container created but failed to start: %w", err)
 		}
 		return nil

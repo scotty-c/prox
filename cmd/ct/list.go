@@ -18,7 +18,7 @@ var listCmd = &cobra.Command{
 		running, _ := cmd.Flags().GetBool("running")
 		jsonOutput := cmdutil.StructuredOutput(cmd)
 		tag, _ := cmd.Flags().GetString("tag")
-		if err := container.ListContainers(node, running, jsonOutput, tag); err != nil {
+		if err := container.ListContainers(cmd.Context(), node, running, jsonOutput, tag); err != nil {
 			return err
 		}
 		return nil

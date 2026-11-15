@@ -26,12 +26,12 @@ Examples:
 		node, _ := cmd.Flags().GetString("node")
 		available, _ := cmd.Flags().GetBool("available")
 		if available {
-			if err := container.ListAvailableTemplates(node); err != nil {
+			if err := container.ListAvailableTemplates(cmd.Context(), node); err != nil {
 				return fmt.Errorf("listing downloadable templates: %w", err)
 			}
 			return nil
 		}
-		if err := container.ListTemplates(node); err != nil {
+		if err := container.ListTemplates(cmd.Context(), node); err != nil {
 			return err
 		}
 		return nil
@@ -56,7 +56,7 @@ Examples:
 		node, _ := cmd.Flags().GetString("node")
 		storage, _ := cmd.Flags().GetString("storage")
 		wait := cmdutil.ResolveWait(cmd, true)
-		if err := container.PullTemplate(args[0], node, storage, wait); err != nil {
+		if err := container.PullTemplate(cmd.Context(), args[0], node, storage, wait); err != nil {
 			return fmt.Errorf("downloading template: %w", err)
 		}
 		return nil

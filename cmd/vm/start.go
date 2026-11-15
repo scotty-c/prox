@@ -40,7 +40,7 @@ Examples:
 		nameOrID := args[0]
 
 		// Start the VM
-		if err := vm.StartVMByNameOrIDWithWait(nameOrID, node, wait); err != nil {
+		if err := vm.StartVMByNameOrIDWithWait(cmd.Context(), nameOrID, node, wait); err != nil {
 			return err
 		}
 		return nil

@@ -35,7 +35,7 @@ Examples:
 		full, _ := cmd.Flags().GetBool("full")
 		wait := cmdutil.ResolveWait(cmd, true)
 
-		if err := container.CloneContainer(args[0], newID, name, full, wait); err != nil {
+		if err := container.CloneContainer(cmd.Context(), args[0], newID, name, full, wait); err != nil {
 			return fmt.Errorf("cloning container: %w", err)
 		}
 		return nil

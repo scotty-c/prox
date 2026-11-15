@@ -196,7 +196,7 @@ Examples:
 		}
 
 		// Create the container
-		err := container.CreateContainerWithOptions(container.CreateOptions{
+		err := container.CreateContainerWithOptions(cmd.Context(), container.CreateOptions{
 			Node: node, Name: name, Template: template, VMID: vmid,
 			Memory: memory, Disk: disk, Cores: cores,
 			Password: password, SSHKeys: sshKeys, Storage: storage,

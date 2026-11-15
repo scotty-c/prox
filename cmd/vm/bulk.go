@@ -16,7 +16,7 @@ func runOnTaggedVMs(cmd *cobra.Command, verb string, fn func(ctx context.Context
 	node, _ := cmd.Flags().GetString("node")
 	yes, _ := cmd.Flags().GetBool("yes")
 
-	ctx := context.Background()
+	ctx := cmd.Context()
 	cl, err := c.CreateClient()
 	if err != nil {
 		return fmt.Errorf("failed to create client: %w", err)

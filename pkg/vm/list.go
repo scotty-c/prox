@@ -23,7 +23,7 @@ type ListVMsOptions struct {
 
 // fetchIPs looks up the IP address of every running VM, several at a time,
 // and stores it in the VM. VMs without a known address show as N/A.
-func fetchIPs(client c.ProxmoxClientInterface, vms []VM) {
+func fetchIPs(ctx context.Context, client c.ProxmoxClientInterface, vms []VM) {
 	var running []int
 	for i := range vms {
 		if vms[i].Status == "running" {
@@ -32,7 +32,7 @@ func fetchIPs(client c.ProxmoxClientInterface, vms []VM) {
 	}
 	util.ForEach(len(running), c.MaxConcurrentIPLookups, func(k int) {
 		vm := &vms[running[k]]
-		ip, err := client.GetVMIP(context.Background(), vm.Node, vm.ID)
+		ip, err := client.GetVMIP(ctx, vm.Node, vm.ID)
 		if err != nil || ip == "" {
 			ip = "N/A" // shown as-is in tables and JSON
 		}
@@ -41,7 +41,7 @@ func fetchIPs(client c.ProxmoxClientInterface, vms []VM) {
 }
 
 // ListVMs lists virtual machines with the provided options
-func ListVMs(opts ListVMsOptions) error {
+func ListVMs(ctx context.Context, opts ListVMsOptions) error {
 	client, err := c.CreateClient()
 	if err != nil {
 		return fmt.Errorf("failed to create client: %w", err)
@@ -52,7 +52,7 @@ func ListVMs(opts ListVMsOptions) error {
 	}
 
 	// Get cluster resources
-	resources, err := client.GetClusterResources(context.Background())
+	resources, err := client.GetClusterResources(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get cluster resources: %w", err)
 	}
@@ -124,7 +124,7 @@ func ListVMs(opts ListVMsOptions) error {
 
 		// Use detailed disk info if requested (slower but more accurate)
 		if opts.Detailed && (vm.MaxDisk == 0 || vm.Disk == 0) {
-			if maxDisk, usedDisk, err := client.GetVMDiskInfo(context.Background(), resource.Node, int(*resource.VMID)); err == nil {
+			if maxDisk, usedDisk, err := client.GetVMDiskInfo(ctx, resource.Node, int(*resource.VMID)); err == nil {
 				if maxDisk > 0 {
 					vm.MaxDisk = maxDisk
 				}
@@ -145,7 +145,7 @@ func ListVMs(opts ListVMsOptions) error {
 
 	// Fetch IPs concurrently if requested (for performance)
 	if opts.ShowIPs && len(vms) > 0 {
-		fetchIPs(client, vms)
+		fetchIPs(ctx, client, vms)
 	}
 
 	if opts.JSONOutput {

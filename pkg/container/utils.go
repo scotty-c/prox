@@ -96,8 +96,8 @@ func parseTemplateVersion(volID string) string {
 }
 
 // getClusterNodes gets all nodes in the cluster
-func getClusterNodes(client c.ProxmoxClientInterface) ([]string, error) {
-	resources, err := client.GetClusterResources(context.Background())
+func getClusterNodes(ctx context.Context, client c.ProxmoxClientInterface) ([]string, error) {
+	resources, err := client.GetClusterResources(ctx)
 	if err != nil {
 		return nil, err
 	}

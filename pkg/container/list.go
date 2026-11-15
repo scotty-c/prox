@@ -14,7 +14,7 @@ import (
 // fetchContainerIPs looks up the IP address of every running container,
 // several at a time, and stores it in the container. Containers without a
 // known address show as N/A.
-func fetchContainerIPs(client c.ProxmoxClientInterface, containers []Container) {
+func fetchContainerIPs(ctx context.Context, client c.ProxmoxClientInterface, containers []Container) {
 	var running []int
 	for i := range containers {
 		if containers[i].Status == "running" {
@@ -23,7 +23,7 @@ func fetchContainerIPs(client c.ProxmoxClientInterface, containers []Container) 
 	}
 	util.ForEach(len(running), c.MaxConcurrentIPLookups, func(k int) {
 		ct := &containers[running[k]]
-		ip, err := client.GetContainerIPAlternative(context.Background(), ct.Node, ct.ID)
+		ip, err := client.GetContainerIPAlternative(ctx, ct.Node, ct.ID)
 		if err != nil || ip == "" {
 			ip = "N/A" // shown as-is in tables and JSON
 		}
@@ -32,7 +32,7 @@ func fetchContainerIPs(client c.ProxmoxClientInterface, containers []Container) 
 }
 
 // ListContainers lists all LXC containers
-func ListContainers(node string, runningOnly bool, jsonOutput bool, tag string) error {
+func ListContainers(ctx context.Context, node string, runningOnly bool, jsonOutput bool, tag string) error {
 	client, err := c.CreateClient()
 	if err != nil {
 		return fmt.Errorf("failed to create client: %w", err)
@@ -43,7 +43,7 @@ func ListContainers(node string, runningOnly bool, jsonOutput bool, tag string) 
 	}
 
 	// Get cluster resources
-	resources, err := client.GetClusterResources(context.Background())
+	resources, err := client.GetClusterResources(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get cluster resources: %w", err)
 	}
@@ -114,7 +114,7 @@ func ListContainers(node string, runningOnly bool, jsonOutput bool, tag string) 
 	sort.SliceStable(containers, func(i, j int) bool { return containers[i].ID < containers[j].ID })
 
 	// Fetch IP addresses concurrently for all running containers
-	fetchContainerIPs(client, containers)
+	fetchContainerIPs(ctx, client, containers)
 
 	if jsonOutput {
 		if containers == nil {

@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/scotty-c/prox/internal/fakepve"
 )
@@ -135,5 +136,54 @@ func excludes(t *testing.T, what, s string, nots ...string) {
 		if strings.Contains(s, n) {
 			t.Errorf("%s should not contain %q, got:\n%s", what, n, s)
 		}
+	}
+}
+
+// startInterrupted starts prox, waits until the fake server has received a
+// request whose "METHOD /path" starts with waitFor (so prox is certainly in
+// the middle of it), then sends Ctrl-C. It returns what prox did.
+func startInterrupted(t *testing.T, srv *fakepve.Server, waitFor string, args ...string) (result, time.Duration) {
+	t.Helper()
+	cmd := exec.Command(binary, args...)
+	cmd.Env = []string{
+		"HOME=" + t.TempDir(),
+		"PATH=" + os.Getenv("PATH"),
+		"PROX_URL=" + srv.URL,
+		"PROX_USER=root@pam",
+		"PROX_PASSWORD=secret",
+	}
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout, cmd.Stderr = &stdout, &stderr
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+
+	method, path, _ := strings.Cut(waitFor, " ")
+	deadline := time.Now().Add(5 * time.Second)
+	for srv.Count(method, path) == 0 {
+		if time.Now().After(deadline) {
+			_ = cmd.Process.Kill()
+			t.Fatalf("prox never sent %q; requests so far: %v", waitFor, srv.Requests())
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	sent := time.Now()
+	if err := cmd.Process.Signal(os.Interrupt); err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan error, 1)
+	go func() { done <- cmd.Wait() }()
+	select {
+	case err := <-done:
+		code := 0
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			code = exitErr.ExitCode()
+		}
+		return result{stdout.String(), stderr.String(), code}, time.Since(sent)
+	case <-time.After(5 * time.Second):
+		_ = cmd.Process.Kill()
+		t.Fatalf("prox did not stop within 5s of Ctrl-C; stderr:\n%s", stderr.String())
+		return result{}, 0
 	}
 }

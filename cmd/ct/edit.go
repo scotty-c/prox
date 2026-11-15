@@ -24,7 +24,7 @@ Examples:
 		cpu, _ := cmd.Flags().GetInt("cpu")
 		memory, _ := cmd.Flags().GetInt("memory")
 		disk, _ := cmd.Flags().GetInt("disk")
-		if err := container.EditContainer(args[0], name, cpu, memory, disk); err != nil {
+		if err := container.EditContainer(cmd.Context(), args[0], name, cpu, memory, disk); err != nil {
 			return fmt.Errorf("editing container: %w", err)
 		}
 		return nil

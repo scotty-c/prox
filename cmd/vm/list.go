@@ -24,7 +24,7 @@ and --detailed to get accurate disk usage information (both options are slower).
 		detailed, _ := cmd.Flags().GetBool("detailed")
 		jsonOutput := cmdutil.StructuredOutput(cmd)
 		tag, _ := cmd.Flags().GetString("tag")
-		if err := v.ListVMs(v.ListVMsOptions{
+		if err := v.ListVMs(cmd.Context(), v.ListVMsOptions{
 			Node:        node,
 			RunningOnly: running,
 			ShowIPs:     showIPs,

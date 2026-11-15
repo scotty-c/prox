@@ -9,8 +9,7 @@ import (
 )
 
 // TestConnection tests the basic connection to Proxmox
-func TestConnection() error {
-	ctx := context.Background()
+func TestConnection(ctx context.Context) error {
 	client, err := c.CreateClient()
 	if err != nil {
 		return fmt.Errorf("failed to create client: %w", err)
