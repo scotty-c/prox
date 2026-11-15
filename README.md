@@ -151,6 +151,7 @@ prox ssh 100                  # Add/update SSH config entry for VM 100
 prox ssh --list               # List managed SSH config entries
 prox ssh 100 --delete         # Remove SSH entry for VM 100
 prox vm clone 100 101 clone-101 --full
+prox vm clone 100 clone-102           # no ID: the next free one is used
 prox vm migrate 100 node2 --online
 prox vm shutdown 100
 prox vm stop 100 --force      # Hard stop a VM that ignores ACPI shutdown
@@ -168,13 +169,14 @@ prox ct templates
 prox ct list --tag database   # Filter containers by tag
 # create: prox ct create <name> <template>
 prox ct create web ubuntu:22.04 --ssh-keys-file ~/.ssh/id_rsa.pub --memory 1024 --disk 10
+prox ct create web debian:12 --cpu 2 --start                       # Create and start it
 prox ct create web debian:12 --bridge vmbr1 --vlan 20 --ip 10.0.20.5/24 --gateway 10.0.20.1  # Static IP on a VLAN
 prox ct start web
 prox ct describe web
 prox ssh web          # Add/update SSH config entry for container
 prox ct stop web
 prox ct edit web --cpu 2 --memory 2048   # Change resources (--disk 10 grows the root disk)
-prox ct clone web 201 web-copy --full    # Clone (linked clones need a template source)
+prox ct clone web 201 web-copy --full    # Clone (linked clones need a template source); the ID is optional
 prox ct migrate web node2 --restart      # Move a running container to another node
 prox ct templates --available             # Templates Proxmox can download
 prox ct templates pull debian:12          # Download one, then: prox ct create web debian:12
@@ -254,7 +256,7 @@ prox --profile <name> [command]                          # Use specific profile 
 VMs:
 ```bash
 prox vm list | describe <id> | start <id> | shutdown <id> | delete <id>
-prox vm clone <srcID> <newID> [NAME] [--full]
+prox vm clone <srcID> [newID] [NAME] [--full]
 prox vm edit <id> --cpu 4 --memory 8192
 prox vm migrate <id> <targetNode> [--online] [--with-local-disks]
 ```
@@ -399,6 +401,10 @@ Global config
 Output formats
 - `-o json` or `-o yaml` works on the list and describe commands, plus `status`, `config list` and `ct templates`. YAML uses the same field names as JSON.
 - The existing `--json` flags still work and mean `-o json`.
+
+Confirmation prompts
+- Deleting a VM, container, snapshot or profile, rolling back a snapshot, and the `--tag` bulk commands ask first. Skip the question with `-y`/`--yes`; `--force` still works on the delete commands.
+- If there is no way to answer (stdin is closed, as in a CI job), the command fails and names the flag to pass instead of assuming "no" and exiting 0.
 
 Waiting for tasks
 - Commands that start a Proxmox task accept both -w/--wait and --no-wait. Defaults are unchanged: vm start, shutdown and delete return immediately; vm clone, vm migrate and the ct commands wait.

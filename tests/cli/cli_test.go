@@ -117,7 +117,7 @@ func TestDeleteWithoutAnswerFailsAndDeletesNothing(t *testing.T) {
 	if r.code != 1 {
 		t.Errorf("exit %d, want 1", r.code)
 	}
-	contains(t, "stderr", r.stderr, "Delete VM 'web' (ID 100, running, on pve1)", "pass --force")
+	contains(t, "stderr", r.stderr, "Delete VM 'web' (ID 100, running, on pve1)", "pass --yes")
 	if n := srv.Count("DELETE", "/"); n != 0 {
 		t.Errorf("%d DELETEs sent", n)
 	}
@@ -522,7 +522,7 @@ func TestConfigDeleteAsksFirstAndNeedsAnAnswer(t *testing.T) {
 	if r.code != 1 {
 		t.Errorf("no answer: exit %d, want 1", r.code)
 	}
-	contains(t, "stderr", r.stderr, "Delete profile 'lab'", "pass --force")
+	contains(t, "stderr", r.stderr, "Delete profile 'lab'", "pass --yes")
 
 	if r := runInHome(t, home, srv, "n\n", "config", "delete", "lab"); r.code != 0 {
 		t.Errorf("answered no: exit %d, want 0", r.code)
@@ -560,4 +560,123 @@ func TestConfigDeleteUnknownProfileFailsBeforeAsking(t *testing.T) {
 	}
 	contains(t, "stderr", r.stderr, "profile 'nope' does not exist")
 	excludes(t, "stderr", r.stderr, "[y/N]")
+}
+
+// -y/--yes, clone IDs and ct create options
+
+func TestYesAndForceBothSkipTheConfirmation(t *testing.T) {
+	for _, flag := range []string{"-y", "--yes", "-f", "--force"} {
+		srv := fakepve.New(t)
+		r := run(t, srv, "", "vm", "delete", "100", flag)
+		if r.code != 0 || srv.Count("DELETE", "/nodes/pve1/qemu/100") != 1 {
+			t.Errorf("vm delete %s: exit %d, DELETEs %d\n%s", flag, r.code, srv.Count("DELETE", "/"), r.stderr)
+		}
+		srv = fakepve.New(t)
+		r = run(t, srv, "", "ct", "delete", "ct1", flag)
+		if r.code != 0 || srv.Count("DELETE", "/nodes/pve1/lxc/200") != 1 {
+			t.Errorf("ct delete %s: exit %d, DELETEs %d\n%s", flag, r.code, srv.Count("DELETE", "/"), r.stderr)
+		}
+	}
+}
+
+func TestYesSkipsSnapshotAndConfigPrompts(t *testing.T) {
+	srv := fakepve.New(t)
+	if r := run(t, srv, "", "vm", "snapshot", "delete", "100", "snap1", "--yes"); r.code != 0 || srv.Count("DELETE", "/nodes/pve1/qemu/100/snapshot/snap1") != 1 {
+		t.Errorf("snapshot delete: exit %d\n%s", r.code, r.stderr)
+	}
+	if r := run(t, srv, "", "vm", "snapshot", "rollback", "100", "snap1", "-y"); r.code != 0 || srv.Count("POST", "/nodes/pve1/qemu/100/snapshot/snap1/rollback") != 1 {
+		t.Errorf("snapshot rollback: exit %d\n%s", r.code, r.stderr)
+	}
+	home := t.TempDir()
+	runInHome(t, home, srv, "", "config", "create", "lab", "-u", "u@pam", "-p", "pw", "-l", "https://pve:8006")
+	if r := runInHome(t, home, srv, "", "config", "delete", "lab", "-y"); r.code != 0 {
+		t.Errorf("config delete -y: exit %d\n%s", r.code, r.stderr)
+	}
+}
+
+func TestVMCloneWithoutAnIDUsesTheNextFreeOne(t *testing.T) {
+	srv := fakepve.New(t)
+	r := run(t, srv, "", "vm", "clone", "100", "web2", "--wait")
+	if r.code != 0 {
+		t.Fatalf("exit %d: %s", r.code, r.stderr)
+	}
+	body := srv.Body("POST /nodes/pve1/qemu/100/clone")
+	contains(t, "clone request", body, `"newid":103`, `"name":"web2"`)
+	contains(t, "stderr", r.stderr, "next free VM ID: 103")
+}
+
+func TestVMCloneStillTakesAnExplicitID(t *testing.T) {
+	srv := fakepve.New(t)
+	r := run(t, srv, "", "vm", "clone", "100", "300", "web2")
+	if r.code != 0 {
+		t.Fatalf("exit %d: %s", r.code, r.stderr)
+	}
+	contains(t, "clone request", srv.Body("POST /nodes/pve1/qemu/100/clone"), `"newid":300`, `"name":"web2"`)
+}
+
+func TestVMCloneNeedsAName(t *testing.T) {
+	r := run(t, fakepve.New(t), "", "vm", "clone", "100", "300")
+	if r.code != 1 {
+		t.Errorf("exit %d, want 1", r.code)
+	}
+	contains(t, "stderr", r.stderr, "a name for the new VM is required")
+}
+
+func TestContainerCloneWithoutAnIDUsesTheNextFreeOne(t *testing.T) {
+	srv := fakepve.New(t)
+	r := run(t, srv, "", "ct", "clone", "ct1", "ct1-copy", "--full")
+	if r.code != 0 {
+		t.Fatalf("exit %d: %s", r.code, r.stderr)
+	}
+	contains(t, "clone request", srv.Body("POST /nodes/pve1/lxc/200/clone"), `"newid":103`, `"hostname":"ct1-copy"`)
+}
+
+func TestContainerCreateAcceptsCPUAndIDAndCanStart(t *testing.T) {
+	srv := fakepve.New(t)
+	r := run(t, srv, "", "ct", "create", "web2", "debian:12", "--cpu", "2", "--id", "150", "--start")
+	if r.code != 0 {
+		t.Fatalf("exit %d: %s", r.code, r.stderr)
+	}
+	contains(t, "create request", srv.Body("POST /nodes/pve1/lxc"), `"cores":2`, `"vmid":150`, `"hostname":"web2"`)
+	if srv.Count("POST", "/nodes/pve1/lxc/150/status/start") != 1 {
+		t.Errorf("container should have been started: %v", srv.Requests())
+	}
+	contains(t, "stdout", r.stdout, "Container web2 (ID: 150) created successfully")
+}
+
+func TestContainerCreateWithoutStartLeavesItStopped(t *testing.T) {
+	srv := fakepve.New(t)
+	r := run(t, srv, "", "ct", "create", "web2", "debian:12")
+	if r.code != 0 {
+		t.Fatalf("exit %d: %s", r.code, r.stderr)
+	}
+	if n := srv.Count("POST", "/nodes/pve1/lxc/"); n != 0 {
+		t.Errorf("nothing should be started, got %d POSTs", n)
+	}
+	contains(t, "stderr", r.stderr, "prox ct start web2")
+}
+
+func TestContainerCreateRejectsConflictingAliasesBeforeDoingAnything(t *testing.T) {
+	for _, args := range [][]string{
+		{"ct", "create", "web2", "debian:12", "--cpu", "2", "--cores", "3"},
+		{"ct", "create", "web2", "debian:12", "--id", "150", "--vmid", "151"},
+		{"ct", "create", "web2", "debian:12", "--start", "--no-wait"},
+	} {
+		srv := fakepve.New(t)
+		r := run(t, srv, "", args...)
+		if r.code != 1 {
+			t.Errorf("prox %v: exit %d, want 1", args, r.code)
+		}
+		if srv.Count("POST", "/") != 0 {
+			t.Errorf("prox %v made changes: %v", args, srv.Requests())
+		}
+	}
+}
+
+func TestVMTestCommandIsHidden(t *testing.T) {
+	r := run(t, fakepve.New(t), "", "vm", "--help")
+	excludes(t, "vm help", r.stdout, "Test connection to Proxmox server")
+	if r := run(t, fakepve.New(t), "", "vm", "test"); r.code != 0 {
+		t.Errorf("hidden command should still work: exit %d\n%s", r.code, r.stderr)
+	}
 }

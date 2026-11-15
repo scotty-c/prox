@@ -104,15 +104,14 @@ Examples:
 		Args:              cobra.ExactArgs(2),
 		ValidArgsFunction: complete,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			force, _ := cmd.Flags().GetBool("force")
-			if !force {
+			if !cmdutil.SkipConfirm(cmd) {
 				_, _, t, err := prepare(guestType, args[0], node(cmd))
 				if err != nil {
 					return wrap("rolling back", err)
 				}
 				ok, err := cmdutil.Confirm(
 					fmt.Sprintf("Roll %s '%s' (ID %d, on %s) back to snapshot '%s'? Changes since the snapshot will be lost", label, t.name, t.id, t.node, args[1]),
-					"--force", "Rollback cancelled")
+					"--yes", "Rollback cancelled")
 				if err != nil || !ok {
 					return err
 				}
@@ -121,7 +120,8 @@ Examples:
 			return wrap("rolling back", Rollback(guestType, args[0], node(cmd), args[1], wait))
 		},
 	}
-	rollback.Flags().BoolP("force", "f", false, "Skip the confirmation prompt")
+	rollback.Flags().BoolP("force", "f", false, "Skip the confirmation prompt (same as --yes)")
+	cmdutil.AddYesFlag(rollback)
 	addNode(rollback)
 	cmdutil.AddWaitFlags(rollback, true)
 
@@ -132,15 +132,14 @@ Examples:
 		Args:              cobra.ExactArgs(2),
 		ValidArgsFunction: complete,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			force, _ := cmd.Flags().GetBool("force")
-			if !force {
+			if !cmdutil.SkipConfirm(cmd) {
 				_, _, t, err := prepare(guestType, args[0], node(cmd))
 				if err != nil {
 					return wrap("deleting snapshot", err)
 				}
 				ok, err := cmdutil.Confirm(
 					fmt.Sprintf("Delete snapshot '%s' of %s '%s' (ID %d, on %s)?", args[1], label, t.name, t.id, t.node),
-					"--force", "Deletion cancelled")
+					"--yes", "Deletion cancelled")
 				if err != nil || !ok {
 					return err
 				}
@@ -149,7 +148,8 @@ Examples:
 			return wrap("deleting snapshot", Delete(guestType, args[0], node(cmd), args[1], wait))
 		},
 	}
-	del.Flags().BoolP("force", "f", false, "Skip the confirmation prompt")
+	del.Flags().BoolP("force", "f", false, "Skip the confirmation prompt (same as --yes)")
+	cmdutil.AddYesFlag(del)
 	addNode(del)
 	cmdutil.AddWaitFlags(del, true)
 

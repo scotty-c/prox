@@ -31,7 +31,6 @@ Examples:
 		nameOrID := args[0]
 
 		// Get flags
-		force, _ := cmd.Flags().GetBool("force")
 		node, _ := cmd.Flags().GetString("node")
 
 		ctx := context.Background()
@@ -45,10 +44,10 @@ Examples:
 			return err
 		}
 
-		if !force {
+		if !cmdutil.SkipConfirm(cmd) {
 			ok, err := cmdutil.Confirm(
 				fmt.Sprintf("Delete VM '%s' (ID %d, %s, on %s)? This action cannot be undone", target.Name, target.ID, target.Status, target.Node),
-				"--force", "Deletion cancelled")
+				"--yes", "Deletion cancelled")
 			if err != nil || !ok {
 				return err
 			}
@@ -64,7 +63,8 @@ Examples:
 func init() {
 	cmdutil.AddWaitFlags(delCmd, false)
 	delCmd.Flags().StringP("node", "n", "", "Only match VMs on this node (optional - auto-discovered if not specified)")
-	delCmd.Flags().BoolP("force", "f", false, "Skip confirmation prompt (use with caution)")
+	delCmd.Flags().BoolP("force", "f", false, "Skip the confirmation prompt (same as --yes)")
+	cmdutil.AddYesFlag(delCmd)
 	vmCmd.AddCommand(delCmd)
 	completion.RegisterNodeFlag(delCmd, "node")
 }

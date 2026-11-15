@@ -24,7 +24,6 @@ var deleteCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		wait := cmdutil.ResolveWait(cmd, true)
 		nameOrID := args[0]
-		force, _ := cmd.Flags().GetBool("force")
 
 		cl, err := c.CreateClient()
 		if err != nil {
@@ -36,10 +35,10 @@ var deleteCmd = &cobra.Command{
 			return err
 		}
 
-		if !force {
+		if !cmdutil.SkipConfirm(cmd) {
 			ok, err := cmdutil.Confirm(
 				fmt.Sprintf("Delete container '%s' (ID %d, %s, on %s)? This action cannot be undone", target.Name, target.ID, target.Status, target.Node),
-				"--force", "Deletion cancelled")
+				"--yes", "Deletion cancelled")
 			if err != nil || !ok {
 				return err
 			}
@@ -55,6 +54,7 @@ var deleteCmd = &cobra.Command{
 
 func init() {
 	cmdutil.AddWaitFlags(deleteCmd, true)
-	deleteCmd.Flags().BoolP("force", "f", false, "Skip confirmation prompt (use with caution)")
+	deleteCmd.Flags().BoolP("force", "f", false, "Skip the confirmation prompt (same as --yes)")
+	cmdutil.AddYesFlag(deleteCmd)
 	ctCmd.AddCommand(deleteCmd)
 }

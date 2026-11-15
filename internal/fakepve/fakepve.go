@@ -9,6 +9,7 @@ package fakepve
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"regexp"
@@ -31,6 +32,8 @@ type Server struct {
 	mu       sync.Mutex
 	requests []string
 	failures map[string]failure
+	bodies   map[string]string        // last request body per "METHOD /path"
+	created  []map[string]interface{} // guests made by create or clone requests
 }
 
 type failure struct {
@@ -41,7 +44,7 @@ type failure struct {
 // New starts a fake Proxmox API that is shut down when the test ends
 func New(t testing.TB) *Server {
 	t.Helper()
-	s := &Server{failures: map[string]failure{}}
+	s := &Server{failures: map[string]failure{}, bodies: map[string]string{}}
 	s.Server = httptest.NewServer(http.HandlerFunc(s.handle))
 	t.Cleanup(s.Close)
 	return s
@@ -59,6 +62,14 @@ func (s *Server) FailRequestWithStatus(methodAndPath string, status int, msg str
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.failures[methodAndPath] = failure{status, msg}
+}
+
+// Body returns the body of the last request to "METHOD /path" (the path
+// without /api2/json), or "" if there was none
+func (s *Server) Body(methodAndPath string) string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.bodies[methodAndPath]
 }
 
 // Requests returns every request received so far as "METHOD /path?query"
@@ -97,20 +108,32 @@ var qemuConfig = map[string]interface{}{
 	"boot": "order=scsi0", "onboot": 1,
 }
 
+// storages is what every node reports: "local" holds templates, "local-lvm"
+// holds container root disks
+var storages = []map[string]interface{}{
+	{"storage": "local", "type": "dir", "content": "iso,vztmpl,backup", "active": 1},
+	{"storage": "local-lvm", "type": "lvmthin", "content": "rootdir,images", "active": 1},
+}
+
 var (
-	reQemuConfig = regexp.MustCompile(`^/nodes/\w+/qemu/\d+/config$`)
-	reQemuStatus = regexp.MustCompile(`^/nodes/\w+/qemu/\d+/status/current$`)
-	reLxcStatus  = regexp.MustCompile(`^/nodes/\w+/lxc/\d+/status/current$`)
-	reLxcIfaces  = regexp.MustCompile(`^/nodes/\w+/lxc/\d+/interfaces$`)
-	reLxcConfig  = regexp.MustCompile(`^/nodes/\w+/lxc/\d+/config$`)
-	reAction     = regexp.MustCompile(`^/nodes/\w+/(qemu|lxc)/(\d+)/status/\w+$`)
-	reGuest      = regexp.MustCompile(`^/nodes/\w+/(qemu|lxc)/\d+$`)
-	reSnapshots  = regexp.MustCompile(`^/nodes/\w+/(qemu|lxc)/\d+/snapshot$`)
+	reStorageList    = regexp.MustCompile(`^/nodes/\w+/storage$`)
+	reStorageContent = regexp.MustCompile(`^/nodes/\w+/storage/[\w-]+/content$`)
+	reCreateGuest    = regexp.MustCompile(`^/nodes/\w+/(lxc|qemu)$`)
+	reQemuConfig     = regexp.MustCompile(`^/nodes/\w+/qemu/\d+/config$`)
+	reQemuStatus     = regexp.MustCompile(`^/nodes/\w+/qemu/\d+/status/current$`)
+	reLxcStatus      = regexp.MustCompile(`^/nodes/\w+/lxc/\d+/status/current$`)
+	reLxcIfaces      = regexp.MustCompile(`^/nodes/\w+/lxc/\d+/interfaces$`)
+	reLxcConfig      = regexp.MustCompile(`^/nodes/\w+/lxc/\d+/config$`)
+	reAction         = regexp.MustCompile(`^/nodes/\w+/(qemu|lxc)/(\d+)/status/\w+$`)
+	reGuest          = regexp.MustCompile(`^/nodes/\w+/(qemu|lxc)/\d+$`)
+	reSnapshots      = regexp.MustCompile(`^/nodes/\w+/(qemu|lxc)/\d+/snapshot$`)
 )
 
 func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 	p := strings.TrimPrefix(r.URL.Path, "/api2/json")
+	body, _ := io.ReadAll(r.Body)
 	s.mu.Lock()
+	s.bodies[r.Method+" "+p] = string(body)
 	s.requests = append(s.requests, r.Method+" "+strings.TrimPrefix(r.URL.RequestURI(), "/api2/json"))
 	f, failed := s.failures[r.Method+" "+p]
 	s.mu.Unlock()
@@ -129,7 +152,10 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 			{"node": "pve1", "status": "online", "type": "node", "id": "node/pve1"},
 			{"node": "pve2", "status": "online", "type": "node", "id": "node/pve2"}}, 200, "")
 	case p == "/cluster/resources":
-		reply(w, cluster, 200, "")
+		s.mu.Lock()
+		all := append(append([]map[string]interface{}{}, cluster...), s.created...)
+		s.mu.Unlock()
+		reply(w, all, 200, "")
 	case p == "/cluster/nextid":
 		reply(w, "103", 200, "")
 	case reQemuConfig.MatchString(p):
@@ -148,6 +174,24 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 		reply(w, map[string]interface{}{"hostname": "ct1", "memory": 512, "cores": 1, "rootfs": "local-lvm:vm-200-disk-0,size=8G",
 			"net0": "name=eth0,bridge=vmbr0,ip=dhcp", "net1": "name=eth1,bridge=vmbr1", "net2": "name=eth2,bridge=vmbr2",
 			"mp0": "local:200/data0,mp=/data0", "mp1": "local:200/data1,mp=/data1", "mp10": "local:200/data10,mp=/data10"}, 200, "")
+	case reStorageList.MatchString(p) && r.Method == http.MethodGet:
+		want := r.URL.Query().Get("content")
+		var out []map[string]interface{}
+		for _, st := range storages {
+			if want == "" || strings.Contains(st["content"].(string), want) {
+				out = append(out, st)
+			}
+		}
+		reply(w, out, 200, "")
+	case reStorageContent.MatchString(p) && r.Method == http.MethodGet:
+		if strings.HasPrefix(p, "/nodes/pve1/storage/local/") {
+			reply(w, []map[string]interface{}{{"volid": "local:vztmpl/debian-12-standard_12.7-1_amd64.tar.zst", "size": 123456789}}, 200, "")
+		} else {
+			reply(w, []map[string]interface{}{}, 200, "")
+		}
+	case reCreateGuest.MatchString(p) && r.Method == http.MethodPost, strings.HasSuffix(p, "/clone") && r.Method == http.MethodPost:
+		s.addGuest(p, body)
+		reply(w, UPID, 200, "")
 	case strings.Contains(p, "/agent/"):
 		reply(w, nil, 500, "QEMU guest agent is not running")
 	case strings.HasSuffix(p, "/resize") && r.Method == http.MethodPut:
@@ -192,4 +236,40 @@ func reply(w http.ResponseWriter, data interface{}, status int, reason string) {
 	w.Header().Set("Content-Length", strconv.Itoa(len(body)))
 	w.WriteHeader(status)
 	_, _ = w.Write(body)
+}
+
+// addGuest records a guest made by a create or clone request, so that it
+// appears in the cluster listing afterwards (stopped, as Proxmox leaves it)
+func (s *Server) addGuest(path string, body []byte) {
+	var req struct {
+		VMID     int    `json:"vmid"`
+		NewID    int    `json:"newid"`
+		Name     string `json:"name"`
+		Hostname string `json:"hostname"`
+	}
+	if json.Unmarshal(body, &req) != nil {
+		return
+	}
+	id := req.VMID
+	if id == 0 {
+		id = req.NewID
+	}
+	name := req.Name
+	if name == "" {
+		name = req.Hostname
+	}
+	kind := "qemu"
+	if strings.Contains(path, "/lxc") {
+		kind = "lxc"
+	}
+	node := strings.Split(strings.TrimPrefix(path, "/nodes/"), "/")[0]
+	if id == 0 || name == "" {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.created = append(s.created, map[string]interface{}{
+		"id": fmt.Sprintf("%s/%d", kind, id), "type": kind, "node": node, "vmid": id, "name": name,
+		"status": "stopped", "maxcpu": 1, "maxmem": 512 << 20, "maxdisk": 8 << 30,
+	})
 }

@@ -38,6 +38,7 @@ SSH Key Options:
 
 Examples:
   prox ct create mycontainer ubuntu:22.04
+  prox ct create web debian:12 --cpu 2 --start     # create and start it
   prox ct create webapp debian:12 --memory 2048 --disk 32
   prox ct create dev-env alpine:3.18 --cores 2 --node node1 --ssh-keys-file ~/.ssh/id_rsa.pub
   prox ct create mycontainer ubuntu:22.04 --storage local-zfs --disk 16
@@ -100,6 +101,26 @@ Examples:
 		ip, _ := cmd.Flags().GetString("ip")
 		gateway, _ := cmd.Flags().GetString("gateway")
 		vlan, _ := cmd.Flags().GetInt("vlan")
+		start, _ := cmd.Flags().GetBool("start")
+
+		// --cpu and --id are the names 'vm create' uses; they mean the same as
+		// --cores and --vmid
+		if cmd.Flags().Changed("cpu") {
+			cpu, _ := cmd.Flags().GetInt("cpu")
+			if cmd.Flags().Changed("cores") && cpu != cores {
+				return fmt.Errorf("--cpu %d and --cores %d disagree; they are the same setting, use one", cpu, cores)
+			}
+			cores = cpu
+		}
+		if id, _ := cmd.Flags().GetInt("id"); id != 0 {
+			if vmidStr != "" && vmidStr != strconv.Itoa(id) {
+				return fmt.Errorf("--id %d and --vmid %s disagree; they are the same setting, use one", id, vmidStr)
+			}
+			vmidStr = strconv.Itoa(id)
+		}
+		if start && !wait {
+			return fmt.Errorf("--start needs the container to be created first; drop --no-wait")
+		}
 
 		// Parse VMID if provided
 		var vmid int
@@ -181,6 +202,7 @@ Examples:
 			Password: password, SSHKeys: sshKeys, Storage: storage,
 			Network: container.NetworkOptions{Bridge: bridge, IP: ip, Gateway: gateway, VLAN: vlan},
 			Wait:    wait,
+			Start:   start,
 		})
 		if err != nil {
 			return fmt.Errorf("creating container: %w", err)
@@ -201,6 +223,9 @@ func init() {
 	createCmd.Flags().IntP("memory", "m", 512, "Memory in MB")
 	createCmd.Flags().IntP("disk", "d", 8, "Disk size in GB")
 	createCmd.Flags().IntP("cores", "c", 1, "Number of CPU cores")
+	createCmd.Flags().Int("cpu", 0, "Number of CPU cores (same as --cores; the name 'vm create' uses)")
+	createCmd.Flags().Int("id", 0, "Container ID (same as --vmid; the name 'vm create' uses)")
+	createCmd.Flags().Bool("start", false, "Start the container after creating it")
 	createCmd.Flags().StringP("password", "p", "", "Root password for container")
 	createCmd.Flags().Bool("prompt-password", false, "Prompt for password interactively")
 	createCmd.Flags().String("ssh-keys-file", "", "Path to SSH public key file (e.g., ~/.ssh/id_rsa.pub) or '-' to read from stdin")

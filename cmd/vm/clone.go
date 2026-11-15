@@ -5,7 +5,6 @@ import (
 	"github.com/scotty-c/prox/pkg/cmdutil"
 	"github.com/scotty-c/prox/pkg/completion"
 	"os"
-	"strconv"
 
 	"github.com/scotty-c/prox/pkg/vm"
 	"github.com/spf13/cobra"
@@ -14,26 +13,26 @@ import (
 // cloneCmd represents the clone command
 
 var cloneCmd = &cobra.Command{
-	Use:   "clone <source_name|id> [NEW_VM_ID] [NAME] [flags]",
+	Use:   "clone <source_name|id> [new_id] [name] [flags]",
 	Short: "Clone a virtual machine",
-	Long: `Clone an existing virtual machine to create a new one with a different ID. The source VM can be specified by name or ID, and its node will be automatically discovered if not specified.
+	Long: `Clone an existing virtual machine to create a new one. Without a new ID the next free one is used. The source VM can be specified by name or ID, and its node will be automatically discovered if not specified.
 
 By default, Proxmox attempts to create a linked clone (if supported by the storage backend).
 Use the --full flag to create a full clone instead, which copies all disk data and is supported by all storage types.
 
 Examples:
+  prox vm clone myvm newvm              # next free ID
   prox vm clone myvm 200 newvm
   prox vm clone 100 200 newvm --full
   prox vm clone web-server 300 web-clone`,
 	ValidArgsFunction: completion.FirstArgOnly(completion.GetVMNames),
-	Args:              cobra.MinimumNArgs(2),
+	Args:              cobra.RangeArgs(1, 3),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		sourceNameOrID := args[0]
 
-		// Parse new VM ID
-		newID, err := strconv.Atoi(args[1])
+		newID, posName, err := cmdutil.ParseCloneArgs(args[1:])
 		if err != nil {
-			return fmt.Errorf("Invalid new VM ID '%s'. Must be a number.", args[1])
+			return err
 		}
 
 		// Get flags
@@ -42,11 +41,7 @@ Examples:
 		wait := cmdutil.ResolveWait(cmd, true)
 		node, _ := cmd.Flags().GetString("node")
 
-		// Optional positional name support; precedence to positional when provided
-		posName := ""
-		if len(args) >= 3 {
-			posName = args[2]
-		}
+		// Positional name wins over --name
 		name := posName
 		if name == "" {
 			name = flagName
@@ -55,7 +50,7 @@ Examples:
 		}
 
 		if name == "" {
-			return fmt.Errorf("a name for the new VM is required: give NAME as the third argument or use --name")
+			return fmt.Errorf("a name for the new VM is required: give NAME as an argument or use --name")
 		}
 
 		if err := vm.CloneVMByNameOrIDWithWait(sourceNameOrID, node, name, newID, full, wait); err != nil {

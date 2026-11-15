@@ -7,9 +7,10 @@ import (
 
 // testCmd represents the test command
 var testCmd = &cobra.Command{
-	Use:   "test",
-	Short: "Test connection to Proxmox server",
-	Long:  `Test the connection to your Proxmox server and verify API access.`,
+	Use:    "test",
+	Hidden: true, // a connection check, not a VM operation; use 'prox config test' or 'prox status'
+	Short:  "Test connection to Proxmox server",
+	Long:   `Test the connection to your Proxmox server and verify API access.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if err := vm.TestConnection(); err != nil {
 			return err

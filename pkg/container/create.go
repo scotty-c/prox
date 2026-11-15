@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"slices"
+	"strconv"
 	"strings"
 
 	c "github.com/scotty-c/prox/pkg/client"
@@ -30,6 +31,7 @@ type CreateOptions struct {
 	Storage  string // empty: local-lvm if available, otherwise the first rootdir storage
 	Network  NetworkOptions
 	Wait     bool
+	Start    bool // start it once created (needs Wait)
 }
 
 // CreateContainerWithWait creates a new LXC container, optionally returning as
@@ -152,6 +154,17 @@ func CreateContainerWithOptions(opts CreateOptions) error {
 	}
 
 	output.Result("Container %s (ID: %d) created successfully on node %s\n", name, vmid, node)
+
+	if opts.Start {
+		// The cluster listing fetched while resolving the template does not
+		// have the new container in it
+		client.ClearClusterResourcesCache()
+		// By ID: the name may be shared with another container
+		if err := StartContainerWithWait(strconv.Itoa(vmid), true); err != nil {
+			return fmt.Errorf("container created but failed to start: %w", err)
+		}
+		return nil
+	}
 	output.Info("Tip: Use 'prox ct start %s' to start the container\n", name)
 
 	return nil

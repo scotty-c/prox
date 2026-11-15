@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"fmt"
-	"strconv"
 
 	"github.com/scotty-c/prox/pkg/cmdutil"
 	"github.com/scotty-c/prox/pkg/completion"
@@ -11,27 +10,27 @@ import (
 )
 
 var cloneCmd = &cobra.Command{
-	Use:   "clone <source_name|id> <new_id> [name]",
+	Use:   "clone <source_name|id> [new_id] [name]",
 	Short: "Clone a container",
-	Long: `Clone an existing container to a new container ID on the same node.
+	Long: `Clone an existing container to a new container on the same node. Without a new
+ID the next free one is used.
 
 A linked clone is only possible when the source is a template; use --full to copy
 an ordinary container. The name can be given as a third argument or with --name.
 
 Examples:
+  prox ct clone web web-copy --full       # next free ID
   prox ct clone web 201 web-copy --full
   prox ct clone ubuntu-template 202 api`,
-	Args:              cobra.RangeArgs(2, 3),
+	Args:              cobra.RangeArgs(1, 3),
 	ValidArgsFunction: completion.FirstArgOnly(completion.GetContainerNames),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		newID, err := strconv.Atoi(args[1])
-		if err != nil || newID <= 0 {
-			return fmt.Errorf("Invalid new container ID '%s'. Must be a positive number.", args[1])
+		newID, name, err := cmdutil.ParseCloneArgs(args[1:])
+		if err != nil {
+			return err
 		}
-
-		name, _ := cmd.Flags().GetString("name")
-		if len(args) == 3 {
-			name = args[2]
+		if name == "" {
+			name, _ = cmd.Flags().GetString("name")
 		}
 		full, _ := cmd.Flags().GetBool("full")
 		wait := cmdutil.ResolveWait(cmd, true)

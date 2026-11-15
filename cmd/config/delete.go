@@ -20,7 +20,7 @@ unless --force is given.
 
 Examples:
   prox config delete homelab
-  prox config delete --force       # the current profile, without asking`,
+  prox config delete --yes         # the current profile, without asking`,
 	Args:              cobra.MaximumNArgs(1),
 	ValidArgsFunction: completion.FirstArgOnly(completion.GetProfileNames),
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -32,10 +32,10 @@ Examples:
 			return fmt.Errorf("profile '%s' does not exist (see 'prox config list')", profile)
 		}
 
-		if force, _ := cmd.Flags().GetBool("force"); !force {
+		if !cmdutil.SkipConfirm(cmd) {
 			ok, err := cmdutil.Confirm(
 				fmt.Sprintf("Delete profile '%s'? Its saved credentials will be removed", profile),
-				"--force", "Deletion cancelled")
+				"--yes", "Deletion cancelled")
 			if err != nil || !ok {
 				return err
 			}
@@ -50,6 +50,7 @@ Examples:
 }
 
 func init() {
-	deleteCmd.Flags().BoolP("force", "f", false, "Don't ask for confirmation")
+	deleteCmd.Flags().BoolP("force", "f", false, "Don't ask for confirmation (same as --yes)")
+	cmdutil.AddYesFlag(deleteCmd)
 	configCmd.AddCommand(deleteCmd)
 }

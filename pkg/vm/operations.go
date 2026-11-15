@@ -237,10 +237,16 @@ func CloneVMWithWait(ctx context.Context, id int, node string, name string, newI
 		Client: client,
 	}
 
-	output.Info("Checking if VM ID %d is available...\n", newId)
-	// check to see if the new id is already in use if so the program will exit
-	if err := GetID(ctx, newId); err != nil {
-		return err
+	if newId == 0 {
+		if newId, err = client.GetNextVMID(ctx); err != nil {
+			return fmt.Errorf("failed to get the next free VM ID: %w", err)
+		}
+		output.Info("Using the next free VM ID: %d\n", newId)
+	} else {
+		output.Info("Checking if VM ID %d is available...\n", newId)
+		if err := GetID(ctx, newId); err != nil {
+			return err
+		}
 	}
 
 	cloneType := "linked"
