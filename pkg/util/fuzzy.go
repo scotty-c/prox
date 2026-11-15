@@ -78,11 +78,14 @@ func FindSimilarStrings(target string, candidates []string, maxResults int) []st
 
 	var matches []match
 	targetLower := strings.ToLower(target)
+	seen := make(map[string]bool)
 
 	for _, candidate := range candidates {
-		if candidate == "" {
+		// Several guests can share a name; suggest it once
+		if candidate == "" || seen[candidate] {
 			continue
 		}
+		seen[candidate] = true
 
 		candidateLower := strings.ToLower(candidate)
 

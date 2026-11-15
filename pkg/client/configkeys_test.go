@@ -1,6 +1,7 @@
 package client
 
 import (
+	"context"
 	"reflect"
 	"testing"
 )
@@ -56,5 +57,22 @@ func TestConfigFlag(t *testing.T) {
 		if on, ok := ConfigFlag(c.in); on != c.on || ok != c.isOK {
 			t.Errorf("ConfigFlag(%#v) = %v, %v; want %v, %v", c.in, on, ok, c.on, c.isOK)
 		}
+	}
+}
+
+func TestVolumeSizeLookupIsExact(t *testing.T) {
+	c := &ProxmoxClient{}
+	cache := map[string][]interface{}{
+		"pve1:local-lvm": {
+			map[string]interface{}{"volid": "local-lvm:vm-100-disk-10", "size": float64(100)},
+			map[string]interface{}{"volid": "local-lvm:vm-100-disk-1", "size": float64(1)},
+		},
+	}
+	got, err := c.getStorageVolumeSizeWithCache(context.Background(), "pve1", "local-lvm", "vm-100-disk-1", cache)
+	if err != nil || got != 1 {
+		t.Fatalf("size = %d, %v; want 1 (not disk-10's 100)", got, err)
+	}
+	if _, err := c.getStorageVolumeSizeWithCache(context.Background(), "pve1", "local-lvm", "vm-100-disk-", cache); err == nil {
+		t.Fatal("a partial volume name must not match")
 	}
 }

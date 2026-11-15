@@ -62,9 +62,7 @@ func showStatus() error {
 		return fmt.Errorf("failed to read config: %w", err)
 	}
 
-	if !output.Structured() {
-		fmt.Println("Connecting to Proxmox VE cluster...")
-	}
+	output.Infoln("Connecting to Proxmox VE cluster...")
 
 	// Create client
 	cl, err := client.CreateClient()

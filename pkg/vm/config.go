@@ -3,6 +3,7 @@ package vm
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	c "github.com/scotty-c/prox/pkg/client"
 	"github.com/scotty-c/prox/pkg/output"
@@ -80,12 +81,18 @@ func EditVM(ctx context.Context, id int, node string, name string, cores int, me
 		output.Info("Increasing disk size by: %d GB\n", diskSize)
 
 		// Call disk resize function with auto-detected disk type
-		if err := vm.ResizeDisk(ctx, primaryDisk, fmt.Sprintf("+%dG", diskSize)); err != nil {
+		taskID, err := vm.ResizeDisk(ctx, primaryDisk, fmt.Sprintf("+%dG", diskSize))
+		if err != nil {
 			return fmt.Errorf("failed to resize VM %d disk: %w", id, err)
 		}
 
-		output.Result("VM %d disk resize command issued successfully\n", id)
-		output.Info("Tip: Use 'prox vm list' to check the VM status\n")
+		// Wait for the resize so a failure is reported here, not silently lost
+		if taskID != "" {
+			if err := waitForTask(ctx, client, node, taskID); err != nil {
+				return fmt.Errorf("disk resize failed: %w", err)
+			}
+		}
+		output.Result("VM %d disk %s grown by %d GB\n", id, primaryDisk, diskSize)
 
 		// Mark as having changes for the check, but don't add to config
 		hasChanges = true
@@ -133,20 +140,10 @@ func EditVM(ctx context.Context, id int, node string, name string, cores int, me
 	return nil
 }
 
-// ResizeDisk resizes a VM disk
-func (v *VirtualMachine) ResizeDisk(ctx context.Context, disk string, size string) error {
-	taskID, err := v.Client.ResizeDisk(ctx, v.Node, v.ID, disk, size)
-	if err != nil {
-		return err
-	}
-
-	// If a task ID is returned, we could track it, but for now just return success
-	if taskID != "" {
-		// Task started successfully
-		return nil
-	}
-
-	return nil
+// ResizeDisk resizes a VM disk and returns the task ID ("" if Proxmox
+// finished the resize without starting a task)
+func (v *VirtualMachine) ResizeDisk(ctx context.Context, disk string, size string) (string, error) {
+	return v.Client.ResizeDisk(ctx, v.Node, v.ID, disk, size)
 }
 
 // GetDiskInfo gets information about the VM's disks
@@ -167,32 +164,59 @@ func (v *VirtualMachine) GetDiskInfo(ctx context.Context) (map[string]string, er
 	return disks, nil
 }
 
-// GetPrimaryDisk returns the primary disk type for the VM
+// GetPrimaryDisk returns the key of the disk the VM boots from (for example
+// "scsi0"), skipping CD/DVD drives and cloud-init drives
 func (v *VirtualMachine) GetPrimaryDisk(ctx context.Context) (string, error) {
-	disks, err := v.GetDiskInfo(ctx)
+	config, err := v.Client.GetVMConfig(ctx, v.Node, v.ID)
 	if err != nil {
 		return "", err
 	}
-
-	if len(disks) == 0 {
+	disk, ok := primaryDisk(config)
+	if !ok {
 		return "", fmt.Errorf("no disks found for VM %d", v.ID)
 	}
+	return disk, nil
+}
 
-	// Priority order for primary disk detection
-	priorities := []string{"scsi0", "ide0", "sata0", "virtio0"}
+// primaryDisk picks the boot disk from a VM config. It prefers the first disk
+// in the boot order (boot: order=scsi0;ide2;net0), then the legacy bootdisk
+// setting, then the first of scsi, virtio, sata and ide that is a real disk.
+func primaryDisk(config map[string]interface{}) (string, bool) {
+	isDisk := map[string]bool{}
+	var disks []string
+	for _, key := range c.DiskKeys(config) {
+		value, _ := config[key].(string)
+		if strings.Contains(value, "media=cdrom") || strings.Contains(value, "cloudinit") {
+			continue
+		}
+		isDisk[key] = true
+		disks = append(disks, key)
+	}
+	if len(disks) == 0 {
+		return "", false
+	}
 
-	for _, priority := range priorities {
-		if _, exists := disks[priority]; exists {
-			return priority, nil
+	if boot, _ := config["boot"].(string); boot != "" {
+		if order, found := strings.CutPrefix(strings.TrimSpace(strings.Split(boot, ",")[0]), "order="); found {
+			for _, dev := range strings.Split(order, ";") {
+				if isDisk[dev] {
+					return dev, true
+				}
+			}
 		}
 	}
-
-	// If no priority disk found, return the first one
-	for diskType := range disks {
-		return diskType, nil
+	if bootdisk, _ := config["bootdisk"].(string); isDisk[bootdisk] {
+		return bootdisk, true
 	}
 
-	return "", fmt.Errorf("no valid disk found for VM %d", v.ID)
+	for _, bus := range []string{"scsi", "virtio", "sata", "ide"} {
+		for _, key := range disks {
+			if strings.HasPrefix(key, bus) {
+				return key, true
+			}
+		}
+	}
+	return disks[0], true
 }
 
 // EditVMByNameOrID edits a VM by name or ID.

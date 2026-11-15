@@ -1568,8 +1568,9 @@ func (c *ProxmoxClient) getStorageVolumeSizeWithCache(ctx context.Context, node,
 		if contentMap, ok := content.(map[string]interface{}); ok {
 			if volID, exists := contentMap["volid"]; exists {
 				if volIDStr, ok := volID.(string); ok {
-					// Match the volume ID - try exact match first, then partial match
-					if volIDStr == fmt.Sprintf("%s:%s", storage, volumeID) || strings.Contains(volIDStr, volumeID) {
+					// Exact match only: a substring match would let vm-100-disk-1
+					// pick up vm-100-disk-10
+					if volIDStr == fmt.Sprintf("%s:%s", storage, volumeID) {
 						if size, exists := contentMap["size"]; exists {
 							if sizeFloat, ok := size.(float64); ok {
 								return uint64(sizeFloat), nil
