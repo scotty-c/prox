@@ -2,7 +2,20 @@
 
 ## Layers
 - Unit tests (Go): validation, parsing, SSH key formats.
+- CLI tests (Go, `tests/cli`): run the real `prox` binary against a fake Proxmox API and check output, exit codes and the requests made. No Proxmox server needed.
 - E2E harness (bash in tests/e2e): exercises real Proxmox operations end‑to‑end.
+
+## CLI Tests (tests/cli)
+`internal/fakepve` is a fake Proxmox API with a fixed cluster (two nodes, four VMs, two containers). It records every request and mimics real Proxmox where prox has been wrong before: the task log returns 50 lines unless asked for more, VM config values such as `agent` and `memory` are strings, and LXC has no guest agent endpoint.
+
+```bash
+go test ./tests/cli                 # run
+go test ./tests/cli -update         # rewrite tests/cli/testdata/*.golden after an intended output change
+```
+
+A test runs `run(t, srv, stdin, args...)` and gets stdout, stderr and the exit code; `srv.Count("DELETE", "/nodes/...")` shows what reached the API. `stdin` is what a confirmation prompt can read (`""` behaves like `</dev/null`). Make a call fail with `srv.FailRequest("POST /nodes/pve1/qemu/101/status/start", "VM 101 is locked")`.
+
+The tests build the binary in `TestMain`. `TestSourcesAreTracked` reads every source file so Go's test cache re-runs them when any code changes; without it a cached pass could hide a regression.
 
 ## E2E Flow (Simplified)
 1. Optional auto build (stale binary detection)

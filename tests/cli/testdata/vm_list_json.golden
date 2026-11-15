@@ -1,0 +1,56 @@
+[
+  {
+    "id": 1000,
+    "name": "big",
+    "status": "running",
+    "node": "pve2",
+    "cpus": 50,
+    "memory": 1073741824,
+    "max_memory": 4294967296,
+    "disk": 0,
+    "max_disk": 68719476736,
+    "uptime": "1h 0m 0s",
+    "ip": "N/A"
+  },
+  {
+    "id": 100,
+    "name": "web",
+    "status": "running",
+    "node": "pve1",
+    "cpus": 2,
+    "memory": 1073741824,
+    "max_memory": 2147483648,
+    "disk": 0,
+    "max_disk": 34359738368,
+    "uptime": "3d 0h 0m",
+    "ip": "N/A",
+    "tags": "prod;web"
+  },
+  {
+    "id": 101,
+    "name": "db",
+    "status": "stopped",
+    "node": "pve1",
+    "cpus": 0,
+    "memory": 0,
+    "max_memory": 2147483648,
+    "disk": 0,
+    "max_disk": 34359738368,
+    "uptime": "",
+    "ip": "N/A",
+    "tags": "prod"
+  },
+  {
+    "id": 102,
+    "name": "web",
+    "status": "stopped",
+    "node": "pve2",
+    "cpus": 0,
+    "memory": 0,
+    "max_memory": 2147483648,
+    "disk": 0,
+    "max_disk": 34359738368,
+    "uptime": "",
+    "ip": "N/A"
+  }
+]
