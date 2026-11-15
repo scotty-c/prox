@@ -742,22 +742,41 @@ func (c *ProxmoxClient) GetTaskStatus(ctx context.Context, node, upid string) (*
 	return task, nil
 }
 
-// GetTaskLog retrieves the log for a Proxmox task
+// taskLogPageSize is how many log lines are requested at a time
+const taskLogPageSize = 500
+
+// GetTaskLog retrieves the log for a Proxmox task, starting at line start.
+// With limit > 0 it returns at most limit lines. With limit <= 0 it returns
+// every line from start to the end of the log: Proxmox returns only 50 lines
+// when no limit is sent, so the log is read in pages.
 func (c *ProxmoxClient) GetTaskLog(ctx context.Context, node, upid string, start int, limit int) ([]string, error) {
+	if limit > 0 {
+		return c.getTaskLogPage(ctx, node, upid, start, limit)
+	}
+
+	var all []string
+	for {
+		page, err := c.getTaskLogPage(ctx, node, upid, start+len(all), taskLogPageSize)
+		if err != nil {
+			return nil, err
+		}
+		all = append(all, page...)
+		if len(page) < taskLogPageSize {
+			return all, nil
+		}
+	}
+}
+
+// getTaskLogPage reads one page of a task's log
+func (c *ProxmoxClient) getTaskLogPage(ctx context.Context, node, upid string, start int, limit int) ([]string, error) {
 	path := fmt.Sprintf("/nodes/%s/tasks/%s/log", url.PathEscape(node), url.PathEscape(upid))
 
-	// Add query parameters for pagination
 	params := url.Values{}
+	params.Add("limit", strconv.Itoa(limit))
 	if start > 0 {
 		params.Add("start", strconv.Itoa(start))
 	}
-	if limit > 0 {
-		params.Add("limit", strconv.Itoa(limit))
-	}
-
-	if len(params) > 0 {
-		path = path + "?" + params.Encode()
-	}
+	path = path + "?" + params.Encode()
 
 	body, err := c.makeRequest(ctx, "GET", path, nil)
 	if err != nil {
