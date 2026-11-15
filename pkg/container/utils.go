@@ -3,12 +3,12 @@ package container
 import (
 	"bufio"
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"strconv"
 	"strings"
 
+	"github.com/scotty-c/prox/pkg/apierr"
 	c "github.com/scotty-c/prox/pkg/client"
 	"github.com/scotty-c/prox/pkg/output"
 	"github.com/scotty-c/prox/pkg/util"
@@ -177,7 +177,7 @@ func FindByNameOrID(ctx context.Context, client c.ProxmoxClientInterface, nameOr
 			errorMsg += fmt.Sprintf("\n  • ID %d on node %s", *m.VMID, m.Node)
 		}
 		errorMsg += "\n\nUse the container ID instead"
-		return nil, errors.New(errorMsg)
+		return nil, apierr.WithKind(apierr.ErrAmbiguous, errorMsg)
 	}
 
 	// Container not found - provide helpful suggestions
@@ -195,7 +195,7 @@ func FindByNameOrID(ctx context.Context, client c.ProxmoxClientInterface, nameOr
 		errorMsg += "\n\nRun 'prox ct list' to see all available containers"
 	}
 
-	return nil, errors.New(errorMsg)
+	return nil, apierr.WithKind(apierr.ErrNotFound, errorMsg)
 }
 
 // ReadSSHKeys reads SSH public keys (one per line) from r until EOF.

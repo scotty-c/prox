@@ -70,9 +70,16 @@ type result struct {
 // the command can read; "" behaves like </dev/null.
 func run(t *testing.T, srv *fakepve.Server, stdin string, args ...string) result {
 	t.Helper()
+	return runInHome(t, t.TempDir(), srv, stdin, args...)
+}
+
+// runInHome is run with a chosen home directory, for tests that need files in
+// it such as ~/.ssh/config
+func runInHome(t *testing.T, home string, srv *fakepve.Server, stdin string, args ...string) result {
+	t.Helper()
 	cmd := exec.Command(binary, args...)
 	cmd.Env = []string{
-		"HOME=" + t.TempDir(),
+		"HOME=" + home,
 		"PATH=" + os.Getenv("PATH"),
 		"PROX_URL=" + srv.URL,
 		"PROX_USER=root@pam",

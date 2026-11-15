@@ -16,4 +16,23 @@ var (
 	ErrCertificate = errors.New("TLS certificate verification failed")
 	// ErrNoConfig means there is no saved connection to use
 	ErrNoConfig = errors.New("no configuration found")
+	// ErrNotFound means no VM, container or node matched what was asked for
+	ErrNotFound = errors.New("not found")
+	// ErrAmbiguous means a name matched more than one VM or container
+	ErrAmbiguous = errors.New("ambiguous name")
 )
+
+// WithKind returns an error that prints as msg but matches kind with
+// errors.Is. It keeps a long, ready-made message (with suggestions) while
+// letting callers tell "not found" from "ambiguous" without reading it.
+func WithKind(kind error, msg string) error {
+	return &kindError{kind: kind, msg: msg}
+}
+
+type kindError struct {
+	kind error
+	msg  string
+}
+
+func (e *kindError) Error() string { return e.msg }
+func (e *kindError) Unwrap() error { return e.kind }

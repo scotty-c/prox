@@ -365,3 +365,60 @@ func TestDeleteAndShutdownNameTheVM(t *testing.T) {
 	r = run(t, srv, "", "vm", "shutdown", "100", "--wait")
 	contains(t, "shutdown stdout", r.stdout, "VM web (ID 100) shut down in ")
 }
+
+// prox ssh
+
+func TestSSHAmbiguousNameStopsInsteadOfTryingContainers(t *testing.T) {
+	r := run(t, fakepve.New(t), "", "ssh", "web", "--print")
+	if r.code != 1 {
+		t.Errorf("exit %d, want 1", r.code)
+	}
+	contains(t, "stderr", r.stderr, "more than one VM is named 'web'", "ID 100 on node pve1")
+	excludes(t, "stderr", r.stderr, "not found", "Container error")
+	if n := strings.Count(r.stderr, "Error:"); n != 1 {
+		t.Errorf("%d error lines, want 1:\n%s", n, r.stderr)
+	}
+}
+
+func TestSSHNotFoundSuggestsFromVMsAndContainers(t *testing.T) {
+	r := run(t, fakepve.New(t), "", "ssh", "ct3", "--print")
+	contains(t, "stderr", r.stderr, "'ct3' not found as a VM or container", "Did you mean one of these?", "• ct1", "prox ct list")
+	excludes(t, "stderr", r.stderr, "VM error", "Container error")
+}
+
+func TestSSHPrintsTheCommandForAContainer(t *testing.T) {
+	r := run(t, fakepve.New(t), "", "ssh", "ct1", "--print", "--user", "root")
+	if r.code != 0 || strings.TrimSpace(r.stdout) != "ssh root@10.0.0.50" {
+		t.Errorf("exit %d, stdout %q, stderr %q", r.code, r.stdout, r.stderr)
+	}
+}
+
+func TestSSHExplainsAVMWithoutAnAddress(t *testing.T) {
+	r := run(t, fakepve.New(t), "", "ssh", "100", "--print")
+	if r.code != 1 {
+		t.Errorf("exit %d, want 1", r.code)
+	}
+	contains(t, "stderr", r.stderr, "no IP address found for VM 'web'", "Make sure the resource is running")
+}
+
+func TestSSHDeleteDoesNotNeedTheNetworkWhenTheHostIsInTheConfig(t *testing.T) {
+	home := t.TempDir()
+	if err := os.MkdirAll(home+"/.ssh", 0o700); err != nil {
+		t.Fatal(err)
+	}
+	config := "Host web\n    HostName 10.0.0.9\n\nHost keep\n    HostName 10.0.0.1\n"
+	if err := os.WriteFile(home+"/.ssh/config", []byte(config), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	srv := fakepve.New(t)
+	r := runInHome(t, home, srv, "", "ssh", "web", "--delete")
+	if r.code != 0 {
+		t.Fatalf("exit %d: %s", r.code, r.stderr)
+	}
+	if n := len(srv.Requests()); n != 0 {
+		t.Errorf("made %d requests to Proxmox, want none: %v", n, srv.Requests())
+	}
+	got, _ := os.ReadFile(home + "/.ssh/config")
+	excludes(t, "ssh config", string(got), "Host web")
+	contains(t, "ssh config", string(got), "Host keep")
+}

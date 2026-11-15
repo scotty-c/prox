@@ -11,13 +11,16 @@ import (
 	"os/signal"
 	"os/user"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 
 	"github.com/jedib0t/go-pretty/v6/table"
+	"github.com/scotty-c/prox/pkg/apierr"
 	"github.com/scotty-c/prox/pkg/client"
 	"github.com/scotty-c/prox/pkg/container"
 	"github.com/scotty-c/prox/pkg/sshconfig"
+	"github.com/scotty-c/prox/pkg/util"
 	"github.com/scotty-c/prox/pkg/vm"
 	"github.com/spf13/cobra"
 )
@@ -126,19 +129,26 @@ func resolveSSHTarget(ctx context.Context, nameOrID string, info io.Writer) (*ss
 		return nil, fmt.Errorf("failed to create Proxmox client: %w", err)
 	}
 
-	// Try to find as VM first, then as container
+	// Try a VM first, then a container. Only "not found" moves on to the
+	// next kind; an ambiguous name or a failure is reported as it is.
 	t := &sshTarget{}
 	vmObj, vmErr := vm.FindByNameOrID(ctx, cl, nameOrID)
-	if vmErr == nil {
+	switch {
+	case vmErr == nil:
 		t.Type, t.Name, t.ID, t.Node = "VM", vmObj.Name, vmObj.ID, vmObj.Node
 		_, _ = fmt.Fprintf(info, "Found %s: %s (ID: %d) on node %s\n", t.Type, t.Name, t.ID, t.Node)
 		if t.IP, err = cl.GetVMIP(ctx, t.Node, t.ID); err != nil {
 			return nil, fmt.Errorf("failed to get VM IP: %w", err)
 		}
-	} else {
+	case !errors.Is(vmErr, apierr.ErrNotFound):
+		return nil, vmErr
+	default:
 		ctObj, ctErr := container.FindByNameOrID(ctx, cl, nameOrID)
+		if errors.Is(ctErr, apierr.ErrNotFound) {
+			return nil, notFoundAnywhere(ctx, cl, nameOrID)
+		}
 		if ctErr != nil {
-			return nil, fmt.Errorf("resource '%s' not found as VM or container. VM error: %v, Container error: %v", nameOrID, vmErr, ctErr)
+			return nil, ctErr
 		}
 		t.Type, t.Name, t.ID, t.Node = "Container", ctObj.Name, ctObj.ID, ctObj.Node
 		_, _ = fmt.Fprintf(info, "Found %s: %s (ID: %d) on node %s\n", t.Type, t.Name, t.ID, t.Node)
@@ -157,6 +167,28 @@ func resolveSSHTarget(ctx context.Context, nameOrID string, info io.Writer) (*ss
 		return nil, fmt.Errorf("invalid IP address: %s", t.IP)
 	}
 	return t, nil
+}
+
+// notFoundAnywhere is the error for a name that is neither a VM nor a
+// container, with suggestions drawn from both
+func notFoundAnywhere(ctx context.Context, cl client.ProxmoxClientInterface, nameOrID string) error {
+	var names []string
+	if resources, err := cl.GetClusterResources(ctx); err == nil {
+		for _, r := range resources {
+			if (r.Type == "qemu" || r.Type == "lxc") && r.Name != "" {
+				names = append(names, r.Name)
+			}
+		}
+	}
+	msg := fmt.Sprintf("'%s' not found as a VM or container", nameOrID)
+	if suggestions := util.FindSimilarStrings(nameOrID, names, 3); len(suggestions) > 0 {
+		msg += "\n\nDid you mean one of these?"
+		for _, suggestion := range suggestions {
+			msg += "\n  • " + suggestion
+		}
+	}
+	msg += "\n\nRun 'prox vm list' or 'prox ct list' to see what exists"
+	return apierr.WithKind(apierr.ErrNotFound, msg)
 }
 
 // validateSSHOptions checks the port and key file
@@ -379,13 +411,17 @@ func deleteSSHConfigEntry(nameOrID string, dryRun bool) error {
 		return fmt.Errorf("VM or container name/ID cannot be empty")
 	}
 
-	// Try to resolve to actual resource name to match stored host alias
+	// If the argument is already a host in the config there is nothing to look
+	// up. Otherwise it may be an ID or a different spelling of the VM's name,
+	// so ask Proxmox for the name that was used as the alias.
 	alias := nameOrID
-	if cl, err := client.CreateClient(); err == nil {
-		if vmObj, vmErr := vm.FindByNameOrID(ctx, cl, nameOrID); vmErr == nil {
-			alias = vmObj.Name
-		} else if ctObj, ctErr := container.FindByNameOrID(ctx, cl, nameOrID); ctErr == nil {
-			alias = ctObj.Name
+	if !sshConfigHasHost(nameOrID) {
+		if cl, err := client.CreateClient(); err == nil {
+			if vmObj, vmErr := vm.FindByNameOrID(ctx, cl, nameOrID); vmErr == nil {
+				alias = vmObj.Name
+			} else if ctObj, ctErr := container.FindByNameOrID(ctx, cl, nameOrID); ctErr == nil {
+				alias = ctObj.Name
+			}
 		}
 	}
 
@@ -438,6 +474,24 @@ func removeFromSSHConfig(hostAlias string, dryRun bool) (bool, string, error) {
 	}
 
 	return removed, block, nil
+}
+
+// sshConfigHasHost reports whether ~/.ssh/config has a Host entry named alias
+func sshConfigHasHost(alias string) bool {
+	configPath, err := sshConfigPath()
+	if err != nil {
+		return false
+	}
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		return false
+	}
+	for _, entry := range sshconfig.ParseEntries(string(data)) {
+		if slices.Contains(entry.Hosts, alias) {
+			return true
+		}
+	}
+	return false
 }
 
 func listSSHConfigEntries() error {

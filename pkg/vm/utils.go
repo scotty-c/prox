@@ -2,10 +2,10 @@ package vm
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strconv"
 
+	"github.com/scotty-c/prox/pkg/apierr"
 	c "github.com/scotty-c/prox/pkg/client"
 	"github.com/scotty-c/prox/pkg/output"
 	"github.com/scotty-c/prox/pkg/util"
@@ -65,7 +65,7 @@ func FindByNameOrIDOnNode(ctx context.Context, client c.ProxmoxClientInterface, 
 			errorMsg += fmt.Sprintf("\n  • ID %d on node %s", *m.VMID, m.Node)
 		}
 		errorMsg += "\n\nUse the VM ID instead, or --node to pick the node"
-		return nil, errors.New(errorMsg)
+		return nil, apierr.WithKind(apierr.ErrAmbiguous, errorMsg)
 	}
 
 	// VM not found - provide helpful suggestions
@@ -86,7 +86,7 @@ func FindByNameOrIDOnNode(ctx context.Context, client c.ProxmoxClientInterface, 
 		errorMsg += "\n\nRun 'prox vm list' to see all available virtual machines"
 	}
 
-	return nil, errors.New(errorMsg)
+	return nil, apierr.WithKind(apierr.ErrNotFound, errorMsg)
 }
 
 // vmFromResource converts a cluster resource into a VM for display and lookup
