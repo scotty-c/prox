@@ -22,6 +22,37 @@ type ListVMsOptions struct {
 	Tag         string // Filter by tag (empty for all VMs)
 }
 
+// fillDiskDetails fills in what the cluster listing lacks about disks, for
+// several VMs at a time: the total size across all of a VM's disks (the
+// listing only reports the boot disk) and, for a running VM with the guest
+// agent, the space used. A VM that is not running needs only its configuration
+// (two fewer requests): there is no status or guest agent to ask.
+func fillDiskDetails(ctx context.Context, client c.ProxmoxClientInterface, vms []VM) {
+	var todo []int
+	for i, vm := range vms {
+		if vm.MaxDisk == 0 || vm.Disk == 0 {
+			todo = append(todo, i)
+		}
+	}
+	util.ForEach(len(todo), c.MaxConcurrentLookups, func(k int) {
+		vm := &vms[todo[k]]
+		var maxDisk, usedDisk uint64
+		if vm.Status == "running" {
+			if total, used, err := client.GetVMDiskInfo(ctx, vm.Node, vm.ID); err == nil {
+				maxDisk, usedDisk = total, used
+			}
+		} else if config, err := client.GetVMConfig(ctx, vm.Node, vm.ID); err == nil {
+			maxDisk, usedDisk = client.GetVMDiskInfoFrom(ctx, vm.Node, vm.ID, config, nil)
+		}
+		if maxDisk > 0 {
+			vm.MaxDisk = maxDisk
+		}
+		if usedDisk > 0 {
+			vm.Disk = usedDisk
+		}
+	})
+}
+
 // ListVMs lists virtual machines with the provided options
 func ListVMs(ctx context.Context, opts ListVMsOptions) error {
 	client, err := c.CreateClient()
@@ -68,19 +99,11 @@ func ListVMs(ctx context.Context, opts ListVMsOptions) error {
 
 		vm := guest.FromResource(resource)
 
-		// Use detailed disk info if requested (slower but more accurate)
-		if opts.Detailed && (vm.MaxDisk == 0 || vm.Disk == 0) {
-			if maxDisk, usedDisk, err := client.GetVMDiskInfo(ctx, resource.Node, int(*resource.VMID)); err == nil {
-				if maxDisk > 0 {
-					vm.MaxDisk = maxDisk
-				}
-				if usedDisk > 0 {
-					vm.Disk = usedDisk
-				}
-			}
-		}
-
 		vms = append(vms, vm)
+	}
+
+	if opts.Detailed {
+		fillDiskDetails(ctx, client, vms)
 	}
 
 	// Proxmox returns resources in no particular order; list them by ID

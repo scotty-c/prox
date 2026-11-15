@@ -71,7 +71,7 @@ func GetVMDetails(ctx context.Context, nameOrID string, node string) (*VMDetails
 
 	// "N/A" says the VM has no address that can be found; if the lookup itself
 	// failed the IP is left out
-	vmIP, err := client.GetVMIP(ctx, node, vm.ID)
+	vmIP, err := client.GetVMIPWithConfig(ctx, node, vm.ID, config)
 	if err != nil {
 		vmIP = ""
 	} else if vmIP == "" {
@@ -213,18 +213,17 @@ func displayVMDetails(ctx context.Context, id int, name, node string, config, st
 		diskMax, diskMaxOk := status["maxdisk"].(float64)
 
 		if !diskUsageOk || !diskMaxOk || diskMax == 0 || diskUsage == 0 {
-			// Use improved disk info method
-			diskClient, err := c.CreateClient()
-			if err == nil {
-				if maxDisk, usedDisk, err := diskClient.GetVMDiskInfo(ctx, node, id); err == nil {
-					if maxDisk > 0 {
-						diskMax = float64(maxDisk)
-						diskMaxOk = true
-					}
-					if usedDisk > 0 {
-						diskUsage = float64(usedDisk)
-						diskUsageOk = true
-					}
+			// Work out the sizes from the configuration, and the usage from the
+			// guest agent, using what was already fetched for this page
+			if diskClient, err := c.CreateClient(); err == nil {
+				maxDisk, usedDisk := diskClient.GetVMDiskInfoFrom(ctx, node, id, config, status)
+				if maxDisk > 0 {
+					diskMax = float64(maxDisk)
+					diskMaxOk = true
+				}
+				if usedDisk > 0 {
+					diskUsage = float64(usedDisk)
+					diskUsageOk = true
 				}
 			}
 		}

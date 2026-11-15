@@ -10,7 +10,7 @@ const (
 	CPUPercentageMultiplier = 100
 
 	// Worker pool
-	MaxConcurrentIPLookups = 10 // Maximum concurrent IP lookup workers
+	MaxConcurrentLookups = 10 // Maximum concurrent per-guest lookups (IP addresses, disk details)
 
 	// Caching
 	ClusterResourcesCacheTTL = 10 // Time-to-live for cluster resources cache (seconds)

@@ -104,7 +104,7 @@ func LookupIPs(ctx context.Context, guests []Guest, lookup func(ctx context.Cont
 			running = append(running, i)
 		}
 	}
-	util.ForEach(len(running), c.MaxConcurrentIPLookups, func(k int) {
+	util.ForEach(len(running), c.MaxConcurrentLookups, func(k int) {
 		g := &guests[running[k]]
 		if ip, err := lookup(ctx, g.Node, g.ID); err == nil && ip != "" {
 			g.IP, g.IPAddress = ip, ip

@@ -1399,3 +1399,97 @@ func TestConfigHelpHasRealDescriptions(t *testing.T) {
 	excludes(t, "config help", r.stdout, "This command")
 	contains(t, "config help", r.stdout, "Save connection details", "Change details saved in the current profile")
 }
+
+// Requests per command
+
+// gets counts GET requests starting with prefix
+func gets(srv *fakepve.Server, prefix string) int { return srv.Count("GET", prefix) }
+
+func TestDescribeFetchesEachThingOnce(t *testing.T) {
+	srv := fakepve.New(t)
+	r := run(t, srv, "", "vm", "describe", "100")
+	if r.code != 0 {
+		t.Fatalf("exit %d: %s", r.code, r.stderr)
+	}
+	if n := gets(srv, "/nodes/pve1/qemu/100/config"); n != 1 {
+		t.Errorf("config fetched %d times, want 1", n)
+	}
+	if n := gets(srv, "/nodes/pve1/qemu/100/status/current"); n != 1 {
+		t.Errorf("status fetched %d times, want 1", n)
+	}
+	if total := len(srv.Requests()); total > 6 {
+		t.Errorf("%d requests, want at most 6 (login, listing, config, status, two guest-agent calls): %v", total, srv.Requests())
+	}
+	// the page still has everything it had
+	contains(t, "describe", r.stdout, "SCSI0:", "QEMU Agent: Enabled", "Disk Usage: N/A / 132.0 GB")
+}
+
+func TestDetailedListSumsEveryDisksSizeAndAsksStoppedVMsForLess(t *testing.T) {
+	srv := fakepve.New(t)
+	r := run(t, srv, "", "vm", "list", "--detailed")
+	if r.code != 0 {
+		t.Fatalf("exit %d: %s", r.code, r.stderr)
+	}
+	// The total comes from the configuration (all disks), for stopped VMs too:
+	// the cluster listing only knows the boot disk. Every VM here reports the
+	// fake's two-disk configuration.
+	if n := strings.Count(r.stdout, "N/A/132.0 GB"); n != 4 {
+		t.Errorf("%d of 4 VMs show the summed disk size, want all:\n%s", n, r.stdout)
+	}
+	// A stopped VM has no status to read and no guest agent to ask
+	for _, stopped := range []string{"/nodes/pve1/qemu/101", "/nodes/pve2/qemu/102"} {
+		if n := gets(srv, stopped+"/config"); n != 1 {
+			t.Errorf("%s config fetched %d times, want 1", stopped, n)
+		}
+		if n := gets(srv, stopped+"/status"); n != 0 {
+			t.Errorf("%s status fetched %d times, want 0", stopped, n)
+		}
+		if n := gets(srv, stopped+"/agent"); n != 0 {
+			t.Errorf("%s guest agent asked %d times, want 0", stopped, n)
+		}
+	}
+	// A running VM is asked for its config, status and guest agent once each
+	for _, running := range []string{"/nodes/pve1/qemu/100", "/nodes/pve2/qemu/1000"} {
+		for _, part := range []string{"/config", "/status/current", "/agent/get-fsinfo"} {
+			if n := gets(srv, running+part); n != 1 {
+				t.Errorf("%s fetched %d times, want 1", running+part, n)
+			}
+		}
+	}
+	if total := len(srv.Requests()); total > 10 {
+		t.Errorf("%d requests, want at most 10: %v", total, srv.Requests())
+	}
+}
+
+func TestCreatingOnAChosenNodeOnlyAsksThatNodeForTemplates(t *testing.T) {
+	srv := fakepve.New(t)
+	r := run(t, srv, "", "ct", "create", "web2", "debian:12", "--node", "pve1")
+	if r.code != 0 {
+		t.Fatalf("exit %d: %s", r.code, r.stderr)
+	}
+	if n := gets(srv, "/nodes/pve2/storage"); n != 0 {
+		t.Errorf("pve2 was asked about storage %d times; the chosen node already has the template", n)
+	}
+}
+
+func TestWithoutANodeEveryNodeIsAskedForTemplates(t *testing.T) {
+	srv := fakepve.New(t)
+	r := run(t, srv, "", "ct", "create", "web2", "debian:12")
+	if r.code != 0 {
+		t.Fatalf("exit %d: %s", r.code, r.stderr)
+	}
+	for _, node := range []string{"pve1", "pve2"} {
+		if n := gets(srv, "/nodes/"+node+"/storage"); n == 0 {
+			t.Errorf("%s was never asked for templates", node)
+		}
+	}
+	contains(t, "stdout", r.stdout, "Container web2")
+}
+
+func TestAMistypedNodeStillExplainsWhereTheTemplateIs(t *testing.T) {
+	r := run(t, fakepve.New(t), "", "ct", "create", "web2", "debian:12", "--node", "nope")
+	if r.code != 1 {
+		t.Errorf("exit %d, want 1", r.code)
+	}
+	contains(t, "stderr", r.stderr, "is not on node nope", "it is on pve1")
+}

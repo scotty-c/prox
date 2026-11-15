@@ -139,8 +139,10 @@ type ProxmoxClientInterface interface {
 	GetVMConfig(ctx context.Context, node string, vmid int) (map[string]interface{}, error)
 	GetVMStatus(ctx context.Context, node string, vmid int) (map[string]interface{}, error)
 	GetVMDiskInfo(ctx context.Context, node string, vmid int) (uint64, uint64, error)
+	GetVMDiskInfoFrom(ctx context.Context, node string, vmid int, config, status map[string]interface{}) (uint64, uint64)
 	GetVMNode(ctx context.Context, vmid int) (string, error)
 	GetVMIP(ctx context.Context, node string, vmid int) (string, error)
+	GetVMIPWithConfig(ctx context.Context, node string, vmid int, config map[string]interface{}) (string, error)
 	MigrateVM(ctx context.Context, node string, vmid int, targetNode string, options map[string]interface{}) (string, error)
 
 	// Operations for either guest type (GuestVM or GuestContainer)
@@ -806,13 +808,20 @@ func (c *ProxmoxClient) GetVMNode(ctx context.Context, vmid int) (string, error)
 // GetVMIP gets the IP address of a VM, or "" if it has none that can be found
 func (c *ProxmoxClient) GetVMIP(ctx context.Context, node string, vmid int) (string, error) {
 	// The QEMU guest agent is the most reliable source, when it is running
-	ip := c.guestAgentIP(ctx, node, GuestVM, vmid)
-	if ip == "" {
-		// Otherwise use the static address configured with cloud-init, if any
-		ip = c.getVMIPFromConfig(ctx, node, vmid)
+	if ip := c.guestAgentIP(ctx, node, GuestVM, vmid); ip != "" {
+		return ip, nil
 	}
+	// Otherwise use the static address configured with cloud-init, if any
+	return c.getVMIPFromConfig(ctx, node, vmid), nil
+}
 
-	return ip, nil
+// GetVMIPWithConfig is GetVMIP for a caller that has already fetched the VM's
+// configuration, which saves fetching it again
+func (c *ProxmoxClient) GetVMIPWithConfig(ctx context.Context, node string, vmid int, config map[string]interface{}) (string, error) {
+	if ip := c.guestAgentIP(ctx, node, GuestVM, vmid); ip != "" {
+		return ip, nil
+	}
+	return ipFromCloudInitConfig(config), nil
 }
 
 // agentInterface is a network interface as reported by a guest agent
@@ -1023,13 +1032,22 @@ func (c *ProxmoxClient) GetVMStatus(ctx context.Context, node string, vmid int) 
 	return requestData[map[string]interface{}](ctx, c, "GET", path, nil, "VM status")
 }
 
-// GetVMDiskInfo gets more detailed disk information from VM configuration
+// GetVMDiskInfo returns a VM's total disk size and, when it can be found, the
+// space used
 func (c *ProxmoxClient) GetVMDiskInfo(ctx context.Context, node string, vmid int) (uint64, uint64, error) {
 	config, err := c.GetVMConfig(ctx, node, vmid)
 	if err != nil {
 		return 0, 0, err
 	}
+	status, _ := c.GetVMStatus(ctx, node, vmid) // without it only the size is known
+	total, used := c.GetVMDiskInfoFrom(ctx, node, vmid, config, status)
+	return total, used, nil
+}
 
+// GetVMDiskInfoFrom is GetVMDiskInfo for a caller that has already fetched the
+// VM's configuration and status (status may be nil), which saves fetching them
+// again. Used space is 0 when Proxmox and the guest agent do not report it.
+func (c *ProxmoxClient) GetVMDiskInfoFrom(ctx context.Context, node string, vmid int, config, status map[string]interface{}) (uint64, uint64) {
 	var totalSize uint64 = 0
 	var usedSize uint64 = 0
 
@@ -1088,8 +1106,7 @@ func (c *ProxmoxClient) GetVMDiskInfo(ctx context.Context, node string, vmid int
 	// Disk usage: Proxmox only reports it for some setups, so fall back to the
 	// QEMU guest agent. If neither is available, usage is unknown and 0 is
 	// returned; callers must show that as unknown rather than as empty.
-	status, err := c.GetVMStatus(ctx, node, vmid)
-	if err == nil {
+	if status != nil {
 		if diskUsed, ok := status["disk"].(float64); ok {
 			usedSize = uint64(diskUsed)
 		}
@@ -1108,7 +1125,7 @@ func (c *ProxmoxClient) GetVMDiskInfo(ctx context.Context, node string, vmid int
 		}
 	}
 
-	return totalSize, usedSize, nil
+	return totalSize, usedSize
 }
 
 // getVMDiskUsageFromGuestAgent returns the space used on the VM's disk-backed

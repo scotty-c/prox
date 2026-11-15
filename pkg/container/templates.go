@@ -121,19 +121,31 @@ func ResolveTemplateOnNode(ctx context.Context, shortName string, preferredNode 
 		return nil, fmt.Errorf("error creating client: %w", err)
 	}
 
-	// Get all nodes once
+	// If the user chose a node, ask only that one first: when it has the
+	// template the other nodes need not be queried at all
+	if preferredNode != "" {
+		if templates, err := getNodeTemplates(ctx, client, preferredNode); err == nil {
+			if resolved, err := resolveTemplateFrom(templates, shortName, preferredNode); err == nil {
+				return resolved, nil
+			}
+		}
+	}
+
 	nodes, err := getClusterNodes(ctx, client)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get cluster nodes: %w", err)
 	}
 
-	// Get all templates from all nodes once
-	var allTemplates []Template
-	for _, node := range nodes {
-		templates, err := getNodeTemplates(ctx, client, node)
-		if err != nil {
-			continue // Skip nodes that are not accessible
+	// Ask every node at once; one that is not accessible is skipped. Results
+	// are collected per node, so the order stays that of the node list.
+	perNode := make([][]Template, len(nodes))
+	util.ForEach(len(nodes), c.MaxConcurrentLookups, func(i int) {
+		if templates, err := getNodeTemplates(ctx, client, nodes[i]); err == nil {
+			perNode[i] = templates
 		}
+	})
+	var allTemplates []Template
+	for _, templates := range perNode {
 		allTemplates = append(allTemplates, templates...)
 	}
 
