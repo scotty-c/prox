@@ -3,11 +3,9 @@ package vm
 import (
 	"context"
 	"fmt"
-	"strconv"
 
-	"github.com/scotty-c/prox/pkg/apierr"
 	c "github.com/scotty-c/prox/pkg/client"
-	"github.com/scotty-c/prox/pkg/output"
+	"github.com/scotty-c/prox/pkg/lookup"
 	"github.com/scotty-c/prox/pkg/util"
 )
 
@@ -19,74 +17,12 @@ func FindByNameOrID(ctx context.Context, client c.ProxmoxClientInterface, nameOr
 // FindByNameOrIDOnNode finds a VM by either name or ID. If node is not empty,
 // only VMs on that node are considered.
 func FindByNameOrIDOnNode(ctx context.Context, client c.ProxmoxClientInterface, nameOrID string, node string) (*VM, error) {
-	// Get cluster resources
-	resources, err := client.GetClusterResources(ctx)
+	resource, err := lookup.Find(ctx, client, lookup.VM, nameOrID, node)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get cluster resources: %w", err)
+		return nil, err
 	}
-
-	onNode := func(r c.Resource) bool {
-		return r.Type == "qemu" && r.VMID != nil && (node == "" || r.Node == node)
-	}
-
-	// Try to parse as ID first
-	if vmid, err := strconv.Atoi(nameOrID); err == nil {
-		for _, resource := range resources {
-			if onNode(resource) && *resource.VMID == vmid {
-				vm := vmFromResource(resource)
-				return &vm, nil
-			}
-		}
-	}
-
-	// Search by name and collect all VM names for suggestions
-	var allVMNames []string
-	var matches []c.Resource
-	for _, resource := range resources {
-		if !onNode(resource) {
-			continue
-		}
-		if resource.Name == nameOrID {
-			matches = append(matches, resource)
-		}
-		// Collect VM names for fuzzy matching
-		if resource.Name != "" {
-			allVMNames = append(allVMNames, resource.Name)
-		}
-	}
-	if len(matches) == 1 {
-		vm := vmFromResource(matches[0])
-		return &vm, nil
-	}
-	if len(matches) > 1 {
-		// Proxmox allows duplicate names; don't guess which one was meant
-		errorMsg := fmt.Sprintf("more than one VM is named '%s':", nameOrID)
-		for _, m := range matches {
-			errorMsg += fmt.Sprintf("\n  • ID %d on node %s", *m.VMID, m.Node)
-		}
-		errorMsg += "\n\nUse the VM ID instead, or --node to pick the node"
-		return nil, apierr.WithKind(apierr.ErrAmbiguous, errorMsg)
-	}
-
-	// VM not found - provide helpful suggestions
-	errorMsg := fmt.Sprintf("VM '%s' not found", nameOrID)
-	if node != "" {
-		errorMsg = fmt.Sprintf("VM '%s' not found on node '%s'", nameOrID, node)
-	}
-
-	// Find similar names using fuzzy matching
-	suggestions := util.FindSimilarStrings(nameOrID, allVMNames, 3)
-	if len(suggestions) > 0 {
-		errorMsg += "\n\nDid you mean one of these?"
-		for _, suggestion := range suggestions {
-			errorMsg += fmt.Sprintf("\n  • %s", suggestion)
-		}
-		errorMsg += "\n\nRun 'prox vm list' to see all available virtual machines"
-	} else if len(allVMNames) > 0 {
-		errorMsg += "\n\nRun 'prox vm list' to see all available virtual machines"
-	}
-
-	return nil, apierr.WithKind(apierr.ErrNotFound, errorMsg)
+	vm := vmFromResource(resource)
+	return &vm, nil
 }
 
 // vmFromResource converts a cluster resource into a VM for display and lookup
@@ -116,14 +52,6 @@ func vmFromResource(resource c.Resource) VM {
 		vm.Uptime = util.FormatUptime(*resource.Uptime)
 	}
 	return vm
-}
-
-// waitForTask waits for a Proxmox task to complete, showing a spinner
-func waitForTask(ctx context.Context, client c.ProxmoxClientInterface, node, taskID string) error {
-	stop := output.StartSpinner(" Processing...")
-	defer stop()
-
-	return c.WaitForTaskInteractive(ctx, client, node, taskID)
 }
 
 // FindByTag returns the VMs that have tag, optionally only on node

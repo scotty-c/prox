@@ -5,12 +5,10 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"strconv"
 	"strings"
 
-	"github.com/scotty-c/prox/pkg/apierr"
 	c "github.com/scotty-c/prox/pkg/client"
-	"github.com/scotty-c/prox/pkg/output"
+	"github.com/scotty-c/prox/pkg/lookup"
 	"github.com/scotty-c/prox/pkg/util"
 )
 
@@ -117,85 +115,13 @@ func getClusterNodes(client c.ProxmoxClientInterface) ([]string, error) {
 	return nodes, nil
 }
 
-// waitForTask waits for a Proxmox task to complete, showing a spinner
-func waitForTask(ctx context.Context, client c.ProxmoxClientInterface, node, taskID string) error {
-	stop := output.StartSpinner(" Processing...")
-	defer stop()
-
-	return c.WaitForTaskInteractive(ctx, client, node, taskID)
-}
-
 // FindByNameOrID finds a container by name or ID
 func FindByNameOrID(ctx context.Context, client c.ProxmoxClientInterface, nameOrID string) (*Container, error) {
-	// Get cluster resources
-	resources, err := client.GetClusterResources(ctx)
+	r, err := lookup.Find(ctx, client, lookup.Container, nameOrID, "")
 	if err != nil {
-		return nil, fmt.Errorf("failed to get cluster resources: %w", err)
+		return nil, err
 	}
-
-	// Try to parse as ID first
-	if vmid, err := strconv.Atoi(nameOrID); err == nil {
-		// Search by ID
-		for _, resource := range resources {
-			if resource.Type == "lxc" && resource.VMID != nil && *resource.VMID == vmid {
-				return &Container{
-					ID:     int(*resource.VMID),
-					Name:   resource.Name,
-					Status: resource.Status,
-					Node:   resource.Node,
-				}, nil
-			}
-		}
-	}
-
-	// Search by name and collect all container names for suggestions
-	var allContainerNames []string
-	var matches []c.Resource
-	for _, resource := range resources {
-		if resource.Type == "lxc" && resource.VMID != nil {
-			if resource.Name == nameOrID {
-				matches = append(matches, resource)
-			}
-			// Collect container names for fuzzy matching
-			if resource.Name != "" {
-				allContainerNames = append(allContainerNames, resource.Name)
-			}
-		}
-	}
-	if len(matches) == 1 {
-		return &Container{
-			ID:     *matches[0].VMID,
-			Name:   matches[0].Name,
-			Status: matches[0].Status,
-			Node:   matches[0].Node,
-		}, nil
-	}
-	if len(matches) > 1 {
-		// Proxmox allows duplicate names; don't guess which one was meant
-		errorMsg := fmt.Sprintf("more than one container is named '%s':", nameOrID)
-		for _, m := range matches {
-			errorMsg += fmt.Sprintf("\n  • ID %d on node %s", *m.VMID, m.Node)
-		}
-		errorMsg += "\n\nUse the container ID instead"
-		return nil, apierr.WithKind(apierr.ErrAmbiguous, errorMsg)
-	}
-
-	// Container not found - provide helpful suggestions
-	errorMsg := fmt.Sprintf("container '%s' not found", nameOrID)
-
-	// Find similar names using fuzzy matching
-	suggestions := util.FindSimilarStrings(nameOrID, allContainerNames, 3)
-	if len(suggestions) > 0 {
-		errorMsg += "\n\nDid you mean one of these?"
-		for _, suggestion := range suggestions {
-			errorMsg += fmt.Sprintf("\n  • %s", suggestion)
-		}
-		errorMsg += "\n\nRun 'prox ct list' to see all available containers"
-	} else if len(allContainerNames) > 0 {
-		errorMsg += "\n\nRun 'prox ct list' to see all available containers"
-	}
-
-	return nil, apierr.WithKind(apierr.ErrNotFound, errorMsg)
+	return &Container{ID: *r.VMID, Name: r.Name, Status: r.Status, Node: r.Node}, nil
 }
 
 // ReadSSHKeys reads SSH public keys (one per line) from r until EOF.

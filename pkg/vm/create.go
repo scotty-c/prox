@@ -8,6 +8,8 @@ import (
 	"time"
 
 	c "github.com/scotty-c/prox/pkg/client"
+	"github.com/scotty-c/prox/pkg/cmdutil"
+	"github.com/scotty-c/prox/pkg/lookup"
 	"github.com/scotty-c/prox/pkg/output"
 )
 
@@ -89,20 +91,6 @@ func encodeSSHKeys(keys string) string {
 	return b.String()
 }
 
-// idFree returns an error if a VM or container already uses id
-func idFree(ctx context.Context, client c.ProxmoxClientInterface, id int) error {
-	resources, err := client.GetClusterResources(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to get cluster resources: %w", err)
-	}
-	for _, r := range resources {
-		if (r.Type == "qemu" || r.Type == "lxc") && r.VMID != nil && *r.VMID == id {
-			return fmt.Errorf("ID %d is already in use by '%s' on node %s", id, r.Name, r.Node)
-		}
-	}
-	return nil
-}
-
 // CreateFromTemplate clones a cloud-init template and configures the new VM
 func CreateFromTemplate(opts CreateOptions) error {
 	if err := ValidateNewVMName(opts.Name); err != nil {
@@ -129,7 +117,7 @@ func CreateFromTemplate(opts CreateOptions) error {
 		if newID, err = client.GetNextVMID(ctx); err != nil {
 			return fmt.Errorf("failed to get next ID: %w", err)
 		}
-	} else if err := idFree(ctx, client, newID); err != nil {
+	} else if err := lookup.CheckIDFree(ctx, client, newID); err != nil {
 		return err
 	}
 
@@ -139,7 +127,7 @@ func CreateFromTemplate(opts CreateOptions) error {
 	if err != nil {
 		return fmt.Errorf("failed to clone template: %w", err)
 	}
-	if err := waitForTask(ctx, client, tmpl.Node, taskID); err != nil {
+	if err := cmdutil.WaitForTask(ctx, client, tmpl.Node, taskID); err != nil {
 		return fmt.Errorf("clone failed: %w", err)
 	}
 
@@ -155,7 +143,7 @@ func CreateFromTemplate(opts CreateOptions) error {
 			return fail("configuration", err)
 		}
 		if taskID != "" {
-			if err := waitForTask(ctx, client, tmpl.Node, taskID); err != nil {
+			if err := cmdutil.WaitForTask(ctx, client, tmpl.Node, taskID); err != nil {
 				return fail("configuration", err)
 			}
 		}
@@ -172,7 +160,7 @@ func CreateFromTemplate(opts CreateOptions) error {
 		if err != nil {
 			return fail("disk resize", err)
 		}
-		if err := waitForTask(ctx, client, tmpl.Node, taskID); err != nil {
+		if err := cmdutil.WaitForTask(ctx, client, tmpl.Node, taskID); err != nil {
 			return fail("disk resize", err)
 		}
 	}

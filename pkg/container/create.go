@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	c "github.com/scotty-c/prox/pkg/client"
+	"github.com/scotty-c/prox/pkg/cmdutil"
 	"github.com/scotty-c/prox/pkg/output"
 )
 
@@ -148,7 +149,7 @@ func CreateContainerWithOptions(opts CreateOptions) error {
 	}
 
 	// Wait for task completion
-	err = waitForTask(ctx, client, node, taskID)
+	err = cmdutil.WaitForTask(ctx, client, node, taskID)
 	if err != nil {
 		return fmt.Errorf("container creation failed: %w", err)
 	}

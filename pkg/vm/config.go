@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	c "github.com/scotty-c/prox/pkg/client"
+	"github.com/scotty-c/prox/pkg/cmdutil"
 	"github.com/scotty-c/prox/pkg/output"
 )
 
@@ -88,7 +89,7 @@ func EditVM(ctx context.Context, id int, node string, name string, cores int, me
 
 		// Wait for the resize so a failure is reported here, not silently lost
 		if taskID != "" {
-			if err := waitForTask(ctx, client, node, taskID); err != nil {
+			if err := cmdutil.WaitForTask(ctx, client, node, taskID); err != nil {
 				return fmt.Errorf("disk resize failed: %w", err)
 			}
 		}

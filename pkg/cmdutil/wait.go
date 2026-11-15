@@ -1,7 +1,22 @@
 // Package cmdutil holds small helpers shared by prox's cobra commands.
 package cmdutil
 
-import "github.com/spf13/cobra"
+import (
+	"context"
+
+	c "github.com/scotty-c/prox/pkg/client"
+	"github.com/scotty-c/prox/pkg/output"
+	"github.com/spf13/cobra"
+)
+
+// WaitForTask waits for a Proxmox task to finish, showing a spinner while it
+// runs. It stops waiting on Ctrl-C or after --timeout, leaving the task
+// running on the server, and returns an error if the task did not succeed.
+func WaitForTask(ctx context.Context, client c.TaskStatusGetter, node, taskID string) error {
+	stop := output.StartSpinner(" Processing...")
+	defer stop()
+	return c.WaitForTaskInteractive(ctx, client, node, taskID)
+}
 
 // AddWaitFlags registers --wait and --no-wait on cmd. defaultWait is what the
 // command does when neither is given; it is shown in the help text.

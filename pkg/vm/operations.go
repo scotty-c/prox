@@ -6,6 +6,8 @@ import (
 	"time"
 
 	c "github.com/scotty-c/prox/pkg/client"
+	"github.com/scotty-c/prox/pkg/cmdutil"
+	"github.com/scotty-c/prox/pkg/lookup"
 	"github.com/scotty-c/prox/pkg/output"
 )
 
@@ -20,34 +22,6 @@ func vmLabel(ctx context.Context, client c.ProxmoxClientInterface, id int) strin
 		}
 	}
 	return fmt.Sprintf("ID %d", id)
-}
-
-// GetID checks if a VM ID is available
-func GetID(ctx context.Context, id int) error {
-	client, err := c.CreateClient()
-	if err != nil {
-		return fmt.Errorf("failed to create client: %w", err)
-	}
-
-	resources, err := client.GetClusterResources(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to get cluster resources: %w", err)
-	}
-
-	// VMs and containers share one ID space
-	for _, resource := range resources {
-		if (resource.Type == "qemu" || resource.Type == "lxc") && resource.VMID != nil && *resource.VMID == id {
-			kind := "VM"
-			if resource.Type == "lxc" {
-				kind = "container"
-			}
-			output.Info("Tip: Please choose a different VM ID\n")
-			return fmt.Errorf("ID %d is already in use by %s '%s' on node %s", id, kind, resource.Name, resource.Node)
-		}
-	}
-
-	output.Result("VM ID %d is available\n", id)
-	return nil
 }
 
 // Shutdown shuts down a virtual machine
@@ -119,7 +93,7 @@ func ShutdownVMWithOptions(ctx context.Context, id int, node string, wait bool, 
 	output.Result("Task started: %s\n", task.ID)
 
 	if wait {
-		err = waitForTask(ctx, client, node, task.ID)
+		err = cmdutil.WaitForTask(ctx, client, node, task.ID)
 		if err != nil {
 			return fmt.Errorf("shutdown failed: %w", err)
 		}
@@ -186,7 +160,7 @@ func StartVMWithWait(ctx context.Context, id int, node string, wait bool, client
 	output.Result("Task started: %s\n", task.ID)
 
 	if wait {
-		err = waitForTask(ctx, client, node, task.ID)
+		err = cmdutil.WaitForTask(ctx, client, node, task.ID)
 		if err != nil {
 			return fmt.Errorf("start failed: %w", err)
 		}
@@ -244,7 +218,7 @@ func CloneVMWithWait(ctx context.Context, id int, node string, name string, newI
 		output.Info("Using the next free VM ID: %d\n", newId)
 	} else {
 		output.Info("Checking if VM ID %d is available...\n", newId)
-		if err := GetID(ctx, newId); err != nil {
+		if err := lookup.CheckIDFree(ctx, client, newId); err != nil {
 			return err
 		}
 	}
@@ -268,7 +242,7 @@ func CloneVMWithWait(ctx context.Context, id int, node string, name string, newI
 		output.Infoln("Waiting for clone operation to complete...")
 
 		// Wait for the clone task to complete
-		err = waitForTask(ctx, client, node, task.ID)
+		err = cmdutil.WaitForTask(ctx, client, node, task.ID)
 		if err != nil {
 			return fmt.Errorf("clone failed: %w", err)
 		}
@@ -337,7 +311,7 @@ func DeleteVMWithWait(ctx context.Context, id int, node string, wait bool) error
 	output.Result("Task started: %s\n", task.ID)
 
 	if wait {
-		if err := waitForTask(ctx, client, node, task.ID); err != nil {
+		if err := cmdutil.WaitForTask(ctx, client, node, task.ID); err != nil {
 			return fmt.Errorf("deletion failed: %w", err)
 		}
 		output.Result("VM %s deleted\n", label)
@@ -406,7 +380,7 @@ func MigrateVMWithWait(ctx context.Context, id int, sourceNode, targetNode strin
 	output.Infoln("Waiting for migration to complete...")
 
 	// Wait for the migration task to complete
-	err = waitForTask(ctx, client, sourceNode, taskID)
+	err = cmdutil.WaitForTask(ctx, client, sourceNode, taskID)
 	if err != nil {
 		return fmt.Errorf("migration failed: %w", err)
 	}
@@ -588,7 +562,7 @@ func RebootVMByNameOrID(nameOrID, node string, wait bool) error {
 		output.Info("Tip: Follow progress with 'prox logs --follow %s'\n", taskID)
 		return nil
 	}
-	if err := waitForTask(ctx, client, vm.Node, taskID); err != nil {
+	if err := cmdutil.WaitForTask(ctx, client, vm.Node, taskID); err != nil {
 		return fmt.Errorf("reboot failed: %w", err)
 	}
 	output.Result("VM %s rebooted in %s\n", vm.Name, time.Since(start).Round(time.Millisecond))

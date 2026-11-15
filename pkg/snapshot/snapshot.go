@@ -8,6 +8,7 @@ import (
 
 	"github.com/jedib0t/go-pretty/v6/table"
 	c "github.com/scotty-c/prox/pkg/client"
+	"github.com/scotty-c/prox/pkg/cmdutil"
 	"github.com/scotty-c/prox/pkg/container"
 	"github.com/scotty-c/prox/pkg/output"
 	"github.com/scotty-c/prox/pkg/vm"
@@ -62,10 +63,7 @@ func finish(ctx context.Context, cl c.ProxmoxClientInterface, t *target, taskID 
 		output.Info("Tip: Follow progress with 'prox logs --follow %s'\n", taskID)
 		return nil
 	}
-	stop := output.StartSpinner(" Processing...")
-	err := c.WaitForTaskInteractive(ctx, cl, t.node, taskID)
-	stop()
-	if err != nil {
+	if err := cmdutil.WaitForTask(ctx, cl, t.node, taskID); err != nil {
 		return err
 	}
 	output.Result("%s\n", done)

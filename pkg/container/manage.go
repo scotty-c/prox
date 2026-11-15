@@ -7,6 +7,8 @@ import (
 	"time"
 
 	c "github.com/scotty-c/prox/pkg/client"
+	"github.com/scotty-c/prox/pkg/cmdutil"
+	"github.com/scotty-c/prox/pkg/lookup"
 	"github.com/scotty-c/prox/pkg/output"
 )
 
@@ -18,29 +20,10 @@ func finishTask(ctx context.Context, client c.ProxmoxClientInterface, node, task
 		return nil
 	}
 	start := time.Now()
-	if err := waitForTask(ctx, client, node, taskID); err != nil {
+	if err := cmdutil.WaitForTask(ctx, client, node, taskID); err != nil {
 		return err
 	}
 	output.Result("%s in %s\n", done, time.Since(start).Round(time.Millisecond))
-	return nil
-}
-
-// checkIDFree returns an error if a VM or container already uses id
-// (they share one ID space)
-func checkIDFree(ctx context.Context, client c.ProxmoxClientInterface, id int) error {
-	resources, err := client.GetClusterResources(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to get cluster resources: %w", err)
-	}
-	for _, r := range resources {
-		if (r.Type == "qemu" || r.Type == "lxc") && r.VMID != nil && *r.VMID == id {
-			kind := "VM"
-			if r.Type == "lxc" {
-				kind = "container"
-			}
-			return fmt.Errorf("ID %d is already in use by %s '%s' on node %s", id, kind, r.Name, r.Node)
-		}
-	}
 	return nil
 }
 
@@ -62,7 +45,7 @@ func CloneContainer(sourceNameOrID string, newID int, name string, full, wait bo
 		if newID, err = client.GetNextVMID(ctx); err != nil {
 			return fmt.Errorf("failed to get next ID: %w", err)
 		}
-	} else if err := checkIDFree(ctx, client, newID); err != nil {
+	} else if err := lookup.CheckIDFree(ctx, client, newID); err != nil {
 		return err
 	}
 

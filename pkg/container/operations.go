@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	c "github.com/scotty-c/prox/pkg/client"
+	"github.com/scotty-c/prox/pkg/cmdutil"
 	"github.com/scotty-c/prox/pkg/output"
 )
 
@@ -48,7 +49,7 @@ func StartContainerWithWait(nameOrID string, wait bool) error {
 	}
 
 	// Wait for task completion
-	err = waitForTask(ctx, client, container.Node, taskID)
+	err = cmdutil.WaitForTask(ctx, client, container.Node, taskID)
 	if err != nil {
 		return fmt.Errorf("container start failed: %w", err)
 	}
@@ -104,7 +105,7 @@ func StopContainerWithOptions(nameOrID string, force bool, wait bool) error {
 	}
 
 	// Wait for task completion
-	err = waitForTask(ctx, client, container.Node, taskID)
+	err = cmdutil.WaitForTask(ctx, client, container.Node, taskID)
 	if err != nil {
 		return fmt.Errorf("container stop failed: %w", err)
 	}
@@ -148,7 +149,7 @@ func DeleteContainerWithWait(nameOrID string, wait bool) error {
 	}
 
 	// Wait for task completion
-	err = waitForTask(ctx, client, container.Node, taskID)
+	err = cmdutil.WaitForTask(ctx, client, container.Node, taskID)
 	if err != nil {
 		return fmt.Errorf("container deletion failed: %w", err)
 	}
