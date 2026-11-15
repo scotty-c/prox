@@ -1408,7 +1408,7 @@ func (c *ProxmoxClient) GetVMDiskInfo(ctx context.Context, node string, vmid int
 	storageCache := make(map[string][]interface{})
 
 	// Check all possible disk types
-	diskKeys := []string{"ide0", "ide1", "ide2", "ide3", "sata0", "sata1", "sata2", "sata3", "scsi0", "scsi1", "scsi2", "scsi3", "virtio0", "virtio1", "virtio2", "virtio3", "efidisk0", "tpmstate0"}
+	diskKeys := append(DiskKeys(config), "efidisk0", "tpmstate0")
 
 	for _, diskKey := range diskKeys {
 		if diskConfig, exists := config[diskKey]; exists {

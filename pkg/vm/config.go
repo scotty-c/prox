@@ -158,14 +158,9 @@ func (v *VirtualMachine) GetDiskInfo(ctx context.Context) (map[string]string, er
 
 	disks := make(map[string]string)
 
-	// Common disk types in Proxmox
-	diskTypes := []string{"scsi0", "scsi1", "scsi2", "scsi3", "ide0", "ide1", "ide2", "ide3", "sata0", "sata1", "sata2", "sata3", "virtio0", "virtio1", "virtio2", "virtio3"}
-
-	for _, diskType := range diskTypes {
-		if diskConfig, exists := config[diskType]; exists {
-			if diskStr, ok := diskConfig.(string); ok {
-				disks[diskType] = diskStr
-			}
+	for _, diskType := range c.DiskKeys(config) {
+		if diskStr, ok := config[diskType].(string); ok {
+			disks[diskType] = diskStr
 		}
 	}
 

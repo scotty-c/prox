@@ -29,16 +29,14 @@ func GetVMDetails(nameOrID string, node string) (*VMDetails, error) {
 		return nil, fmt.Errorf("error creating client: %w", err)
 	}
 
-	// Find the VM by name or ID
-	vm, err := FindByNameOrID(ctx, client, nameOrID)
+	// Find the VM by name or ID. --node narrows the search, so it can pick
+	// between VMs that share a name; the node used from here on is always the
+	// one the VM was found on.
+	vm, err := FindByNameOrIDOnNode(ctx, client, nameOrID, node)
 	if err != nil {
 		return nil, fmt.Errorf("failed to find VM: %w", err)
 	}
-
-	// Use the discovered node if no node was specified
-	if node == "" {
-		node = vm.Node
-	}
+	node = vm.Node
 
 	// Fetch config and status in parallel
 	var (
@@ -161,8 +159,7 @@ func displayVMDetails(id int, name, node string, config, status map[string]inter
 	output.Result("Storage:\n")
 
 	// Display disks
-	diskKeys := []string{"ide0", "ide1", "ide2", "ide3", "sata0", "sata1", "sata2", "sata3", "scsi0", "scsi1", "scsi2", "scsi3", "virtio0", "virtio1", "virtio2", "virtio3"}
-	for _, diskKey := range diskKeys {
+	for _, diskKey := range c.DiskKeys(config) {
 		if disk, ok := config[diskKey].(string); ok {
 			output.Result("   %s: %s\n", strings.ToUpper(diskKey), disk)
 		}
@@ -174,10 +171,9 @@ func displayVMDetails(id int, name, node string, config, status map[string]inter
 	output.Result("Network:\n")
 
 	// Display network interfaces
-	for i := 0; i < 10; i++ {
-		netKey := fmt.Sprintf("net%d", i)
+	for _, netKey := range c.NetKeys(config) {
 		if net, ok := config[netKey].(string); ok {
-			output.Result("   Network %d: %s\n", i, net)
+			output.Result("   Network %s: %s\n", strings.TrimPrefix(netKey, "net"), net)
 		}
 	}
 
