@@ -30,7 +30,7 @@ Key capabilities:
 - SSH key validation (file or stdin, multi‑key, type checks)
 - **Smart UX**: fuzzy matching suggestions ("Did you mean?"), context-aware error messages, real-time progress spinners
 - **Shell completion**: dynamic VM/container name completion for all commands (bash/zsh/fish/powershell)
-- **Performance**: parallel API calls, intelligent caching (IP addresses, storage volumes), concurrent operations
+- **Performance**: parallel API calls, one cluster listing shared by every lookup in a command, concurrent IP lookups
 - Modular Go codebase (easy to extend) + Makefile automation
 
 ## Install
@@ -232,9 +232,9 @@ Pro tips:
 
 **Performance Optimizations:**
 - **Parallel operations**: VM/container describe operations run config and status fetches concurrently (5-10x faster)
-- **IP address caching**: 60-second cache reduces redundant DHCP lease lookups in list operations
-- **Storage volume caching**: Per-call scoped cache eliminates duplicate API requests during template resolution
-- **Concurrent workers**: Container IP fetching uses a pool of 10 workers for batch operations
+- **One cluster listing per command**: name lookups, suggestions and tags all share a single `/cluster/resources` request (kept for 10 seconds, cleared when a command creates a guest)
+- **One login per command**: every part of a command uses the same client, so the configuration is read and the ticket requested once
+- **Concurrent workers**: IP lookups for `vm list --ip` and `ct list` run on a pool of 10 workers
 
 **Real-time Feedback:**
 - **Progress spinners**: All async operations (create, clone, migrate, start, stop, delete) show visual progress

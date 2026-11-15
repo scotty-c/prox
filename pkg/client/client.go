@@ -30,20 +30,11 @@ type ProxmoxClient struct {
 	csrfToken  string
 	authMu     sync.Mutex // guards ticket and csrfToken
 
-	// Cluster resources cache
-	cachedResources      []Resource
-	cachedResourcesTime  time.Time
-	cachedResourcesMutex sync.RWMutex
-
-	// IP address cache for VMs and containers
-	ipCache      map[string]ipCacheEntry
-	ipCacheMutex sync.RWMutex
-}
-
-// ipCacheEntry represents a cached IP address with its timestamp
-type ipCacheEntry struct {
-	ip        string
-	timestamp time.Time
+	// The cluster listing is fetched once and shared by the lookups a command
+	// makes; resourcesMu also stops concurrent callers fetching it twice
+	resourcesMu   sync.Mutex
+	resources     []Resource
+	resourcesTime time.Time
 }
 
 // AuthResponse represents the response from Proxmox authentication
@@ -179,11 +170,11 @@ type ProxmoxClientInterface interface {
 	GetTaskLog(ctx context.Context, node, upid string, start int, limit int) ([]string, error)
 }
 
-// Client cache for reuse across operations
+// sharedClient is the one client a prox run uses, so that its login and its
+// cluster listing are shared by every part of a command
 var (
-	cachedClient     *ProxmoxClient
-	cachedClientKey  string
-	clientCacheMutex sync.RWMutex
+	sharedClient   *ProxmoxClient
+	sharedClientMu sync.Mutex
 )
 
 // NewClientWithTLS creates a new Proxmox client with the given TLS options
@@ -212,7 +203,6 @@ func NewClientWithTLS(baseURL, username, password string, opts TLSOptions) (*Pro
 		Username:   username,
 		Password:   password,
 		HTTPClient: client,
-		ipCache:    make(map[string]ipCacheEntry),
 	}, nil
 }
 
@@ -488,42 +478,26 @@ func (c *ProxmoxClient) GetNodes(ctx context.Context) ([]Node, error) {
 	return requestData[[]Node](ctx, c, "GET", "/nodes", nil, "nodes")
 }
 
-// GetClusterResources gets cluster resources with short-lived caching
+// GetClusterResources returns the cluster listing, which every name lookup
+// needs. It is kept for ClusterResourcesCacheTTL seconds, so the several
+// lookups in one command cost one request.
 func (c *ProxmoxClient) GetClusterResources(ctx context.Context) ([]Resource, error) {
-	// Try to use cached data (read lock)
-	c.cachedResourcesMutex.RLock()
-	if time.Since(c.cachedResourcesTime) < time.Duration(ClusterResourcesCacheTTL)*time.Second {
-		cached := c.cachedResources
-		c.cachedResourcesMutex.RUnlock()
-		return cached, nil
-	}
-	c.cachedResourcesMutex.RUnlock()
+	c.resourcesMu.Lock()
+	defer c.resourcesMu.Unlock()
 
-	// Cache miss or expired, fetch from API (write lock)
-	c.cachedResourcesMutex.Lock()
-	defer c.cachedResourcesMutex.Unlock()
-
-	// Double-check after acquiring write lock (another goroutine might have refreshed)
-	if time.Since(c.cachedResourcesTime) < time.Duration(ClusterResourcesCacheTTL)*time.Second {
-		return c.cachedResources, nil
+	if c.resources != nil && time.Since(c.resourcesTime) < ClusterResourcesCacheTTL*time.Second {
+		return c.resources, nil
 	}
 
-	// Fetch from API
-	body, err := c.makeRequest(ctx, "GET", "/cluster/resources", nil)
+	resp, err := requestData[[]Resource](ctx, c, "GET", "/cluster/resources", nil, "cluster resources")
 	if err != nil {
 		return nil, err
 	}
-
-	var resp ClusterResourcesResponse
-	if err := json.Unmarshal(body, &resp); err != nil {
-		return nil, fmt.Errorf("failed to parse cluster resources response: %w", err)
+	if resp == nil {
+		resp = []Resource{} // so an empty cluster still counts as fetched
 	}
-
-	// Update cache
-	c.cachedResources = resp.Data
-	c.cachedResourcesTime = time.Now()
-
-	return resp.Data, nil
+	c.resources, c.resourcesTime = resp, time.Now()
+	return c.resources, nil
 }
 
 // StartVM starts a virtual machine
@@ -759,56 +733,38 @@ func ReadConfig() (string, string, string, error) {
 	return config.Read()
 }
 
-// CreateClient creates a new authenticated Proxmox client with caching
+// CreateClient returns the Proxmox client for this run, creating it from the
+// saved or environment configuration the first time. Later calls return the
+// same client, so a command reads its configuration once and logs in once.
 func CreateClient() (ProxmoxClientInterface, error) {
+	sharedClientMu.Lock()
+	defer sharedClientMu.Unlock()
+	if sharedClient != nil {
+		return sharedClient, nil
+	}
+
 	user, pass, url, err := ReadConfig()
 	if err != nil {
 		return nil, fmt.Errorf("failed to read config: %w", err)
 	}
-
 	tlsOpts, err := ResolveTLSOptions()
 	if err != nil {
 		return nil, fmt.Errorf("failed to read TLS settings: %w", err)
 	}
-
-	// Create a cache key based on user, URL and TLS settings
-	cacheKey := fmt.Sprintf("%s@%s|%v|%s", user, url, tlsOpts.Insecure, tlsOpts.CACert)
-
-	// Try to get cached client first (read lock)
-	clientCacheMutex.RLock()
-	if cachedClient != nil && cachedClientKey == cacheKey {
-		client := cachedClient
-		clientCacheMutex.RUnlock()
-		return client, nil
-	}
-	clientCacheMutex.RUnlock()
-
-	// Need to create new client (write lock)
-	clientCacheMutex.Lock()
-	defer clientCacheMutex.Unlock()
-
-	// Double-check after acquiring write lock
-	if cachedClient != nil && cachedClientKey == cacheKey {
-		return cachedClient, nil
-	}
-
-	// Create new client and cache it
 	client, err := NewClientWithTLS(url, user, pass, tlsOpts)
 	if err != nil {
 		return nil, err
 	}
-	cachedClient = client
-	cachedClientKey = cacheKey
-
+	sharedClient = client
 	return client, nil
 }
 
-// ClearClusterResourcesCache clears the cluster resources cache for this client
+// ClearClusterResourcesCache forgets the cluster listing, for use after
+// creating or removing a guest
 func (c *ProxmoxClient) ClearClusterResourcesCache() {
-	c.cachedResourcesMutex.Lock()
-	defer c.cachedResourcesMutex.Unlock()
-	c.cachedResources = nil
-	c.cachedResourcesTime = time.Time{}
+	c.resourcesMu.Lock()
+	defer c.resourcesMu.Unlock()
+	c.resources = nil
 }
 
 // GetVMNode finds which node a VM is running on
@@ -827,42 +783,8 @@ func (c *ProxmoxClient) GetVMNode(ctx context.Context, vmid int) (string, error)
 	return "", fmt.Errorf("VM %d not found in cluster", vmid)
 }
 
-// getCachedIP retrieves a cached IP address if it exists and hasn't expired
-func (c *ProxmoxClient) getCachedIP(node string, vmid int) (string, bool) {
-	cacheKey := fmt.Sprintf("%s:%d", node, vmid)
-
-	c.ipCacheMutex.RLock()
-	defer c.ipCacheMutex.RUnlock()
-
-	if entry, exists := c.ipCache[cacheKey]; exists {
-		// Check if cache entry is still valid
-		if time.Since(entry.timestamp).Seconds() < IPCacheTTL {
-			return entry.ip, true
-		}
-	}
-
-	return "", false
-}
-
-// setCachedIP stores an IP address in the cache with the current timestamp
-func (c *ProxmoxClient) setCachedIP(node string, vmid int, ip string) {
-	cacheKey := fmt.Sprintf("%s:%d", node, vmid)
-
-	c.ipCacheMutex.Lock()
-	defer c.ipCacheMutex.Unlock()
-
-	c.ipCache[cacheKey] = ipCacheEntry{
-		ip:        ip,
-		timestamp: time.Now(),
-	}
-}
-
 // GetVMIP gets the IP address of a VM, or "" if it has none that can be found
 func (c *ProxmoxClient) GetVMIP(ctx context.Context, node string, vmid int) (string, error) {
-	if cachedIP, found := c.getCachedIP(node, vmid); found {
-		return cachedIP, nil
-	}
-
 	// The QEMU guest agent is the most reliable source, when it is running
 	ip := c.guestAgentIP(ctx, node, GuestVM, vmid)
 	if ip == "" {
@@ -870,8 +792,6 @@ func (c *ProxmoxClient) GetVMIP(ctx context.Context, node string, vmid int) (str
 		ip = c.getVMIPFromConfig(ctx, node, vmid)
 	}
 
-	// Remember "no address" too, so VMs without one are not looked up again
-	c.setCachedIP(node, vmid, ip)
 	return ip, nil
 }
 
@@ -921,32 +841,22 @@ func (c *ProxmoxClient) guestAgentIP(ctx context.Context, node, guestType string
 
 // GetContainerIP gets the IP address of a container, or "" if it has none that can be found
 func (c *ProxmoxClient) GetContainerIP(ctx context.Context, node string, vmid int) (string, error) {
-	if cachedIP, found := c.getCachedIP(node, vmid); found {
-		return cachedIP, nil
-	}
-
 	ip := c.guestAgentIP(ctx, node, GuestContainer, vmid)
 	if ip == "" {
 		ip, _ = c.GetContainerIPAlternative(ctx, node, vmid)
 	}
 
-	c.setCachedIP(node, vmid, ip)
 	return ip, nil
 }
 
 // GetContainerIPAlternative tries to get container IP from various sources
 func (c *ProxmoxClient) GetContainerIPAlternative(ctx context.Context, node string, vmid int) (string, error) {
 	// IMPORTANT: Do not call GetContainerIP here to avoid infinite recursion.
-	if cachedIP, found := c.getCachedIP(node, vmid); found {
-		return cachedIP, nil
-	}
-
 	status, err := c.GetContainerStatus(ctx, node, vmid)
 	if err != nil {
 		return "", nil
 	}
 	if ips, ok := status["ips"].(string); ok && ips != "" {
-		c.setCachedIP(node, vmid, ips)
 		return ips, nil
 	}
 
@@ -963,7 +873,6 @@ func (c *ProxmoxClient) GetContainerIPAlternative(ctx context.Context, node stri
 		}
 	}
 
-	c.setCachedIP(node, vmid, ip)
 	return ip, nil
 }
 
