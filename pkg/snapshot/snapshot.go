@@ -56,20 +56,6 @@ func prepare(guestType, nameOrID, node string) (context.Context, c.ProxmoxClient
 	return ctx, cl, t, nil
 }
 
-// finish prints the task ID and waits for it if asked
-func finish(ctx context.Context, cl c.ProxmoxClientInterface, t *target, taskID string, wait bool, done string) error {
-	output.Result("Task started: %s\n", taskID)
-	if !wait {
-		output.Info("Tip: Follow progress with 'prox logs --follow %s'\n", taskID)
-		return nil
-	}
-	if err := cmdutil.WaitForTask(ctx, cl, t.node, taskID); err != nil {
-		return err
-	}
-	output.Result("%s\n", done)
-	return nil
-}
-
 // List prints the snapshots of a VM or container
 func List(guestType, nameOrID, node string) error {
 	ctx, cl, t, err := prepare(guestType, nameOrID, node)
@@ -137,7 +123,7 @@ func Create(guestType, nameOrID, node, name, description string, vmState, wait b
 	if err != nil {
 		return fmt.Errorf("failed to create snapshot: %w", err)
 	}
-	return finish(ctx, cl, t, taskID, wait, fmt.Sprintf("Snapshot '%s' created", name))
+	return cmdutil.FinishTask(ctx, cl, t.node, taskID, wait, fmt.Sprintf("Snapshot '%s' created", name))
 }
 
 // Rollback returns a VM or container to a snapshot, discarding changes since
@@ -151,7 +137,7 @@ func Rollback(guestType, nameOrID, node, name string, wait bool) error {
 	if err != nil {
 		return fmt.Errorf("failed to roll back: %w", err)
 	}
-	return finish(ctx, cl, t, taskID, wait, fmt.Sprintf("Rolled back to snapshot '%s'", name))
+	return cmdutil.FinishTask(ctx, cl, t.node, taskID, wait, fmt.Sprintf("Rolled back to snapshot '%s'", name))
 }
 
 // Delete removes a snapshot
@@ -165,5 +151,5 @@ func Delete(guestType, nameOrID, node, name string, wait bool) error {
 	if err != nil {
 		return fmt.Errorf("failed to delete snapshot: %w", err)
 	}
-	return finish(ctx, cl, t, taskID, wait, fmt.Sprintf("Snapshot '%s' deleted", name))
+	return cmdutil.FinishTask(ctx, cl, t.node, taskID, wait, fmt.Sprintf("Snapshot '%s' deleted", name))
 }

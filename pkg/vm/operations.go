@@ -64,7 +64,6 @@ func ShutdownVMWithOptions(ctx context.Context, id int, node string, wait bool, 
 	}
 
 	label := vmLabel(ctx, client, id)
-	startTime := time.Now()
 	var task *Task
 	var err error
 	if force {
@@ -80,18 +79,9 @@ func ShutdownVMWithOptions(ctx context.Context, id int, node string, wait bool, 
 		return fmt.Errorf("failed to shutdown VM %d: %w", id, err)
 	}
 
-	output.Result("Task started: %s\n", task.ID)
-
-	if wait {
-		err = cmdutil.WaitForTask(ctx, client, node, task.ID)
-		if err != nil {
-			return fmt.Errorf("shutdown failed: %w", err)
-		}
-		output.Result("VM %s shut down in %s\n", label, time.Since(startTime).Round(time.Millisecond))
-	} else {
-		output.Info("Tip: Follow progress with 'prox logs --follow %s'\n", task.ID)
+	if err := cmdutil.FinishTask(ctx, client, node, task.ID, wait, fmt.Sprintf("VM %s shut down", label)); err != nil {
+		return fmt.Errorf("shutdown failed: %w", err)
 	}
-
 	return nil
 }
 
@@ -136,22 +126,13 @@ func StartVMWithWait(ctx context.Context, id int, node string, wait bool, client
 		Client: client,
 	}
 
-	startTime := time.Now()
 	task, err := vm.Start(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to start VM %d: %w", id, err)
 	}
 
-	output.Result("Task started: %s\n", task.ID)
-
-	if wait {
-		err = cmdutil.WaitForTask(ctx, client, node, task.ID)
-		if err != nil {
-			return fmt.Errorf("start failed: %w", err)
-		}
-		output.Result("VM %s started in %s\n", label, time.Since(startTime).Round(time.Millisecond))
-	} else {
-		output.Info("Tip: Follow progress with 'prox logs --follow %s'\n", task.ID)
+	if err := cmdutil.FinishTask(ctx, client, node, task.ID, wait, fmt.Sprintf("VM %s started", label)); err != nil {
+		return fmt.Errorf("start failed: %w", err)
 	}
 	return nil
 }
@@ -283,17 +264,9 @@ func DeleteVMWithWait(ctx context.Context, id int, node string, wait bool) error
 		return fmt.Errorf("failed to delete VM %d: %w", id, err)
 	}
 
-	output.Result("Task started: %s\n", task.ID)
-
-	if wait {
-		if err := cmdutil.WaitForTask(ctx, client, node, task.ID); err != nil {
-			return fmt.Errorf("deletion failed: %w", err)
-		}
-		output.Result("VM %s deleted\n", label)
-		return nil
+	if err := cmdutil.FinishTask(ctx, client, node, task.ID, wait, fmt.Sprintf("VM %s deleted", label)); err != nil {
+		return fmt.Errorf("deletion failed: %w", err)
 	}
-
-	output.Info("Tip: Follow progress with 'prox logs --follow %s'\n", task.ID)
 	return nil
 }
 
@@ -471,19 +444,12 @@ func RebootVMByNameOrID(nameOrID, node string, wait bool) error {
 	}
 
 	output.Info("Rebooting VM %s (ID: %d) on node %s...\n", vm.Name, vm.ID, vm.Node)
-	start := time.Now()
 	taskID, err := client.RebootGuest(ctx, vm.Node, c.GuestVM, vm.ID)
 	if err != nil {
 		return fmt.Errorf("failed to reboot VM %d: %w", vm.ID, err)
 	}
-	output.Result("Task started: %s\n", taskID)
-	if !wait {
-		output.Info("Tip: Follow progress with 'prox logs --follow %s'\n", taskID)
-		return nil
-	}
-	if err := cmdutil.WaitForTask(ctx, client, vm.Node, taskID); err != nil {
+	if err := cmdutil.FinishTask(ctx, client, vm.Node, taskID, wait, fmt.Sprintf("VM %s rebooted", vm.Name)); err != nil {
 		return fmt.Errorf("reboot failed: %w", err)
 	}
-	output.Result("VM %s rebooted in %s\n", vm.Name, time.Since(start).Round(time.Millisecond))
 	return nil
 }

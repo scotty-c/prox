@@ -641,7 +641,7 @@ func TestContainerCreateAcceptsCPUAndIDAndCanStart(t *testing.T) {
 	if srv.Count("POST", "/nodes/pve1/lxc/150/status/start") != 1 {
 		t.Errorf("container should have been started: %v", srv.Requests())
 	}
-	contains(t, "stdout", r.stdout, "Container web2 (ID: 150) created successfully")
+	contains(t, "stdout", r.stdout, "Container web2 (ID: 150) created on node pve1")
 }
 
 func TestContainerCreateWithoutStartLeavesItStopped(t *testing.T) {

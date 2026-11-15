@@ -37,19 +37,9 @@ func StartContainerWithWait(nameOrID string, wait bool) error {
 		return fmt.Errorf("failed to start container: %w", err)
 	}
 
-	output.Result("Task started: %s\n", taskID)
-	if !wait {
-		output.Info("Tip: Follow progress with 'prox logs --follow %s'\n", taskID)
-		return nil
-	}
-
-	// Wait for task completion
-	err = cmdutil.WaitForTask(ctx, client, container.Node, taskID)
-	if err != nil {
+	if err := cmdutil.FinishTask(ctx, client, container.Node, taskID, wait, fmt.Sprintf("Container %s started", nameOrID)); err != nil {
 		return fmt.Errorf("container start failed: %w", err)
 	}
-
-	output.Result("Container %s started successfully\n", nameOrID)
 	return nil
 }
 
@@ -88,19 +78,9 @@ func StopContainerWithOptions(nameOrID string, force bool, wait bool) error {
 		return fmt.Errorf("failed to stop container: %w", err)
 	}
 
-	output.Result("Task started: %s\n", taskID)
-	if !wait {
-		output.Info("Tip: Follow progress with 'prox logs --follow %s'\n", taskID)
-		return nil
-	}
-
-	// Wait for task completion
-	err = cmdutil.WaitForTask(ctx, client, container.Node, taskID)
-	if err != nil {
+	if err := cmdutil.FinishTask(ctx, client, container.Node, taskID, wait, fmt.Sprintf("Container %s stopped", nameOrID)); err != nil {
 		return fmt.Errorf("container stop failed: %w", err)
 	}
-
-	output.Result("Container %s stopped successfully\n", nameOrID)
 	return nil
 }
 
@@ -127,18 +107,8 @@ func DeleteContainerWithWait(nameOrID string, wait bool) error {
 		return fmt.Errorf("failed to delete container: %w", err)
 	}
 
-	output.Result("Task started: %s\n", taskID)
-	if !wait {
-		output.Info("Tip: Follow progress with 'prox logs --follow %s'\n", taskID)
-		return nil
-	}
-
-	// Wait for task completion
-	err = cmdutil.WaitForTask(ctx, client, container.Node, taskID)
-	if err != nil {
+	if err := cmdutil.FinishTask(ctx, client, container.Node, taskID, wait, fmt.Sprintf("Container %s deleted", nameOrID)); err != nil {
 		return fmt.Errorf("container deletion failed: %w", err)
 	}
-
-	output.Result("Container %s deleted successfully\n", nameOrID)
 	return nil
 }

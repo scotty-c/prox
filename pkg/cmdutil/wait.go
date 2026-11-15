@@ -3,6 +3,7 @@ package cmdutil
 
 import (
 	"context"
+	"time"
 
 	c "github.com/scotty-c/prox/pkg/client"
 	"github.com/scotty-c/prox/pkg/output"
@@ -45,4 +46,22 @@ func ResolveWait(cmd *cobra.Command, defaultWait bool) bool {
 		return !noWait
 	}
 	return defaultWait
+}
+
+// FinishTask is the ending every Proxmox task command shares. It prints the
+// task ID. Without wait it points at 'prox logs --follow' and returns; with
+// wait it waits for the task, then prints done and how long it took. A task
+// that fails is returned as an error for the caller to describe.
+func FinishTask(ctx context.Context, client c.TaskStatusGetter, node, taskID string, wait bool, done string) error {
+	output.Result("Task started: %s\n", taskID)
+	if !wait {
+		output.Info("Tip: Follow progress with 'prox logs --follow %s'\n", taskID)
+		return nil
+	}
+	start := time.Now()
+	if err := WaitForTask(ctx, client, node, taskID); err != nil {
+		return err
+	}
+	output.Result("%s in %s\n", done, time.Since(start).Round(time.Millisecond))
+	return nil
 }

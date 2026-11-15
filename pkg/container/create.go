@@ -127,19 +127,13 @@ func CreateContainerWithOptions(opts CreateOptions) error {
 		return fmt.Errorf("failed to create container: %w", err)
 	}
 
-	output.Result("Task started: %s\n", taskID)
-	if !wait {
-		output.Info("Tip: Follow progress with 'prox logs --follow %s'\n", taskID)
-		return nil
-	}
-
-	// Wait for task completion
-	err = cmdutil.WaitForTask(ctx, client, node, taskID)
-	if err != nil {
+	if err := cmdutil.FinishTask(ctx, client, node, taskID, wait,
+		fmt.Sprintf("Container %s (ID: %d) created on node %s", name, vmid, node)); err != nil {
 		return fmt.Errorf("container creation failed: %w", err)
 	}
-
-	output.Result("Container %s (ID: %d) created successfully on node %s\n", name, vmid, node)
+	if !wait {
+		return nil
+	}
 
 	if opts.Start {
 		// The cluster listing fetched while resolving the template does not

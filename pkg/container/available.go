@@ -8,6 +8,7 @@ import (
 
 	"github.com/jedib0t/go-pretty/v6/table"
 	c "github.com/scotty-c/prox/pkg/client"
+	"github.com/scotty-c/prox/pkg/cmdutil"
 	"github.com/scotty-c/prox/pkg/output"
 )
 
@@ -182,5 +183,5 @@ func PullTemplate(want, node, storage string, wait bool) error {
 	if err != nil {
 		return fmt.Errorf("failed to start download: %w", err)
 	}
-	return finishTask(ctx, client, node, taskID, wait, fmt.Sprintf("Downloaded %s to %s", tmpl.Name, storage))
+	return cmdutil.FinishTask(ctx, client, node, taskID, wait, fmt.Sprintf("Downloaded %s to %s", tmpl.Name, storage))
 }

@@ -4,28 +4,12 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"time"
 
 	c "github.com/scotty-c/prox/pkg/client"
 	"github.com/scotty-c/prox/pkg/cmdutil"
 	"github.com/scotty-c/prox/pkg/lookup"
 	"github.com/scotty-c/prox/pkg/output"
 )
-
-// finishTask prints the task ID and, if wait, waits for it and prints done
-func finishTask(ctx context.Context, client c.ProxmoxClientInterface, node, taskID string, wait bool, done string) error {
-	output.Result("Task started: %s\n", taskID)
-	if !wait {
-		output.Info("Tip: Follow progress with 'prox logs --follow %s'\n", taskID)
-		return nil
-	}
-	start := time.Now()
-	if err := cmdutil.WaitForTask(ctx, client, node, taskID); err != nil {
-		return err
-	}
-	output.Result("%s in %s\n", done, time.Since(start).Round(time.Millisecond))
-	return nil
-}
 
 // CloneContainer clones a container. newID 0 uses the next free ID. full
 // makes a full copy; a linked clone is only possible from a template.
@@ -63,7 +47,7 @@ func CloneContainer(sourceNameOrID string, newID int, name string, full, wait bo
 		}
 		return fmt.Errorf("failed to clone container: %w", err)
 	}
-	return finishTask(ctx, client, source.Node, taskID, wait, fmt.Sprintf("Container %s (ID: %d) created", name, newID))
+	return cmdutil.FinishTask(ctx, client, source.Node, taskID, wait, fmt.Sprintf("Container %s (ID: %d) created", name, newID))
 }
 
 // MigrateContainer moves a container to targetNode. A running container is
@@ -91,7 +75,7 @@ func MigrateContainer(nameOrID, targetNode string, restart, wait bool) error {
 	if err != nil {
 		return fmt.Errorf("failed to start migration: %w", err)
 	}
-	return finishTask(ctx, client, ct.Node, taskID, wait, fmt.Sprintf("Container %s is now on node %s", ct.Name, targetNode))
+	return cmdutil.FinishTask(ctx, client, ct.Node, taskID, wait, fmt.Sprintf("Container %s is now on node %s", ct.Name, targetNode))
 }
 
 // EditContainer changes a container's hostname, cores or memory, and grows
@@ -138,7 +122,7 @@ func EditContainer(nameOrID, hostname string, cores, memoryMB, diskGB int) error
 		if err != nil {
 			return fmt.Errorf("failed to resize container %d disk: %w", ct.ID, err)
 		}
-		return finishTask(ctx, client, ct.Node, taskID, true, fmt.Sprintf("Root disk of container %s grown by %d GB", ct.Name, diskGB))
+		return cmdutil.FinishTask(ctx, client, ct.Node, taskID, true, fmt.Sprintf("Root disk of container %s grown by %d GB", ct.Name, diskGB))
 	}
 	return nil
 }
@@ -163,5 +147,5 @@ func RebootContainer(nameOrID string, wait bool) error {
 	if err != nil {
 		return fmt.Errorf("failed to reboot container: %w", err)
 	}
-	return finishTask(ctx, client, ct.Node, taskID, wait, fmt.Sprintf("Container %s rebooted", ct.Name))
+	return cmdutil.FinishTask(ctx, client, ct.Node, taskID, wait, fmt.Sprintf("Container %s rebooted", ct.Name))
 }
