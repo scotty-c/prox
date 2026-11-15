@@ -231,10 +231,6 @@ func writeProfileFile(path, content string) error {
 
 // DeleteProfile deletes a profile
 func DeleteProfile(profile string) error {
-	if profile == defaultProfile {
-		return fmt.Errorf("cannot delete the default profile")
-	}
-
 	profilePath, err := GetProfilePath(profile)
 	if err != nil {
 		return err
@@ -508,17 +504,6 @@ func Read() (string, string, string, error) {
 
 	profile := GetCurrentProfile()
 	return ReadProfile(profile)
-}
-
-// Delete deletes the current profile's config file
-func Delete() error {
-	profile := GetCurrentProfile()
-	if err := DeleteProfile(profile); err != nil {
-		return err
-	}
-
-	output.Resultln("Profile deleted successfully")
-	return nil
 }
 
 // Update updates the current profile's config file with encrypted data

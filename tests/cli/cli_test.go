@@ -467,3 +467,97 @@ func TestNodeDescribeShowsEachFigureOnce(t *testing.T) {
 	}
 	excludes(t, "describe", r.stdout, "Runtime Status")
 }
+
+// config profiles
+
+func profiles(t *testing.T, home string, srv *fakepve.Server) []string {
+	t.Helper()
+	r := runInHome(t, home, srv, "", "config", "list", "-o", "json")
+	var list []struct{ Name string }
+	if err := json.Unmarshal([]byte(r.stdout), &list); err != nil {
+		t.Fatalf("config list: %v\n%s%s", err, r.stdout, r.stderr)
+	}
+	var names []string
+	for _, p := range list {
+		names = append(names, p.Name)
+	}
+	return names
+}
+
+func TestConfigCreateRefusesToSaveAnIncompleteProfile(t *testing.T) {
+	home, srv := t.TempDir(), fakepve.New(t)
+	r := runInHome(t, home, srv, "", "config", "create", "lab", "-u", "root@pam")
+	if r.code != 1 {
+		t.Errorf("exit %d, want 1", r.code)
+	}
+	contains(t, "stderr", r.stderr, "missing --password, --url")
+	if got := profiles(t, home, srv); len(got) != 0 {
+		t.Errorf("a profile was saved anyway: %v", got)
+	}
+	// no flags at all
+	if r := runInHome(t, home, srv, "", "config", "create", "lab"); r.code != 1 {
+		t.Errorf("exit %d, want 1", r.code)
+	}
+	if got := profiles(t, home, srv); len(got) != 0 {
+		t.Errorf("a profile was saved anyway: %v", got)
+	}
+}
+
+func TestConfigCreateSavesAProfileThatHasEverything(t *testing.T) {
+	home, srv := t.TempDir(), fakepve.New(t)
+	r := runInHome(t, home, srv, "", "config", "create", "lab", "-u", "root@pam", "-p", "pw", "-l", "https://pve:8006")
+	if r.code != 0 {
+		t.Fatalf("exit %d: %s", r.code, r.stderr)
+	}
+	if got := profiles(t, home, srv); len(got) != 1 || got[0] != "lab" {
+		t.Errorf("profiles = %v", got)
+	}
+}
+
+func TestConfigDeleteAsksFirstAndNeedsAnAnswer(t *testing.T) {
+	home, srv := t.TempDir(), fakepve.New(t)
+	runInHome(t, home, srv, "", "config", "create", "lab", "-u", "u@pam", "-p", "pw", "-l", "https://pve:8006")
+
+	r := runInHome(t, home, srv, "", "config", "delete", "lab")
+	if r.code != 1 {
+		t.Errorf("no answer: exit %d, want 1", r.code)
+	}
+	contains(t, "stderr", r.stderr, "Delete profile 'lab'", "pass --force")
+
+	if r := runInHome(t, home, srv, "n\n", "config", "delete", "lab"); r.code != 0 {
+		t.Errorf("answered no: exit %d, want 0", r.code)
+	}
+	if got := profiles(t, home, srv); len(got) != 1 {
+		t.Fatalf("profile should still exist after 'no': %v", got)
+	}
+
+	if r := runInHome(t, home, srv, "y\n", "config", "delete", "lab"); r.code != 0 {
+		t.Fatalf("answered yes: exit %d: %s", r.code, r.stderr)
+	}
+	if got := profiles(t, home, srv); len(got) != 0 {
+		t.Errorf("profile should be gone: %v", got)
+	}
+}
+
+func TestConfigDeleteCanRemoveTheDefaultProfile(t *testing.T) {
+	home, srv := t.TempDir(), fakepve.New(t)
+	runInHome(t, home, srv, "", "config", "create", "default", "-u", "u@pam", "-p", "pw", "-l", "https://pve:8006")
+	runInHome(t, home, srv, "", "config", "create", "other", "-u", "u@pam", "-p", "pw", "-l", "https://pve:8006")
+
+	r := runInHome(t, home, srv, "", "config", "delete", "default", "--force")
+	if r.code != 0 {
+		t.Fatalf("exit %d: %s", r.code, r.stderr)
+	}
+	if got := profiles(t, home, srv); len(got) != 1 || got[0] != "other" {
+		t.Errorf("profiles = %v, want just 'other'", got)
+	}
+}
+
+func TestConfigDeleteUnknownProfileFailsBeforeAsking(t *testing.T) {
+	r := run(t, fakepve.New(t), "", "config", "delete", "nope")
+	if r.code != 1 {
+		t.Errorf("exit %d, want 1", r.code)
+	}
+	contains(t, "stderr", r.stderr, "profile 'nope' does not exist")
+	excludes(t, "stderr", r.stderr, "[y/N]")
+}

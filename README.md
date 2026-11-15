@@ -248,7 +248,7 @@ prox config list                                         # List all profiles
 prox config use <profile>                                # Switch to a different profile
 prox config read                                         # Read current profile (masked)
 prox config update                                       # Update current profile
-prox config delete                                       # Delete current profile
+prox config delete [profile]                             # Delete a profile (the current one by default; asks first, -f skips)
 prox --profile <name> [command]                          # Use specific profile for one command
 ```
 VMs:

@@ -3,9 +3,12 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"sort"
+	"strings"
 
 	c "github.com/scotty-c/prox/pkg/config"
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 )
 
 // createCmd represents the create command to create a new profile
@@ -19,6 +22,25 @@ var createCmd = &cobra.Command{
 		username, _ := cmd.Flags().GetString("username")
 		password, _ := cmd.Flags().GetString("password")
 		url, _ := cmd.Flags().GetString("url")
+
+		// On a terminal, ask for anything not given as a flag, as setup does
+		if term.IsTerminal(int(os.Stdin.Fd())) {
+			var err error
+			if username, password, url, err = promptMissing(username, password, url); err != nil {
+				return fmt.Errorf("reading input: %w", err)
+			}
+		}
+		// A profile without these cannot connect, so don't save one
+		var missing []string
+		for flag, value := range map[string]string{"--url": url, "--username": username, "--password": password} {
+			if strings.TrimSpace(value) == "" {
+				missing = append(missing, flag)
+			}
+		}
+		if len(missing) > 0 {
+			sort.Strings(missing)
+			return fmt.Errorf("a profile needs a URL, username and password; missing %s (run on a terminal to be prompted)", strings.Join(missing, ", "))
+		}
 
 		if err := c.CreateProfile(profile, username, password, url); err != nil {
 			return fmt.Errorf("creating profile: %w", err)
