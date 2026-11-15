@@ -496,77 +496,16 @@ func apiErrorMessage(reason string, body []byte) string {
 
 // GetVersion gets the Proxmox version
 func (c *ProxmoxClient) GetVersion(ctx context.Context) (*Version, error) {
-	body, err := c.makeRequest(ctx, "GET", "/version", nil)
+	v, err := requestData[Version](ctx, c, "GET", "/version", nil, "version")
 	if err != nil {
 		return nil, err
 	}
-
-	var resp APIResponse
-	if err := json.Unmarshal(body, &resp); err != nil {
-		return nil, fmt.Errorf("failed to parse version response: %w", err)
-	}
-
-	versionData, ok := resp.Data.(map[string]interface{})
-	if !ok {
-		return nil, fmt.Errorf("unexpected version response format")
-	}
-
-	version := &Version{}
-	if v, ok := versionData["version"].(string); ok {
-		version.Version = v
-	}
-	if r, ok := versionData["release"].(string); ok {
-		version.Release = r
-	}
-	if repo, ok := versionData["repoid"].(string); ok {
-		version.RepoID = repo
-	}
-
-	return version, nil
+	return &v, nil
 }
 
 // GetNodes gets the list of cluster nodes
 func (c *ProxmoxClient) GetNodes(ctx context.Context) ([]Node, error) {
-	body, err := c.makeRequest(ctx, "GET", "/nodes", nil)
-	if err != nil {
-		return nil, err
-	}
-
-	var resp APIResponse
-	if err := json.Unmarshal(body, &resp); err != nil {
-		return nil, fmt.Errorf("failed to parse nodes response: %w", err)
-	}
-
-	nodesData, ok := resp.Data.([]interface{})
-	if !ok {
-		return nil, fmt.Errorf("unexpected nodes response format")
-	}
-
-	var nodes []Node
-	for _, nodeData := range nodesData {
-		nodeMap, ok := nodeData.(map[string]interface{})
-		if !ok {
-			continue
-		}
-
-		node := Node{}
-		if v, ok := nodeMap["node"].(string); ok {
-			node.Node = v
-		}
-		if v, ok := nodeMap["status"].(string); ok {
-			node.Status = v
-		}
-		if v, ok := nodeMap["type"].(string); ok {
-			node.Type = v
-		}
-		if v, ok := nodeMap["id"].(string); ok {
-			node.ID = v
-		}
-
-		nodes = append(nodes, node)
-	}
-
-	return nodes, nil
+	return requestData[[]Node](ctx, c, "GET", "/nodes", nil, "nodes")
 }
 
 // GetClusterResources gets cluster resources with short-lived caching
@@ -631,26 +570,50 @@ func (c *ProxmoxClient) ForceStopContainer(ctx context.Context, node string, vmi
 	return requestData[string](ctx, c, "POST", fmt.Sprintf("/nodes/%s/lxc/%d/status/stop", url.PathEscape(node), vmid), nil, "force stop container")
 }
 
-// requestData makes an API request and returns its "data" field as T.
-// Errors read "failed to parse <action> response" if the body isn't JSON and
-// "unexpected <action> response format" if data isn't a T.
+// requestData makes an API request and decodes the response's "data" field
+// into T. A task ID is a string that must not be empty, and a config or status
+// map must not be missing; both are reported as an unexpected response.
 func requestData[T any](ctx context.Context, c *ProxmoxClient, method, path string, body interface{}, action string) (T, error) {
-	var zero T
+	var resp struct {
+		Data T `json:"data"`
+	}
 	raw, err := c.makeRequest(ctx, method, path, body)
 	if err != nil {
-		return zero, err
+		return resp.Data, err
 	}
-
-	var resp APIResponse
 	if err := json.Unmarshal(raw, &resp); err != nil {
-		return zero, fmt.Errorf("failed to parse %s response: %w", action, err)
+		return resp.Data, fmt.Errorf("failed to parse %s response: %w", action, err)
 	}
+	switch data := any(resp.Data).(type) {
+	case string:
+		if data == "" {
+			return resp.Data, fmt.Errorf("unexpected %s response format: no data", action)
+		}
+	case map[string]interface{}:
+		if data == nil {
+			return resp.Data, fmt.Errorf("unexpected %s response format: no data", action)
+		}
+	}
+	return resp.Data, nil
+}
 
-	data, ok := resp.Data.(T)
-	if !ok {
-		return zero, fmt.Errorf("unexpected %s response format", action)
+// requestOptionalTask makes an API request that either starts a task or just
+// succeeds (Proxmox returns a task ID for some changes and null for others).
+// It returns the task ID, or "" if there was none.
+func requestOptionalTask(ctx context.Context, c *ProxmoxClient, method, path string, body interface{}, action string) (string, error) {
+	raw, err := c.makeRequest(ctx, method, path, body)
+	if err != nil {
+		return "", err
 	}
-	return data, nil
+	var resp struct {
+		Data json.RawMessage `json:"data"`
+	}
+	if err := json.Unmarshal(raw, &resp); err != nil {
+		return "", fmt.Errorf("failed to parse %s response: %w", action, err)
+	}
+	var taskID string
+	_ = json.Unmarshal(resp.Data, &taskID) // null or not a string: no task
+	return taskID, nil
 }
 
 // DeleteVM deletes a virtual machine
@@ -717,73 +680,30 @@ func (c *ProxmoxClient) GetContainerStatus(ctx context.Context, node string, vmi
 
 // GetNextVMID gets the next available VM/container ID
 func (c *ProxmoxClient) GetNextVMID(ctx context.Context) (int, error) {
-	body, err := c.makeRequest(ctx, "GET", "/cluster/nextid", nil)
+	id, err := requestData[flexInt](ctx, c, "GET", "/cluster/nextid", nil, "next ID")
+	return int(id), err
+}
+
+// flexInt is an integer that Proxmox may send as a number or as a string
+type flexInt int
+
+func (f *flexInt) UnmarshalJSON(b []byte) error {
+	n, err := strconv.Atoi(strings.Trim(string(b), `"`))
 	if err != nil {
-		return 0, err
+		return fmt.Errorf("invalid number %s", b)
 	}
-
-	var resp APIResponse
-	if err := json.Unmarshal(body, &resp); err != nil {
-		return 0, fmt.Errorf("failed to parse next ID response: %w", err)
-	}
-
-	// Try different response formats that Proxmox might return
-	switch data := resp.Data.(type) {
-	case float64:
-		return int(data), nil
-	case string:
-		// Parse string to int
-		if id, err := strconv.Atoi(data); err == nil {
-			return id, nil
-		}
-		return 0, fmt.Errorf("invalid next ID format: %s", data)
-	case int:
-		return data, nil
-	default:
-		return 0, fmt.Errorf("unexpected next ID response format: %T", resp.Data)
-	}
+	*f = flexInt(n)
+	return nil
 }
 
 // GetTaskStatus gets the status of a Proxmox task
 func (c *ProxmoxClient) GetTaskStatus(ctx context.Context, node, upid string) (*Task, error) {
 	path := fmt.Sprintf("/nodes/%s/tasks/%s/status", url.PathEscape(node), url.PathEscape(upid))
-
-	body, err := c.makeRequest(ctx, "GET", path, nil)
+	task, err := requestData[Task](ctx, c, "GET", path, nil, "task status")
 	if err != nil {
 		return nil, err
 	}
-
-	var resp APIResponse
-	if err := json.Unmarshal(body, &resp); err != nil {
-		return nil, fmt.Errorf("failed to parse task status response: %w", err)
-	}
-
-	taskData, ok := resp.Data.(map[string]interface{})
-	if !ok {
-		return nil, fmt.Errorf("unexpected task status response format")
-	}
-
-	task := &Task{}
-	if v, ok := taskData["upid"].(string); ok {
-		task.UPID = v
-	}
-	if v, ok := taskData["node"].(string); ok {
-		task.Node = v
-	}
-	if v, ok := taskData["type"].(string); ok {
-		task.Type = v
-	}
-	if v, ok := taskData["status"].(string); ok {
-		task.Status = v
-	}
-	if v, ok := taskData["exitstatus"].(string); ok {
-		task.ExitCode = v
-	}
-	if v, ok := taskData["pid"].(float64); ok {
-		task.PID = int(v)
-	}
-
-	return task, nil
+	return &task, nil
 }
 
 // taskLogPageSize is how many log lines are requested at a time
@@ -813,44 +733,23 @@ func (c *ProxmoxClient) GetTaskLog(ctx context.Context, node, upid string, start
 
 // getTaskLogPage reads one page of a task's log
 func (c *ProxmoxClient) getTaskLogPage(ctx context.Context, node, upid string, start int, limit int) ([]string, error) {
-	path := fmt.Sprintf("/nodes/%s/tasks/%s/log", url.PathEscape(node), url.PathEscape(upid))
-
 	params := url.Values{}
 	params.Add("limit", strconv.Itoa(limit))
 	if start > 0 {
 		params.Add("start", strconv.Itoa(start))
 	}
-	path = path + "?" + params.Encode()
+	path := fmt.Sprintf("/nodes/%s/tasks/%s/log?%s", url.PathEscape(node), url.PathEscape(upid), params.Encode())
 
-	body, err := c.makeRequest(ctx, "GET", path, nil)
+	entries, err := requestData[[]struct {
+		Text string `json:"t"`
+	}](ctx, c, "GET", path, nil, "task log")
 	if err != nil {
 		return nil, err
 	}
-
-	var resp APIResponse
-	if err := json.Unmarshal(body, &resp); err != nil {
-		return nil, fmt.Errorf("failed to parse task log response: %w", err)
+	lines := make([]string, len(entries))
+	for i, e := range entries {
+		lines[i] = e.Text
 	}
-
-	// The log response is an array of log line objects
-	logData, ok := resp.Data.([]interface{})
-	if !ok {
-		return nil, fmt.Errorf("unexpected task log response format")
-	}
-
-	var lines []string
-	for _, item := range logData {
-		logLine, ok := item.(map[string]interface{})
-		if !ok {
-			continue
-		}
-
-		// Each log entry has "n" (line number) and "t" (text)
-		if text, ok := logLine["t"].(string); ok {
-			lines = append(lines, text)
-		}
-	}
-
 	return lines, nil
 }
 
@@ -1269,24 +1168,8 @@ func (c *ProxmoxClient) GetNodeIP(ctx context.Context, node string) (string, err
 // UpdateVM updates a virtual machine configuration
 func (c *ProxmoxClient) UpdateVM(ctx context.Context, node string, vmid int, config map[string]interface{}) (string, error) {
 	path := fmt.Sprintf("/nodes/%s/qemu/%d/config", url.PathEscape(node), vmid)
-
-	body, err := c.makeRequest(ctx, "PUT", path, config)
-	if err != nil {
-		return "", err
-	}
-
-	var resp APIResponse
-	if err := json.Unmarshal(body, &resp); err != nil {
-		return "", fmt.Errorf("failed to parse update VM response: %w", err)
-	}
-
-	// For VM config updates, Proxmox might return a task ID or just success
-	if taskID, ok := resp.Data.(string); ok {
-		return taskID, nil
-	}
-
-	// If no task ID is returned, it was likely a synchronous operation
-	return "", nil
+	// Proxmox returns a task ID for some changes and nothing for others
+	return requestOptionalTask(ctx, c, "PUT", path, config, "update VM")
 }
 
 // ResizeDisk resizes a VM disk
@@ -1311,21 +1194,20 @@ func (c *ProxmoxClient) GetVMConfig(ctx context.Context, node string, vmid int) 
 // hold the given content type (e.g. "rootdir" for container root disks)
 func (c *ProxmoxClient) GetStorageNames(ctx context.Context, node string, content string) ([]string, error) {
 	path := fmt.Sprintf("/nodes/%s/storage?enabled=1&content=%s", url.PathEscape(node), url.QueryEscape(content))
-	list, err := requestData[[]interface{}](ctx, c, "GET", path, nil, "storage")
+	storages, err := requestData[[]struct {
+		Storage string      `json:"storage"`
+		Active  interface{} `json:"active"`
+	}](ctx, c, "GET", path, nil, "storage")
 	if err != nil {
 		return nil, err
 	}
 	var names []string
-	for _, item := range list {
-		storage, ok := item.(map[string]interface{})
-		if !ok {
-			continue
+	for _, st := range storages {
+		if active, ok := ConfigFlag(st.Active); ok && !active {
+			continue // listed but not usable right now
 		}
-		if active, ok := storage["active"].(float64); ok && active == 0 {
-			continue
-		}
-		if name, ok := storage["storage"].(string); ok && name != "" {
-			names = append(names, name)
+		if st.Storage != "" {
+			names = append(names, st.Storage)
 		}
 	}
 	return names, nil
@@ -1334,101 +1216,45 @@ func (c *ProxmoxClient) GetStorageNames(ctx context.Context, node string, conten
 // GetContainerTemplates gets available container templates from a node
 func (c *ProxmoxClient) GetContainerTemplates(ctx context.Context, node string) ([]ContainerTemplate, error) {
 	path := fmt.Sprintf("/nodes/%s/storage", url.PathEscape(node))
-
-	body, err := c.makeRequest(ctx, "GET", path, nil)
+	storages, err := requestData[[]struct {
+		Storage string `json:"storage"`
+		Content string `json:"content"`
+	}](ctx, c, "GET", path, nil, "storage")
 	if err != nil {
 		return nil, err
 	}
 
-	var resp APIResponse
-	if err := json.Unmarshal(body, &resp); err != nil {
-		return nil, fmt.Errorf("failed to parse storage response: %w", err)
-	}
-
-	storageList, ok := resp.Data.([]interface{})
-	if !ok {
-		return nil, fmt.Errorf("unexpected storage response format")
-	}
-
-	var allTemplates []ContainerTemplate
-
-	// Check each storage for container templates
-	for _, storage := range storageList {
-		storageMap, ok := storage.(map[string]interface{})
-		if !ok {
+	var all []ContainerTemplate
+	for _, st := range storages {
+		if st.Storage == "" || !strings.Contains(st.Content, "vztmpl") {
 			continue
 		}
-
-		storageID, ok := storageMap["storage"].(string)
-		if !ok {
-			continue
-		}
-
-		// Check if this storage contains container templates
-		content, ok := storageMap["content"].(string)
-		if !ok || !strings.Contains(content, "vztmpl") {
-			continue
-		}
-
-		// Get templates from this storage
-		templates, err := c.getStorageTemplates(ctx, node, storageID)
+		templates, err := c.getStorageTemplates(ctx, node, st.Storage)
 		if err != nil {
-			// Continue with other storages if one fails
-			continue
+			continue // keep going with the other storages
 		}
-
-		allTemplates = append(allTemplates, templates...)
+		all = append(all, templates...)
 	}
-
-	return allTemplates, nil
+	return all, nil
 }
 
 // getStorageTemplates gets templates from a specific storage
 func (c *ProxmoxClient) getStorageTemplates(ctx context.Context, node, storage string) ([]ContainerTemplate, error) {
-	path := fmt.Sprintf("/nodes/%s/storage/%s/content", url.PathEscape(node), url.PathEscape(storage))
-
-	// Add query parameter to filter for container templates
-	query := "?content=vztmpl"
-
-	body, err := c.makeRequest(ctx, "GET", path+query, nil)
+	path := fmt.Sprintf("/nodes/%s/storage/%s/content?content=vztmpl", url.PathEscape(node), url.PathEscape(storage))
+	items, err := requestData[[]struct {
+		VolID string  `json:"volid"`
+		Size  float64 `json:"size"`
+		Used  float64 `json:"used"`
+	}](ctx, c, "GET", path, nil, "storage content")
 	if err != nil {
 		return nil, err
 	}
-
-	var resp APIResponse
-	if err := json.Unmarshal(body, &resp); err != nil {
-		return nil, fmt.Errorf("failed to parse storage content response: %w", err)
-	}
-
-	contentList, ok := resp.Data.([]interface{})
-	if !ok {
-		return nil, fmt.Errorf("unexpected storage content response format")
-	}
-
 	var templates []ContainerTemplate
-	for _, content := range contentList {
-		contentMap, ok := content.(map[string]interface{})
-		if !ok {
-			continue
+	for _, it := range items {
+		if it.VolID != "" {
+			templates = append(templates, ContainerTemplate{VolID: it.VolID, Size: uint64(it.Size), Used: uint64(it.Used)})
 		}
-
-		volID, ok := contentMap["volid"].(string)
-		if !ok {
-			continue
-		}
-
-		size, _ := contentMap["size"].(float64)
-		used, _ := contentMap["used"].(float64)
-
-		template := ContainerTemplate{
-			VolID: volID,
-			Size:  uint64(size),
-			Used:  uint64(used),
-		}
-
-		templates = append(templates, template)
 	}
-
 	return templates, nil
 }
 
@@ -1449,7 +1275,7 @@ func (c *ProxmoxClient) GetVMDiskInfo(ctx context.Context, node string, vmid int
 	var usedSize uint64 = 0
 
 	// Cache for storage content to avoid repeated API calls for the same storage
-	storageCache := make(map[string][]interface{})
+	storageCache := make(map[string][]storageVolume)
 
 	// Check all possible disk types
 	diskKeys := append(DiskKeys(config), "efidisk0", "tpmstate0")
@@ -1575,57 +1401,36 @@ func sumGuestFilesystemUsage(filesystems []guestFilesystem) (uint64, bool) {
 	return total, found
 }
 
-// getStorageVolumeSizeWithCache is like getStorageVolumeSize but uses a cache to avoid
-// repeated API calls for the same storage. This significantly improves performance when
-// a VM has multiple disks on the same storage.
-func (c *ProxmoxClient) getStorageVolumeSizeWithCache(ctx context.Context, node, storage, volumeID string, cache map[string][]interface{}) (uint64, error) {
+// storageVolume is one entry of a storage's content listing
+type storageVolume struct {
+	VolID string  `json:"volid"`
+	Size  float64 `json:"size"`
+}
+
+// getStorageVolumeSizeWithCache returns the size of a volume. cache holds the
+// content listings already fetched, keyed by node and storage, so a VM with
+// several disks on one storage costs one request.
+func (c *ProxmoxClient) getStorageVolumeSizeWithCache(ctx context.Context, node, storage, volumeID string, cache map[string][]storageVolume) (uint64, error) {
 	cacheKey := fmt.Sprintf("%s:%s", node, storage)
 
-	// Check if we have cached content for this storage
-	contentList, cached := cache[cacheKey]
-
+	volumes, cached := cache[cacheKey]
 	if !cached {
-		// Fetch storage content from API
 		path := fmt.Sprintf("/nodes/%s/storage/%s/content", url.PathEscape(node), url.PathEscape(storage))
-
-		body, err := c.makeRequest(ctx, "GET", path, nil)
-		if err != nil {
+		var err error
+		if volumes, err = requestData[[]storageVolume](ctx, c, "GET", path, nil, "storage content"); err != nil {
 			return 0, err
 		}
-
-		var resp APIResponse
-		if err := json.Unmarshal(body, &resp); err != nil {
-			return 0, err
-		}
-
-		if list, ok := resp.Data.([]interface{}); ok {
-			contentList = list
-			// Cache the content for future lookups
-			cache[cacheKey] = contentList
-		} else {
-			return 0, fmt.Errorf("unexpected storage content format")
-		}
+		cache[cacheKey] = volumes
 	}
 
-	// Search for the volume in the cached content
-	for _, content := range contentList {
-		if contentMap, ok := content.(map[string]interface{}); ok {
-			if volID, exists := contentMap["volid"]; exists {
-				if volIDStr, ok := volID.(string); ok {
-					// Exact match only: a substring match would let vm-100-disk-1
-					// pick up vm-100-disk-10
-					if volIDStr == fmt.Sprintf("%s:%s", storage, volumeID) {
-						if size, exists := contentMap["size"]; exists {
-							if sizeFloat, ok := size.(float64); ok {
-								return uint64(sizeFloat), nil
-							}
-						}
-					}
-				}
-			}
+	// Exact match only: a substring match would let vm-100-disk-1 pick up
+	// vm-100-disk-10
+	want := fmt.Sprintf("%s:%s", storage, volumeID)
+	for _, v := range volumes {
+		if v.VolID == want {
+			return uint64(v.Size), nil
 		}
 	}
-
 	return 0, fmt.Errorf("volume not found in storage")
 }
 

@@ -62,15 +62,8 @@ func (c *ProxmoxClient) UpdateContainer(ctx context.Context, node string, vmid i
 	if err != nil {
 		return err
 	}
-	raw, err := c.makeRequest(ctx, "PUT", path+"/config", config)
-	if err != nil {
-		return err
-	}
-	var resp APIResponse
-	if err := json.Unmarshal(raw, &resp); err != nil {
-		return fmt.Errorf("failed to parse update container response: %w", err)
-	}
-	return nil
+	_, err = requestOptionalTask(ctx, c, "PUT", path+"/config", config, "update container")
+	return err
 }
 
 // ResizeContainerDisk grows a container volume (e.g. "rootfs") by size

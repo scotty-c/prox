@@ -62,10 +62,10 @@ func TestConfigFlag(t *testing.T) {
 
 func TestVolumeSizeLookupIsExact(t *testing.T) {
 	c := &ProxmoxClient{}
-	cache := map[string][]interface{}{
+	cache := map[string][]storageVolume{
 		"pve1:local-lvm": {
-			map[string]interface{}{"volid": "local-lvm:vm-100-disk-10", "size": float64(100)},
-			map[string]interface{}{"volid": "local-lvm:vm-100-disk-1", "size": float64(1)},
+			{VolID: "local-lvm:vm-100-disk-10", Size: 100},
+			{VolID: "local-lvm:vm-100-disk-1", Size: 1},
 		},
 	}
 	got, err := c.getStorageVolumeSizeWithCache(context.Background(), "pve1", "local-lvm", "vm-100-disk-1", cache)
