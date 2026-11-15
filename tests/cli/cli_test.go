@@ -422,3 +422,48 @@ func TestSSHDeleteDoesNotNeedTheNetworkWhenTheHostIsInTheConfig(t *testing.T) {
 	excludes(t, "ssh config", string(got), "Host web")
 	contains(t, "ssh config", string(got), "Host keep")
 }
+
+// describe output
+
+func TestContainerDescribeIsOrderedAndStableAcrossRuns(t *testing.T) {
+	srv := fakepve.New(t)
+	first := run(t, srv, "", "ct", "describe", "ct1")
+	if first.code != 0 {
+		t.Fatalf("exit %d: %s", first.code, first.stderr)
+	}
+	for i := 0; i < 5; i++ {
+		if again := run(t, srv, "", "ct", "describe", "ct1"); again.stdout != first.stdout {
+			t.Fatalf("describe output changed between runs:\n--- first ---\n%s\n--- again ---\n%s", first.stdout, again.stdout)
+		}
+	}
+
+	out := first.stdout
+	for _, pair := range [][2]string{
+		{"Network 0:", "Network 1:"}, {"Network 1:", "Network 2:"},
+		{"Mount Point 0:", "Mount Point 1:"}, {"Mount Point 1:", "Mount Point 10:"},
+	} {
+		a, b := strings.Index(out, pair[0]), strings.Index(out, pair[1])
+		if a < 0 || b < 0 || a > b {
+			t.Errorf("%q should come before %q in:\n%s", pair[0], pair[1], out)
+		}
+	}
+}
+
+func TestContainerDescribeLabelsTheContainersState(t *testing.T) {
+	r := run(t, fakepve.New(t), "", "ct", "describe", "ct1")
+	contains(t, "describe", r.stdout, "State: running")
+	excludes(t, "describe", r.stdout, "VM Status")
+}
+
+func TestNodeDescribeShowsEachFigureOnce(t *testing.T) {
+	r := run(t, fakepve.New(t), "", "node", "describe", "pve1")
+	if r.code != 0 {
+		t.Fatalf("exit %d: %s", r.code, r.stderr)
+	}
+	for _, label := range []string{"CPU:", "Memory:", "Uptime:"} {
+		if n := strings.Count(r.stdout, label); n != 1 {
+			t.Errorf("%q appears %d times, want once:\n%s", label, n, r.stdout)
+		}
+	}
+	excludes(t, "describe", r.stdout, "Runtime Status")
+}

@@ -140,23 +140,6 @@ func DescribeNode(name string) error {
 
 	output.Result("\n")
 
-	// Runtime Status
-	output.Result("Runtime Status:\n")
-	if details.CPU != "" {
-		output.Result("   CPU Usage: %s\n", details.CPU)
-	}
-	if details.MemTotal > 0 {
-		output.Result("   Memory Usage: %s / %s (%.1f%%)\n", formatSize(details.MemUsed), formatSize(details.MemTotal), (float64(details.MemUsed)/float64(details.MemTotal))*100)
-	}
-	if details.DiskTotal > 0 {
-		output.Result("   Disk Usage: %s / %s (%.1f%%)\n", formatSize(details.DiskUsed), formatSize(details.DiskTotal), (float64(details.DiskUsed)/float64(details.DiskTotal))*100)
-	}
-	if details.Uptime != "" {
-		output.Result("   Uptime: %s\n", details.Uptime)
-	}
-
-	output.Result("\n")
-
 	// End of node details
 	// (removed stray CLI suggestion line per user request)
 	output.Result("\n")

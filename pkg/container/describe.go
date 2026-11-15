@@ -137,11 +137,9 @@ func displayContainerDetails(container *Container, config map[string]interface{}
 	}
 
 	// Mount points
-	for key, value := range config {
-		if strings.HasPrefix(key, "mp") {
-			if mountPoint, ok := value.(string); ok {
-				output.Result("   Mount Point %s: %s\n", strings.TrimPrefix(key, "mp"), mountPoint)
-			}
+	for _, key := range c.MountPointKeys(config) {
+		if mountPoint, ok := config[key].(string); ok {
+			output.Result("   Mount Point %s: %s\n", strings.TrimPrefix(key, "mp"), mountPoint)
 		}
 	}
 
@@ -149,11 +147,9 @@ func displayContainerDetails(container *Container, config map[string]interface{}
 
 	// Network Configuration
 	output.Result("Network:\n")
-	for key, value := range config {
-		if strings.HasPrefix(key, "net") {
-			if netConfig, ok := value.(string); ok {
-				output.Result("   Network %s: %s\n", strings.TrimPrefix(key, "net"), netConfig)
-			}
+	for _, key := range c.NetKeys(config) {
+		if netConfig, ok := config[key].(string); ok {
+			output.Result("   Network %s: %s\n", strings.TrimPrefix(key, "net"), netConfig)
 		}
 	}
 
@@ -164,7 +160,7 @@ func displayContainerDetails(container *Container, config map[string]interface{}
 		output.Result("Runtime Status:\n")
 
 		if vmStatus, ok := status["status"].(string); ok {
-			output.Result("   VM Status: %s\n", vmStatus)
+			output.Result("   State: %s\n", vmStatus)
 		}
 
 		if uptime, ok := status["uptime"].(float64); ok {

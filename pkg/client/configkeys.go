@@ -10,6 +10,7 @@ import (
 var (
 	diskKeyPattern = regexp.MustCompile(`^(ide|sata|scsi|virtio)(\d+)$`)
 	netKeyPattern  = regexp.MustCompile(`^net(\d+)$`)
+	mpKeyPattern   = regexp.MustCompile(`^mp(\d+)$`)
 
 	// busOrder is the order disk buses are listed in
 	busOrder = map[string]int{"ide": 0, "sata": 1, "scsi": 2, "virtio": 3}
@@ -48,13 +49,25 @@ func DiskKeys(config map[string]interface{}) []string {
 // NetKeys returns the network interface keys of a VM or container config
 // (net0, net1, ...) in numeric order
 func NetKeys(config map[string]interface{}) []string {
+	return numberedKeys(config, netKeyPattern)
+}
+
+// MountPointKeys returns the mount point keys of a container config (mp0,
+// mp1, ...) in numeric order
+func MountPointKeys(config map[string]interface{}) []string {
+	return numberedKeys(config, mpKeyPattern)
+}
+
+// numberedKeys returns the keys matching pattern (whose first group is the
+// number), ordered by that number so that net10 sorts after net2
+func numberedKeys(config map[string]interface{}, pattern *regexp.Regexp) []string {
 	type key struct {
 		name string
 		n    int
 	}
 	var keys []key
 	for name := range config {
-		if m := netKeyPattern.FindStringSubmatch(name); m != nil {
+		if m := pattern.FindStringSubmatch(name); m != nil {
 			n, _ := strconv.Atoi(m[1])
 			keys = append(keys, key{name, n})
 		}

@@ -145,7 +145,9 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 	case reLxcIfaces.MatchString(p):
 		reply(w, []map[string]interface{}{{"name": "lo", "inet": "127.0.0.1/8"}, {"name": "eth0", "inet": "10.0.0.50/24"}}, 200, "")
 	case reLxcConfig.MatchString(p):
-		reply(w, map[string]interface{}{"hostname": "ct1", "memory": 512, "cores": 1, "rootfs": "local-lvm:vm-200-disk-0,size=8G", "net0": "name=eth0,bridge=vmbr0,ip=dhcp"}, 200, "")
+		reply(w, map[string]interface{}{"hostname": "ct1", "memory": 512, "cores": 1, "rootfs": "local-lvm:vm-200-disk-0,size=8G",
+			"net0": "name=eth0,bridge=vmbr0,ip=dhcp", "net1": "name=eth1,bridge=vmbr1", "net2": "name=eth2,bridge=vmbr2",
+			"mp0": "local:200/data0,mp=/data0", "mp1": "local:200/data1,mp=/data1", "mp10": "local:200/data10,mp=/data10"}, 200, "")
 	case strings.Contains(p, "/agent/"):
 		reply(w, nil, 500, "QEMU guest agent is not running")
 	case strings.HasSuffix(p, "/resize") && r.Method == http.MethodPut:
