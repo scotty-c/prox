@@ -149,8 +149,7 @@ func TestUnknownIPIsEmptyNotASentinel(t *testing.T) {
 
 func TestContainerIPComesFromItsInterfaces(t *testing.T) {
 	c := serve(t, map[string]string{
-		"/nodes/pve1/lxc/200/status/current": `{"data":{"status":"running"}}`,
-		"/nodes/pve1/lxc/200/interfaces":     `{"data":[{"name":"lo","inet":"127.0.0.1/8"},{"name":"eth0","inet":"10.0.0.50/24"}]}`,
+		"/nodes/pve1/lxc/200/interfaces": `{"data":[{"name":"lo","inet":"127.0.0.1/8"},{"name":"eth0","inet":"10.0.0.50/24"}]}`,
 	})
 	if ip, err := c.GetContainerIP(context.Background(), "pve1", 200); err != nil || ip != "10.0.0.50" {
 		t.Errorf("got %q, %v", ip, err)

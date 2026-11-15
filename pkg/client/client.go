@@ -178,7 +178,6 @@ type ProxmoxClientInterface interface {
 	GetContainerTemplates(ctx context.Context, node string) ([]ContainerTemplate, error)
 	GetStorageNames(ctx context.Context, node string, content string) ([]string, error)
 	GetContainerIP(ctx context.Context, node string, vmid int) (string, error)
-	GetContainerIPAlternative(ctx context.Context, node string, vmid int) (string, error)
 
 	// Node operations
 	GetNodeIP(ctx context.Context, node string) (string, error)
@@ -926,41 +925,23 @@ func (c *ProxmoxClient) guestAgentIP(ctx context.Context, node, guestType string
 	return extractIPFromInterfaces(data.Result)
 }
 
-// GetContainerIP gets the IP address of a container, or "" if it has none that can be found
+// GetContainerIP gets the IP address of a container from its network
+// interfaces, or "" if it has none that can be found (a stopped container, for
+// one). Proxmox has no guest agent endpoint for containers and their status
+// has no address, so the interfaces are the only source.
 func (c *ProxmoxClient) GetContainerIP(ctx context.Context, node string, vmid int) (string, error) {
-	ip := c.guestAgentIP(ctx, node, GuestContainer, vmid)
-	if ip == "" {
-		ip, _ = c.GetContainerIPAlternative(ctx, node, vmid)
-	}
-
-	return ip, nil
-}
-
-// GetContainerIPAlternative tries to get container IP from various sources
-func (c *ProxmoxClient) GetContainerIPAlternative(ctx context.Context, node string, vmid int) (string, error) {
-	// IMPORTANT: Do not call GetContainerIP here to avoid infinite recursion.
-	status, err := c.GetContainerStatus(ctx, node, vmid)
-	if err != nil {
-		return "", nil
-	}
-	if ips, ok := status["ips"].(string); ok && ips != "" {
-		return ips, nil
-	}
-
 	interfaces, err := requestData[[]struct {
 		Inet string `json:"inet"`
 	}](ctx, c, "GET", fmt.Sprintf("/nodes/%s/lxc/%d/interfaces", url.PathEscape(node), vmid), nil, "container interfaces")
-	ip := ""
-	if err == nil {
-		for _, iface := range interfaces {
-			if addr := addressOf(iface.Inet); addr != "" && addr != "127.0.0.1" {
-				ip = addr
-				break
-			}
+	if err != nil {
+		return "", nil
+	}
+	for _, iface := range interfaces {
+		if addr := addressOf(iface.Inet); addr != "" && addr != "127.0.0.1" {
+			return addr, nil
 		}
 	}
-
-	return ip, nil
+	return "", nil
 }
 
 // addressOf returns the address part of "10.0.0.5/24" (or of a bare address)

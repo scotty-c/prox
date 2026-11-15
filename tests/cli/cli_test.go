@@ -1602,3 +1602,32 @@ func TestWaitDefaultsAreTheSameEverywhere(t *testing.T) {
 		}
 	}
 }
+
+// Container addresses come from /interfaces alone: a real node has no "ips" in
+// the container status and no guest agent endpoint for containers (checked on
+// Proxmox, which answers "No 'get' handler defined"), so asking would only
+// add requests that cannot succeed.
+func TestContainerAddressesNeedOneRequestEach(t *testing.T) {
+	srv := fakepve.New(t)
+	r := run(t, srv, "", "ct", "list")
+	if r.code != 0 {
+		t.Fatalf("exit %d: %s", r.code, r.stderr)
+	}
+	contains(t, "ct list", r.stdout, "10.0.0.50")
+	if n := gets(srv, "/nodes/pve1/lxc/200/interfaces"); n != 1 {
+		t.Errorf("%d interface requests for container 200, want 1", n)
+	}
+	for _, prefix := range []string{"/nodes/pve1/lxc/200/status/current", "/nodes/pve1/lxc/200/agent"} {
+		if n := gets(srv, prefix); n != 0 {
+			t.Errorf("ct list asked %s %d times; it cannot give an address", prefix, n)
+		}
+	}
+
+	srv = fakepve.New(t)
+	if r := run(t, srv, "", "ssh", "ct1", "--print"); r.code != 0 {
+		t.Fatalf("ssh: exit %d: %s", r.code, r.stderr)
+	}
+	if n := gets(srv, "/nodes/pve1/lxc/200/agent"); n != 0 {
+		t.Errorf("prox ssh asked a container's guest agent %d times; containers have none", n)
+	}
+}

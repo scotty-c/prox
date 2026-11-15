@@ -65,7 +65,7 @@ func ListContainers(ctx context.Context, node string, runningOnly bool, jsonOutp
 	sort.SliceStable(containers, func(i, j int) bool { return containers[i].ID < containers[j].ID })
 
 	// Fetch IP addresses concurrently for all running containers
-	guest.LookupIPs(ctx, containers, client.GetContainerIPAlternative)
+	guest.LookupIPs(ctx, containers, client.GetContainerIP)
 
 	if jsonOutput {
 		if containers == nil {
