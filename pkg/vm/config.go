@@ -27,7 +27,7 @@ func (v *VirtualMachine) Update(ctx context.Context, config map[string]interface
 }
 
 // EditVM edits a VM configuration by ID and node
-func EditVM(ctx context.Context, id int, node string, name string, cores int, mem int, diskSize int, options ...VirtualMachineOption) error {
+func EditVM(ctx context.Context, id int, node string, name string, cores int, mem int, diskSize int) error {
 	client, err := c.CreateClient()
 	if err != nil {
 		return fmt.Errorf("failed to create client: %w", err)
@@ -143,24 +143,6 @@ func EditVM(ctx context.Context, id int, node string, name string, cores int, me
 // finished the resize without starting a task)
 func (v *VirtualMachine) ResizeDisk(ctx context.Context, disk string, size string) (string, error) {
 	return v.Client.ResizeDisk(ctx, v.Node, v.ID, disk, size)
-}
-
-// GetDiskInfo gets information about the VM's disks
-func (v *VirtualMachine) GetDiskInfo(ctx context.Context) (map[string]string, error) {
-	config, err := v.Client.GetVMConfig(ctx, v.Node, v.ID)
-	if err != nil {
-		return nil, err
-	}
-
-	disks := make(map[string]string)
-
-	for _, diskType := range c.DiskKeys(config) {
-		if diskStr, ok := config[diskType].(string); ok {
-			disks[diskType] = diskStr
-		}
-	}
-
-	return disks, nil
 }
 
 // GetPrimaryDisk returns the key of the disk the VM boots from (for example

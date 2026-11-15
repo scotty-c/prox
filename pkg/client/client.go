@@ -122,7 +122,6 @@ type ProxmoxClientInterface interface {
 	GetVersion(ctx context.Context) (*Version, error)
 	GetNodes(ctx context.Context) ([]Node, error)
 	GetClusterResources(ctx context.Context) ([]Resource, error)
-	GetClusterStatus(ctx context.Context) (*ClusterStatus, error)
 	ClearClusterResourcesCache()
 
 	// VM operations
@@ -138,8 +137,6 @@ type ProxmoxClientInterface interface {
 	GetVMDiskInfo(ctx context.Context, node string, vmid int) (uint64, uint64, error)
 	GetVMNode(ctx context.Context, vmid int) (string, error)
 	GetVMIP(ctx context.Context, node string, vmid int) (string, error)
-	GetVMNetworkInterfaces(ctx context.Context, node string, vmid int) ([]NetworkInterface, error)
-	IsVMRunning(ctx context.Context, vmid int) (bool, error)
 	MigrateVM(ctx context.Context, node string, vmid int, targetNode string, options map[string]interface{}) (string, error)
 
 	// Operations for either guest type (GuestVM or GuestContainer)
@@ -171,8 +168,6 @@ type ProxmoxClientInterface interface {
 	GetStorageNames(ctx context.Context, node string, content string) ([]string, error)
 	GetContainerIP(ctx context.Context, node string, vmid int) (string, error)
 	GetContainerIPAlternative(ctx context.Context, node string, vmid int) (string, error)
-	GetContainerNetworkInterfaces(ctx context.Context, node string, vmid int) ([]NetworkInterface, error)
-	IsContainerRunning(ctx context.Context, vmid int) (bool, error)
 
 	// Node operations
 	GetNodeIP(ctx context.Context, node string) (string, error)
@@ -182,7 +177,6 @@ type ProxmoxClientInterface interface {
 	GetNextVMID(ctx context.Context) (int, error)
 	GetTaskStatus(ctx context.Context, node, upid string) (*Task, error)
 	GetTaskLog(ctx context.Context, node, upid string, start int, limit int) ([]string, error)
-	WaitForTask(ctx context.Context, node, taskID string) (*Task, error)
 }
 
 // Client cache for reuse across operations
@@ -191,14 +185,6 @@ var (
 	cachedClientKey  string
 	clientCacheMutex sync.RWMutex
 )
-
-// NewClient creates a new Proxmox client that verifies the server certificate
-// against the system CAs. Use NewClientWithTLS to trust another CA or to skip
-// verification.
-func NewClient(baseURL, username, password string) *ProxmoxClient {
-	client, _ := NewClientWithTLS(baseURL, username, password, TLSOptions{})
-	return client
-}
 
 // NewClientWithTLS creates a new Proxmox client with the given TLS options
 func NewClientWithTLS(baseURL, username, password string, opts TLSOptions) (*ProxmoxClient, error) {
@@ -815,14 +801,6 @@ func CreateClient() (ProxmoxClientInterface, error) {
 	cachedClientKey = cacheKey
 
 	return client, nil
-}
-
-// ClearClientCache clears the cached client (useful for testing or config changes)
-func ClearClientCache() {
-	clientCacheMutex.Lock()
-	defer clientCacheMutex.Unlock()
-	cachedClient = nil
-	cachedClientKey = ""
 }
 
 // ClearClusterResourcesCache clears the cluster resources cache for this client

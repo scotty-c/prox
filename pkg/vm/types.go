@@ -17,12 +17,6 @@ type Task struct {
 	Status string
 }
 
-// VirtualMachineOption represents configuration options for VMs
-type VirtualMachineOption struct {
-	Name  string
-	Value interface{}
-}
-
 // VM represents a virtual machine for display purposes
 type VM struct {
 	ID        int    `json:"id"`
