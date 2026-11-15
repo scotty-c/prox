@@ -150,7 +150,8 @@ prox ct stop --tag web        # Same for containers: vm start/shutdown, ct start
 prox vm start 100
 prox vm describe 100          # shows IPs, disks, resources
 prox ssh 100                  # Add/update SSH config entry for VM 100
-prox ssh --list               # List managed SSH config entries
+prox ssh --list               # List SSH config entries (the MANAGED column marks the ones prox wrote)
+prox ssh --prune --dry-run    # Show prox-written entries whose VM or container is gone
 prox ssh 100 --delete         # Remove SSH entry for VM 100
 prox vm clone 100 101 clone-101 --full
 prox vm clone 100 clone-102           # no ID: the next free one is used
@@ -206,7 +207,8 @@ Pro tips:
 - Template shortcuts: ubuntu:22.04 | debian:12 | alpine:3.18
 - SSH key file can include multiple lines (each a key)
 - Use `prox ssh <resource> --dry-run` to preview SSH config changes
-- Use `prox ssh --list` to view current managed entries
+- Use `prox ssh --list` to view the entries in `~/.ssh/config`; entries prox wrote carry a `# managed by prox` comment and show `prox` in the MANAGED column (entries written by older versions, or by you, are not marked)
+- Use `prox ssh --prune [--dry-run]` to remove entries prox wrote for VMs and containers that no longer exist. It lists them and asks first (`--yes` skips the question); a guest you lack permission to see also looks "gone", so check the list. Your own entries are never touched, and a backup is kept in `~/.ssh/config.prox.bak`
 - Use `prox ssh <resource> --delete [--dry-run]` to remove an entry safely
 - Use `prox ssh <resource> --connect` to connect straight away, or `--print` to print the ssh command, without editing `~/.ssh/config`
 - New SSH entries use OpenSSH's normal host key checking; add `--no-host-key-check` for disposable VMs whose keys change on every rebuild

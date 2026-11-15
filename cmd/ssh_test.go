@@ -7,7 +7,7 @@ import (
 
 func TestGenerateSSHConfigEntry(t *testing.T) {
 	got := generateSSHConfigEntry("web", "10.0.0.5", "alice", 22, "", false)
-	want := "Host web\n    HostName 10.0.0.5\n    User alice\n"
+	want := "Host web\n    # managed by prox\n    HostName 10.0.0.5\n    User alice\n"
 	if got != want {
 		t.Fatalf("got %q, want %q", got, want)
 	}

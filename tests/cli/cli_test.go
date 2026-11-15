@@ -1063,3 +1063,142 @@ func TestTasksJSONIncludesTheTaskIDAndStatus(t *testing.T) {
 		t.Errorf("running task has no end time, failed task carries Proxmox's message: %+v", rows)
 	}
 }
+
+// ssh config markers and --prune
+
+const marker = "# managed by prox"
+
+// sshHome makes a home directory with the given ~/.ssh/config
+func sshHome(t *testing.T, config string) string {
+	t.Helper()
+	home := t.TempDir()
+	if err := os.MkdirAll(home+"/.ssh", 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(home+"/.ssh/config", []byte(config), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return home
+}
+
+func readSSHConfig(t *testing.T, home string) string {
+	t.Helper()
+	data, err := os.ReadFile(home + "/.ssh/config")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(data)
+}
+
+const mixedConfig = `Host legacy
+    HostName 10.9.9.9
+
+Host gone
+    ` + marker + `
+    HostName 10.0.0.9
+
+Host web
+    ` + marker + `
+    HostName 10.0.0.2
+
+# my own notes
+Host gone-by-hand
+    HostName 10.8.8.8
+`
+
+func TestSSHWritesAMarkerAndListShowsWhichEntriesAreProxs(t *testing.T) {
+	home := sshHome(t, "Host legacy\n    HostName 10.9.9.9\n")
+	srv := fakepve.New(t)
+	if r := runInHome(t, home, srv, "", "ssh", "ct1", "--user", "root"); r.code != 0 {
+		t.Fatalf("exit %d: %s", r.code, r.stderr)
+	}
+	got := readSSHConfig(t, home)
+	contains(t, "ssh config", got, "Host ct1\n    "+marker+"\n    HostName 10.0.0.50")
+
+	r := runInHome(t, home, srv, "", "ssh", "--list")
+	var ct1Row, legacyRow string
+	for _, line := range strings.Split(r.stdout, "\n") {
+		switch {
+		case strings.Contains(line, "ct1"):
+			ct1Row = line
+		case strings.Contains(line, "legacy"):
+			legacyRow = line
+		}
+	}
+	if !strings.Contains(ct1Row, "prox") || strings.Contains(legacyRow, "prox") {
+		t.Errorf("only ct1 is prox's:\n%s", r.stdout)
+	}
+
+	// Running it again replaces the entry rather than piling up markers
+	runInHome(t, home, srv, "", "ssh", "ct1", "--user", "admin")
+	if n := strings.Count(readSSHConfig(t, home), marker); n != 1 {
+		t.Errorf("%d markers after updating the entry, want 1:\n%s", n, readSSHConfig(t, home))
+	}
+}
+
+func TestSSHPruneDryRunListsStaleEntriesAndChangesNothing(t *testing.T) {
+	home := sshHome(t, mixedConfig)
+	r := runInHome(t, home, fakepve.New(t), "", "ssh", "--prune", "--dry-run")
+	if r.code != 0 {
+		t.Fatalf("exit %d: %s", r.code, r.stderr)
+	}
+	contains(t, "stdout", r.stdout, "gone (10.0.0.9)", "Would remove 1 entry")
+	excludes(t, "stdout", r.stdout, "web (", "legacy", "gone-by-hand")
+	if readSSHConfig(t, home) != mixedConfig {
+		t.Error("a dry run must not change the file")
+	}
+}
+
+func TestSSHPruneRemovesOnlyStaleEntriesProxWrote(t *testing.T) {
+	home := sshHome(t, mixedConfig)
+	r := runInHome(t, home, fakepve.New(t), "", "ssh", "--prune", "--yes")
+	if r.code != 0 {
+		t.Fatalf("exit %d: %s", r.code, r.stderr)
+	}
+	got := readSSHConfig(t, home)
+	excludes(t, "ssh config", got, "Host gone\n", "10.0.0.9")
+	contains(t, "ssh config", got, "Host legacy", "Host web", "Host gone-by-hand", "# my own notes")
+	if _, err := os.Stat(home + "/.ssh/config.prox.bak"); err != nil {
+		t.Errorf("a backup should be left: %v", err)
+	}
+	contains(t, "stdout", r.stdout, "Removed 1 entry")
+}
+
+func TestSSHPruneNeedsAnAnswerAndDoesNotAssumeYes(t *testing.T) {
+	home := sshHome(t, mixedConfig)
+	r := runInHome(t, home, fakepve.New(t), "", "ssh", "--prune")
+	if r.code != 1 {
+		t.Errorf("exit %d, want 1", r.code)
+	}
+	contains(t, "stderr", r.stderr, "Remove 1 entry", "pass --yes")
+	if readSSHConfig(t, home) != mixedConfig {
+		t.Error("nothing should change without an answer")
+	}
+	if r := runInHome(t, home, fakepve.New(t), "n\n", "ssh", "--prune"); r.code != 0 || readSSHConfig(t, home) != mixedConfig {
+		t.Errorf("answering no: exit %d, config changed: %v", r.code, readSSHConfig(t, home) != mixedConfig)
+	}
+}
+
+func TestSSHPruneNeverGuessesWhenTheClusterIsUnreachable(t *testing.T) {
+	home := sshHome(t, mixedConfig)
+	srv := fakepve.New(t)
+	srv.Close()
+	r := runInHome(t, home, srv, "", "ssh", "--prune", "--yes")
+	if r.code != 1 {
+		t.Errorf("exit %d, want 1", r.code)
+	}
+	contains(t, "stderr", r.stderr, "nothing was changed")
+	if readSSHConfig(t, home) != mixedConfig {
+		t.Error("an unreachable cluster must not look like every guest is gone")
+	}
+}
+
+func TestSSHPruneRejectsArgumentsAndOtherModes(t *testing.T) {
+	for _, args := range [][]string{{"ssh", "--prune", "web"}, {"ssh", "--prune", "--list"}, {"ssh", "--prune", "--delete"}} {
+		r := runInHome(t, sshHome(t, mixedConfig), fakepve.New(t), "", args...)
+		if r.code != 1 {
+			t.Errorf("prox %v: exit %d, want 1", args, r.code)
+		}
+		contains(t, "stderr", r.stderr, "--prune takes no arguments")
+	}
+}

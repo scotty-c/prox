@@ -13,8 +13,13 @@ import (
 	"strings"
 )
 
+// ManagedMarker is the comment prox puts inside every Host block it writes, so
+// its entries can be told apart from the ones you wrote yourself
+const ManagedMarker = "# managed by prox"
+
 // Entry is a Host block as shown by `prox ssh --list`
 type Entry struct {
+	Managed  bool // written by prox (has ManagedMarker)
 	Hosts    []string
 	HostName string
 	User     string
@@ -217,6 +222,10 @@ func ParseEntries(content string) []Entry {
 	}
 
 	for _, line := range strings.Split(content, "\n") {
+		if current != nil && strings.TrimSpace(line) == ManagedMarker {
+			current.Managed = true
+			continue
+		}
 		keyword, value := parseDirective(line)
 		switch {
 		case keyword == "":
@@ -242,6 +251,19 @@ func ParseEntries(content string) []Entry {
 	}
 	flush()
 	return entries
+}
+
+// StaleManaged returns the aliases of the entries prox wrote (single-host
+// blocks with the marker) for which exists reports false. Entries you wrote
+// yourself, and blocks that name several hosts, are never returned.
+func StaleManaged(entries []Entry, exists func(alias string) bool) []string {
+	var stale []string
+	for _, e := range entries {
+		if e.Managed && len(e.Hosts) == 1 && !exists(e.Hosts[0]) {
+			stale = append(stale, e.Hosts[0])
+		}
+	}
+	return stale
 }
 
 // WriteFile writes data to path without leaving a partly written file if it

@@ -179,3 +179,65 @@ func TestWriteFileCreatesNew(t *testing.T) {
 		t.Fatal("no backup should be made when there was no file")
 	}
 }
+
+func TestParseEntriesRecognisesTheEntriesProxWrote(t *testing.T) {
+	content := `Host mine
+    HostName 10.0.0.1
+
+Host web
+    ` + ManagedMarker + `
+    HostName 10.0.0.2
+    User scott
+
+# a comment about the next block
+Host db other
+    ` + ManagedMarker + `
+    HostName 10.0.0.3
+`
+	entries := ParseEntries(content)
+	if len(entries) != 3 {
+		t.Fatalf("entries = %+v", entries)
+	}
+	if entries[0].Managed || !entries[1].Managed || !entries[2].Managed {
+		t.Errorf("Managed = %v %v %v, want false true true", entries[0].Managed, entries[1].Managed, entries[2].Managed)
+	}
+	if entries[1].HostName != "10.0.0.2" || entries[1].User != "scott" {
+		t.Errorf("directives after the marker are still read: %+v", entries[1])
+	}
+}
+
+func TestStaleManagedOnlyReturnsSingleHostEntriesProxWrote(t *testing.T) {
+	entries := []Entry{
+		{Hosts: []string{"gone-by-hand"}},             // not written by prox
+		{Hosts: []string{"gone"}, Managed: true},      // stale
+		{Hosts: []string{"here"}, Managed: true},      // still exists
+		{Hosts: []string{"a", "b"}, Managed: true},    // several hosts: never touched
+		{Hosts: []string{"also-gone"}, Managed: true}, // stale
+	}
+	exists := func(alias string) bool { return alias == "here" }
+	got := StaleManaged(entries, exists)
+	if strings.Join(got, ",") != "gone,also-gone" {
+		t.Errorf("StaleManaged = %v, want gone,also-gone", got)
+	}
+}
+
+func TestMarkerTravelsWithTheBlock(t *testing.T) {
+	block := "Host web\n    " + ManagedMarker + "\n    HostName 10.0.0.2\n"
+	content := "Host keep\n    HostName 10.0.0.1\n\n" + block + "\n# trailing note\nHost last\n    HostName 10.0.0.9\n"
+
+	// Removing the entry takes its marker with it and leaves the neighbours alone
+	removed, taken, found := RemoveHost(content, "web", true)
+	if !found || strings.Contains(removed, ManagedMarker) || !strings.Contains(removed, "Host keep") ||
+		!strings.Contains(removed, "# trailing note") || !strings.Contains(removed, "Host last") {
+		t.Errorf("RemoveHost left %q (found %v)", removed, found)
+	}
+	if !strings.Contains(taken, ManagedMarker) {
+		t.Errorf("the removed text should include the marker: %q", taken)
+	}
+
+	// Replacing it does not pile up markers
+	replaced := AddHost(content, "web", "Host web\n    "+ManagedMarker+"\n    HostName 10.0.0.77\n")
+	if n := strings.Count(replaced, ManagedMarker); n != 1 || !strings.Contains(replaced, "10.0.0.77") || strings.Contains(replaced, "10.0.0.2") {
+		t.Errorf("AddHost result (markers: %d):\n%s", n, replaced)
+	}
+}

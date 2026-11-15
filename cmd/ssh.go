@@ -42,6 +42,7 @@ Examples:
   prox ssh mycontainer --user root    # Setup SSH with specific username
   prox ssh myvm --delete              # Delete SSH config entry for 'myvm'
   prox ssh --list                     # List SSH config host entries
+  prox ssh --prune --dry-run          # Show entries for VMs that no longer exist
   prox ssh myvm --connect             # Connect now without editing ~/.ssh/config
   prox ssh myvm --print               # Print the ssh command, e.g. for scripts`,
 	Args: cobra.ArbitraryArgs,
@@ -49,6 +50,16 @@ Examples:
 		listFlag, _ := cmd.Flags().GetBool("list")
 		deleteFlag, _ := cmd.Flags().GetBool("delete")
 		dryRun, _ := cmd.Flags().GetBool("dry-run")
+
+		// Prune mode: remove entries prox wrote for guests that no longer exist
+		if prune, _ := cmd.Flags().GetBool("prune"); prune {
+			printFlag, _ := cmd.Flags().GetBool("print")
+			connectFlag, _ := cmd.Flags().GetBool("connect")
+			if len(args) > 0 || listFlag || deleteFlag || printFlag || connectFlag {
+				return fmt.Errorf("--prune takes no arguments and cannot be combined with --list, --delete, --print or --connect")
+			}
+			return pruneSSHConfig(cmd.Context(), dryRun, cmdutil.SkipConfirm(cmd))
+		}
 
 		// List mode (no args required; ignore others except dry-run which is harmless here)
 		if listFlag {
@@ -100,7 +111,9 @@ func init() {
 	sshCmd.Flags().Bool("no-host-key-check", false, "Disable SSH host key checking for this entry (for disposable VMs whose keys change on rebuild)")
 	sshCmd.Flags().Bool("dry-run", false, "Show what would be added to SSH config without actually modifying it")
 	sshCmd.Flags().Bool("delete", false, "Delete SSH config entry for the given VM or container")
-	sshCmd.Flags().Bool("list", false, "List SSH config host entries")
+	sshCmd.Flags().Bool("list", false, "List SSH config host entries (entries written by prox are marked)")
+	sshCmd.Flags().Bool("prune", false, "Remove entries prox wrote for VMs and containers that no longer exist (asks first; see --dry-run)")
+	cmdutil.AddYesFlag(sshCmd)
 	sshCmd.Flags().Bool("connect", false, "Connect now with ssh instead of editing ~/.ssh/config")
 	sshCmd.Flags().Bool("print", false, "Print the ssh command instead of editing ~/.ssh/config")
 
@@ -333,6 +346,7 @@ func generateSSHConfigEntry(host, hostname, user string, port int, keyPath strin
 	var config strings.Builder
 
 	fmt.Fprintf(&config, "Host %s\n", host)
+	fmt.Fprintf(&config, "    %s\n", sshconfig.ManagedMarker)
 	fmt.Fprintf(&config, "    HostName %s\n", hostname)
 	if user != "" {
 		fmt.Fprintf(&config, "    User %s\n", user)
@@ -477,6 +491,84 @@ func sshConfigHasHost(alias string) bool {
 	return false
 }
 
+// pruneSSHConfig removes the entries prox wrote whose VM or container no longer
+// exists. A guest the user may not see also looks "gone", so it lists what it
+// would remove and asks first (unless skipConfirm).
+func pruneSSHConfig(ctx context.Context, dryRun, skipConfirm bool) error {
+	configPath, err := sshConfigPath()
+	if err != nil {
+		return err
+	}
+	data, err := os.ReadFile(configPath)
+	if os.IsNotExist(err) {
+		fmt.Println("No SSH config file found (~/.ssh/config); nothing to prune")
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("failed to read SSH config: %w", err)
+	}
+	entries := sshconfig.ParseEntries(string(data))
+
+	cl, err := client.CreateClient()
+	if err != nil {
+		return fmt.Errorf("failed to create Proxmox client: %w", err)
+	}
+	resources, err := cl.GetClusterResources(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to list VMs and containers (nothing was changed): %w", err)
+	}
+	names := map[string]bool{}
+	for _, r := range resources {
+		if r.Type == client.GuestVM || r.Type == client.GuestContainer {
+			names[r.Name] = true
+		}
+	}
+
+	stale := sshconfig.StaleManaged(entries, func(alias string) bool { return names[alias] })
+	if len(stale) == 0 {
+		fmt.Println("No stale entries: every entry prox wrote still has a VM or container")
+		return nil
+	}
+
+	hostnames := map[string]string{}
+	for _, e := range entries {
+		if len(e.Hosts) == 1 {
+			hostnames[e.Hosts[0]] = e.HostName
+		}
+	}
+	fmt.Printf("Entries written by prox with no matching VM or container (or one you cannot see):\n")
+	for _, alias := range stale {
+		fmt.Printf("  %s (%s)\n", alias, hostnames[alias])
+	}
+	if dryRun {
+		fmt.Printf("[Dry run] Would remove %d entr%s\n", len(stale), plural(len(stale), "y", "ies"))
+		return nil
+	}
+	if !skipConfirm {
+		ok, err := cmdutil.Confirm(fmt.Sprintf("Remove %d entr%s from %s?", len(stale), plural(len(stale), "y", "ies"), configPath), "--yes", "Nothing removed")
+		if err != nil || !ok {
+			return err
+		}
+	}
+
+	content := string(data)
+	for _, alias := range stale {
+		content, _, _ = sshconfig.RemoveHost(content, alias, true)
+	}
+	if err := sshconfig.WriteFile(configPath, []byte(content)); err != nil {
+		return fmt.Errorf("failed to write updated SSH config: %w", err)
+	}
+	fmt.Printf("Removed %d entr%s (a backup is in %s.prox.bak)\n", len(stale), plural(len(stale), "y", "ies"), configPath)
+	return nil
+}
+
+func plural(n int, one, many string) string {
+	if n == 1 {
+		return one
+	}
+	return many
+}
+
 func listSSHConfigEntries() error {
 	configPath, err := sshConfigPath()
 	if err != nil {
@@ -503,7 +595,7 @@ func listSSHConfigEntries() error {
 	// Build pretty table similar style to VM list
 	t := table.NewWriter()
 	t.SetTitle("SSH Config Hosts")
-	t.AppendHeader(table.Row{"HOST", "HOSTNAME", "USER", "PORT", "IDENTITY"})
+	t.AppendHeader(table.Row{"HOST", "HOSTNAME", "USER", "PORT", "IDENTITY", "MANAGED"})
 
 	aliasCount := 0
 	for _, e := range entries {
@@ -522,10 +614,14 @@ func listSSHConfigEntries() error {
 				if identity == "" {
 					identity = ""
 				}
-				t.AppendRow(table.Row{h, e.HostName, e.User, e.Port, identity})
+				managed := ""
+				if e.Managed {
+					managed = "prox"
+				}
+				t.AppendRow(table.Row{h, e.HostName, e.User, e.Port, identity, managed})
 			} else {
 				// additional alias rows
-				t.AppendRow(table.Row{h, "", "", "", ""})
+				t.AppendRow(table.Row{h, "", "", "", "", ""})
 			}
 		}
 	}
