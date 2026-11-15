@@ -112,19 +112,19 @@ func displayContainerDetails(container *Container, config map[string]interface{}
 
 	// Resource Configuration
 	output.Result("Resource Configuration:\n")
-	if memory, ok := config["memory"].(float64); ok {
+	if memory, ok := c.ConfigNumber(config["memory"]); ok {
 		output.Result("   Memory: %.0f MB\n", memory)
 	}
-	if swap, ok := config["swap"].(float64); ok {
+	if swap, ok := c.ConfigNumber(config["swap"]); ok {
 		output.Result("   Swap: %.0f MB\n", swap)
 	}
-	if cores, ok := config["cores"].(float64); ok {
+	if cores, ok := c.ConfigNumber(config["cores"]); ok {
 		output.Result("   CPU Cores: %.0f\n", cores)
 	}
-	if cpuLimit, ok := config["cpulimit"].(float64); ok {
+	if cpuLimit, ok := c.ConfigNumber(config["cpulimit"]); ok {
 		output.Result("   CPU Limit: %.1f\n", cpuLimit)
 	}
-	if cpuUnits, ok := config["cpuunits"].(float64); ok {
+	if cpuUnits, ok := c.ConfigNumber(config["cpuunits"]); ok {
 		output.Result("   CPU Units: %.0f\n", cpuUnits)
 	}
 
@@ -210,14 +210,14 @@ func displayContainerDetails(container *Container, config map[string]interface{}
 
 	// Security Settings
 	output.Result("Security:\n")
-	if unprivileged, ok := config["unprivileged"].(float64); ok {
+	if unprivileged, ok := c.ConfigNumber(config["unprivileged"]); ok {
 		if unprivileged == 1 {
 			output.Result("   Unprivileged: Yes\n")
 		} else {
 			output.Result("   Unprivileged: No\n")
 		}
 	}
-	if protection, ok := config["protection"].(float64); ok {
+	if protection, ok := c.ConfigNumber(config["protection"]); ok {
 		if protection == 1 {
 			output.Result("   Protection: Enabled\n")
 		} else {
@@ -235,7 +235,7 @@ func displayContainerDetails(container *Container, config map[string]interface{}
 	if tags, ok := config["tags"].(string); ok {
 		output.Result("   Tags: %s\n", tags)
 	}
-	if onboot, ok := config["onboot"].(float64); ok {
+	if onboot, ok := c.ConfigNumber(config["onboot"]); ok {
 		if onboot == 1 {
 			output.Result("   Start on boot: Yes\n")
 		} else {

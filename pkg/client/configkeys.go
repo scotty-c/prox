@@ -4,6 +4,7 @@ import (
 	"regexp"
 	"sort"
 	"strconv"
+	"strings"
 )
 
 var (
@@ -64,4 +65,53 @@ func NetKeys(config map[string]interface{}) []string {
 		names[i] = k.name
 	}
 	return names
+}
+
+// ConfigNumber reads a numeric value from a Proxmox config map. Proxmox
+// returns some numbers as JSON numbers and others as strings ("2048"), so
+// both are accepted.
+func ConfigNumber(v interface{}) (float64, bool) {
+	switch n := v.(type) {
+	case float64:
+		return n, true
+	case string:
+		f, err := strconv.ParseFloat(strings.TrimSpace(n), 64)
+		return f, err == nil
+	}
+	return 0, false
+}
+
+// ConfigFlag reads an on/off setting from a Proxmox config map. It accepts
+// 0/1 as a number or string, true/false, and the property-string form used by
+// options such as agent ("1", "enabled=1,fstrim_cloned_disks=1").
+func ConfigFlag(v interface{}) (on, ok bool) {
+	switch x := v.(type) {
+	case float64:
+		return x != 0, true
+	case bool:
+		return x, true
+	case string:
+		for i, part := range strings.Split(x, ",") {
+			part = strings.TrimSpace(part)
+			if value, found := strings.CutPrefix(part, "enabled="); found {
+				return parseFlag(value)
+			}
+			if i == 0 {
+				if on, ok := parseFlag(part); ok {
+					return on, true
+				}
+			}
+		}
+	}
+	return false, false
+}
+
+func parseFlag(s string) (on, ok bool) {
+	switch strings.ToLower(s) {
+	case "1", "true", "yes", "on":
+		return true, true
+	case "0", "false", "no", "off":
+		return false, true
+	}
+	return false, false
 }

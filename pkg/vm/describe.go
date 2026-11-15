@@ -118,7 +118,7 @@ func displayVMDetails(id int, name, node string, config, status map[string]inter
 	}
 
 	// VM agent status
-	if agent, ok := config["agent"].(float64); ok && agent == 1 {
+	if agent, ok := c.ConfigFlag(config["agent"]); ok && agent {
 		output.Result("   QEMU Agent: Enabled\n")
 	} else {
 		output.Result("   QEMU Agent: Disabled\n")
@@ -130,23 +130,23 @@ func displayVMDetails(id int, name, node string, config, status map[string]inter
 	output.Result("Resource Configuration:\n")
 
 	// Memory
-	if memory, ok := config["memory"].(float64); ok {
+	if memory, ok := c.ConfigNumber(config["memory"]); ok {
 		output.Result("   Memory: %.0f MB\n", memory)
 	}
 
 	// Balloon memory
-	if balloon, ok := config["balloon"].(float64); ok {
+	if balloon, ok := c.ConfigNumber(config["balloon"]); ok {
 		output.Result("   Balloon Memory: %.0f MB\n", balloon)
 	}
 
 	// CPU
-	if sockets, ok := config["sockets"].(float64); ok {
+	if sockets, ok := c.ConfigNumber(config["sockets"]); ok {
 		output.Result("   CPU Sockets: %.0f\n", sockets)
 	}
-	if cores, ok := config["cores"].(float64); ok {
+	if cores, ok := c.ConfigNumber(config["cores"]); ok {
 		output.Result("   CPU Cores: %.0f\n", cores)
 	}
-	if vcpus, ok := config["vcpus"].(float64); ok {
+	if vcpus, ok := c.ConfigNumber(config["vcpus"]); ok {
 		output.Result("   vCPUs: %.0f\n", vcpus)
 	}
 	if cpuType, ok := config["cpu"].(string); ok {
@@ -271,7 +271,7 @@ func displayVMDetails(id int, name, node string, config, status map[string]inter
 	// Security Settings
 	output.Result("Security:\n")
 
-	if protection, ok := config["protection"].(float64); ok {
+	if protection, ok := c.ConfigNumber(config["protection"]); ok {
 		if protection == 1 {
 			output.Result("   Protection: Enabled\n")
 		} else {
@@ -283,7 +283,7 @@ func displayVMDetails(id int, name, node string, config, status map[string]inter
 		output.Result("   Startup Policy: %s\n", startupPolicy)
 	}
 
-	if onboot, ok := config["onboot"].(float64); ok {
+	if onboot, ok := c.ConfigNumber(config["onboot"]); ok {
 		if onboot == 1 {
 			output.Result("   Start on boot: Yes\n")
 		} else {

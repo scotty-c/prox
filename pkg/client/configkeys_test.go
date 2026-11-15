@@ -23,3 +23,38 @@ func TestNetKeysSortNumerically(t *testing.T) {
 		t.Fatalf("NetKeys = %v, want %v", got, want)
 	}
 }
+
+func TestConfigNumber(t *testing.T) {
+	cases := []struct {
+		in   interface{}
+		want float64
+		ok   bool
+	}{
+		{float64(2048), 2048, true}, {"2048", 2048, true}, {" 4 ", 4, true},
+		{"abc", 0, false}, {nil, 0, false}, {true, 0, false},
+	}
+	for _, c := range cases {
+		if got, ok := ConfigNumber(c.in); got != c.want || ok != c.ok {
+			t.Errorf("ConfigNumber(%#v) = %v, %v; want %v, %v", c.in, got, ok, c.want, c.ok)
+		}
+	}
+}
+
+func TestConfigFlag(t *testing.T) {
+	cases := []struct {
+		in       interface{}
+		on, isOK bool
+	}{
+		{float64(1), true, true}, {float64(0), false, true}, {true, true, true},
+		{"1", true, true}, {"0", false, true}, {"enabled=1", true, true},
+		{"enabled=0,fstrim_cloned_disks=1", false, true},
+		{"1,fstrim_cloned_disks=1", true, true},
+		{"fstrim_cloned_disks=1,enabled=1", true, true},
+		{"virtio", false, false}, {nil, false, false},
+	}
+	for _, c := range cases {
+		if on, ok := ConfigFlag(c.in); on != c.on || ok != c.isOK {
+			t.Errorf("ConfigFlag(%#v) = %v, %v; want %v, %v", c.in, on, ok, c.on, c.isOK)
+		}
+	}
+}
