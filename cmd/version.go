@@ -24,6 +24,7 @@ var (
 // SetVersionInfo sets the version information from build-time variables
 func SetVersionInfo(version, commit, buildDate, goVersion string) {
 	versionInfo.Version = version
+	RootCmd.Version = version // enables prox --version
 	versionInfo.Commit = commit
 	versionInfo.BuildDate = buildDate
 	if goVersion == "unknown" {

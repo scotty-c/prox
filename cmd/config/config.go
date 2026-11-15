@@ -5,6 +5,7 @@ package cmd
 
 import (
 	"github.com/scotty-c/prox/cmd"
+	"github.com/scotty-c/prox/pkg/cmdutil"
 	"github.com/spf13/cobra"
 )
 
@@ -14,12 +15,10 @@ var configCmd = &cobra.Command{
 	GroupID: "core",
 	Short:   "Set up, read, and delete the configuration file for prox",
 	Long:    ``,
-	Run: func(cmd *cobra.Command, args []string) {
-		cmd.Help()
-	},
 }
 
 func init() {
+	cmdutil.MakeGroup(configCmd)
 	cmd.RootCmd.AddCommand(configCmd)
 
 }

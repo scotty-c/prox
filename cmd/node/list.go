@@ -14,8 +14,9 @@ import (
 
 // listCmd represents the 'ls' command for nodes
 var listCmd = &cobra.Command{
-	Use:   "ls",
-	Short: "List all Proxmox nodes in the datacenter",
+	Use:     "ls",
+	Aliases: []string{"list"},
+	Short:   "List all Proxmox nodes in the datacenter",
 	Run: func(cmd *cobra.Command, args []string) {
 		structured := cmdutil.StructuredOutput(cmd)
 

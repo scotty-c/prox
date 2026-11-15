@@ -31,8 +31,8 @@ Examples:
   prox %[2]s snapshot create web before-upgrade --description "pre apt upgrade"
   prox %[2]s snapshot rollback web before-upgrade
   prox %[2]s snapshot delete web before-upgrade`, label, parent),
-		Run: func(cmd *cobra.Command, args []string) { _ = cmd.Help() },
 	}
+	cmdutil.MakeGroup(root)
 
 	// node returns --node for VMs; containers are always looked up cluster-wide
 	node := func(cmd *cobra.Command) string {

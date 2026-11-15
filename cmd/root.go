@@ -124,6 +124,8 @@ func init() {
 	RootCmd.PersistentFlags().Bool("insecure", false, "Skip TLS certificate verification (for self-signed certificates)")
 	RootCmd.PersistentFlags().String("ca-cert", "", "Trust the CA certificate(s) in this PEM file (e.g. a copy of /etc/pve/pve-root-ca.pem)")
 
+	RootCmd.SetVersionTemplate("prox {{.Version}}\n")
+
 	// Define command groups for better organization
 	RootCmd.AddGroup(
 		&cobra.Group{
@@ -142,5 +144,4 @@ func init() {
 
 	// Register node command group
 	RootCmd.AddCommand(node.NodeCmd)
-	// ...existing code...
 }

@@ -4,6 +4,7 @@
 package node
 
 import (
+	"github.com/scotty-c/prox/pkg/cmdutil"
 	"github.com/spf13/cobra"
 )
 
@@ -16,5 +17,5 @@ var NodeCmd = &cobra.Command{
 }
 
 func init() {
-	// Subcommands will be added in their own files
+	cmdutil.MakeGroup(NodeCmd)
 }
