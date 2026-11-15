@@ -24,7 +24,7 @@ Examples:
   prox ct enter 101 --host pve1.lan
   prox ct enter web --print     # Show the ssh command instead`,
 	Args:              cobra.ExactArgs(1),
-	ValidArgsFunction: completion.FirstArgOnly(completion.GetContainerNames),
+	ValidArgsFunction: completion.FirstArgOnly(completion.RunningContainers),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cl, err := c.CreateClient()
 		if err != nil {

@@ -13,7 +13,7 @@ var rebootCmd = &cobra.Command{
 	Aliases:           []string{"restart"},
 	Short:             "Reboot a running container",
 	Args:              cobra.ExactArgs(1),
-	ValidArgsFunction: completion.FirstArgOnly(completion.GetContainerNames),
+	ValidArgsFunction: completion.FirstArgOnly(completion.RunningContainers),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		wait := cmdutil.ResolveWait(cmd, true)
 		if err := container.RebootContainer(cmd.Context(), args[0], wait); err != nil {

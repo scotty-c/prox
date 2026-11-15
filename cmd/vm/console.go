@@ -23,7 +23,7 @@ Examples:
   prox vm console web
   prox vm console 100 --host pve1.lan`,
 	Args:              cobra.ExactArgs(1),
-	ValidArgsFunction: completion.FirstArgOnly(completion.GetVMNames),
+	ValidArgsFunction: completion.FirstArgOnly(completion.RunningVMs),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		node, _ := cmd.Flags().GetString("node")
 		cl, err := c.CreateClient()

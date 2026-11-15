@@ -23,7 +23,7 @@ Examples:
   prox ct stop mycontainer --force   # stop immediately
   prox ct stop --tag web             # Stop every container tagged 'web' (asks first)`,
 	Args:              cmdutil.NameOrTagArgs,
-	ValidArgsFunction: completion.FirstArgOnly(completion.GetContainerNames),
+	ValidArgsFunction: completion.FirstArgOnly(completion.RunningContainers),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		wait := cmdutil.ResolveWait(cmd, true)
 		force, _ := cmd.Flags().GetBool("force")

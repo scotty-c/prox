@@ -23,7 +23,7 @@ Examples:
   prox vm start web-server
   prox vm start --tag web             # Start every VM tagged 'web' (asks first)`,
 	Args:              cmdutil.NameOrTagArgs,
-	ValidArgsFunction: completion.FirstArgOnly(completion.GetVMNames),
+	ValidArgsFunction: completion.FirstArgOnly(completion.StoppedVMs),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		wait := cmdutil.ResolveWait(cmd, false)
 		node, _ := cmd.Flags().GetString("node")

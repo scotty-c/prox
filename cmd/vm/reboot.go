@@ -17,7 +17,7 @@ Examples:
   prox vm reboot web
   prox vm reboot 100 --wait`,
 	Args:              cobra.ExactArgs(1),
-	ValidArgsFunction: completion.FirstArgOnly(completion.GetVMNames),
+	ValidArgsFunction: completion.FirstArgOnly(completion.RunningVMs),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		node, _ := cmd.Flags().GetString("node")
 		wait := cmdutil.ResolveWait(cmd, false)

@@ -87,6 +87,8 @@ prox completion powershell >> $PROFILE
 
 After setup, restart your shell or source the completion file. You'll then have tab completion for all commands, flags, and arguments.
 
+Completion only offers what the command can act on (`prox vm start <TAB>` lists stopped VMs, `prox vm shutdown <TAB>` running ones), names and IDs both work, and zsh and fish show a short description such as `VM 100 on pve1, running` next to each candidate. If the cluster doesn't answer within three seconds, completion gives up quietly instead of holding up your shell.
+
 **Example usage:**
 ```bash
 prox vm start <TAB>          # Shows all VM names and IDs

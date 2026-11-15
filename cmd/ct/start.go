@@ -21,7 +21,7 @@ Examples:
   prox lxc start 101
   prox ct start --tag web    # Start every container tagged 'web' (asks first)`,
 	Args:              cmdutil.NameOrTagArgs,
-	ValidArgsFunction: completion.FirstArgOnly(completion.GetContainerNames),
+	ValidArgsFunction: completion.FirstArgOnly(completion.StoppedContainers),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		wait := cmdutil.ResolveWait(cmd, true)
 

@@ -710,3 +710,87 @@ func TestCtrlCWhileWaitingForATaskSaysTheTaskKeepsRunning(t *testing.T) {
 		t.Errorf("the start request was sent %d times, want once", n)
 	}
 }
+
+// Shell completion
+
+// candidates returns the completion candidates cobra printed (one per line,
+// before the ":<directive>" line), as name -> description
+func candidates(stdout string) map[string]string {
+	out := map[string]string{}
+	for _, line := range strings.Split(stdout, "\n") {
+		if line == "" || strings.HasPrefix(line, ":") {
+			continue
+		}
+		name, desc, _ := strings.Cut(line, "\t")
+		out[name] = desc
+	}
+	return out
+}
+
+func TestCompletionOffersOnlyWhatTheCommandCanActOn(t *testing.T) {
+	srv := fakepve.New(t)
+	tests := []struct {
+		args       []string
+		want, deny []string
+	}{
+		// VM 100 "web" and 1000 "big" run; 101 "db" and 102 "web" are stopped
+		{[]string{"vm", "start"}, []string{"db", "101", "102"}, []string{"big", "1000", "100"}},
+		{[]string{"vm", "shutdown"}, []string{"big", "1000", "100"}, []string{"db", "101", "102"}},
+		{[]string{"vm", "reboot"}, []string{"big", "100"}, []string{"db", "102"}},
+		{[]string{"vm", "describe"}, []string{"big", "db", "100", "101"}, nil}, // anything
+		// container 200 "ct1" runs; 201 "ct2" is stopped
+		{[]string{"ct", "start"}, []string{"ct2", "201"}, []string{"ct1", "200"}},
+		{[]string{"ct", "stop"}, []string{"ct1", "200"}, []string{"ct2", "201"}},
+		{[]string{"ct", "enter"}, []string{"ct1"}, []string{"ct2"}},
+	}
+	for _, tt := range tests {
+		r := run(t, srv, "", append([]string{"__complete"}, append(tt.args, "")...)...)
+		got := candidates(r.stdout)
+		for _, w := range tt.want {
+			if _, ok := got[w]; !ok {
+				t.Errorf("prox %v <TAB> should offer %q, got %v", tt.args, w, got)
+			}
+		}
+		for _, d := range tt.deny {
+			if _, ok := got[d]; ok {
+				t.Errorf("prox %v <TAB> should not offer %q, got %v", tt.args, d, got)
+			}
+		}
+	}
+}
+
+func TestCompletionDescribesEachCandidate(t *testing.T) {
+	r := run(t, fakepve.New(t), "", "__complete", "vm", "shutdown", "")
+	got := candidates(r.stdout)
+	if got["big"] != "VM 1000 on pve2, running" {
+		t.Errorf("name description = %q", got["big"])
+	}
+	if got["1000"] != "VM big on pve2, running" {
+		t.Errorf("ID description = %q", got["1000"])
+	}
+	nodes := candidates(run(t, fakepve.New(t), "", "__complete", "vm", "migrate", "web", "").stdout)
+	if nodes["pve2"] != "online" {
+		t.Errorf("node description = %q (candidates %v)", nodes["pve2"], nodes)
+	}
+}
+
+func TestCompletionOnlyCompletesTheFirstArgument(t *testing.T) {
+	r := run(t, fakepve.New(t), "", "__complete", "vm", "start", "db", "")
+	if got := candidates(r.stdout); len(got) != 0 {
+		t.Errorf("second argument should offer nothing, got %v", got)
+	}
+}
+
+func TestCompletionGivesUpWhenTheClusterDoesNotAnswer(t *testing.T) {
+	srv := fakepve.New(t)
+	srv.Hang("GET /cluster/resources")
+	began := time.Now()
+	r := run(t, srv, "", "__complete", "vm", "start", "")
+	took := time.Since(began)
+	if took > 8*time.Second {
+		t.Errorf("TAB took %s with an unresponsive cluster, want a few seconds at most", took)
+	}
+	if got := candidates(r.stdout); len(got) != 0 {
+		t.Errorf("nothing to offer, got %v", got)
+	}
+}

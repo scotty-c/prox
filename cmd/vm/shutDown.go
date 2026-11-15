@@ -25,7 +25,7 @@ Examples:
   prox vm stop myvm --force    # stop immediately, for guests that ignore ACPI shutdown
   prox vm shutdown --tag web   # Shut down every VM tagged 'web' (asks first)`,
 	Args:              cmdutil.NameOrTagArgs,
-	ValidArgsFunction: completion.FirstArgOnly(completion.GetVMNames),
+	ValidArgsFunction: completion.FirstArgOnly(completion.RunningVMs),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		wait := cmdutil.ResolveWait(cmd, false)
 		force, _ := cmd.Flags().GetBool("force")
