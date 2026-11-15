@@ -51,6 +51,7 @@ All notable changes to prox are recorded here. The format follows [Keep a Change
 #### Output you may be matching on
 
 - Result lines were reworded and shortened. `VM 100 start command issued successfully` plus `Task ID: ...` is now `Task started: <id>` followed by `VM web (ID 100) started in 1.2s`. Emoji and decorations were removed.
+- `ct list` no longer looks up IP addresses unless you pass `-i`/`--ip`, as `vm list` already behaved: the IP column and the `ip_address` JSON field appear only then. It is much faster without it (one request per running container saved). Scripts reading `ip_address` from `ct list -o json` need `--ip`.
 - Lists are sorted by ID (nodes by name) instead of in the order Proxmox returns them, and tables no longer start with a blank line.
 - `config list` is a table (profile, URL, user, where the credentials are stored, which is in use). `prox status` is drawn with the same table renderer. `ct shortcuts` lists what your cluster can download instead of a fixed list.
 - With `-o json`/`yaml`, commands that start a task print one object (`task`, `node`, `waited`, `status`, `message`, `seconds`) instead of text.

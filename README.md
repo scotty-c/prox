@@ -202,6 +202,7 @@ Container workflow:
 ```bash
 prox ct templates
 prox ct list --tag database   # Filter containers by tag
+prox ct list --ip              # Also show IP addresses (slower; same flag as vm list)
 # create: prox ct create <name> <template>
 prox ct create web ubuntu:22.04 --ssh-keys-file ~/.ssh/id_rsa.pub --memory 1024 --disk 10
 prox ct create web debian:12 --cpu 2 --start                       # Create and start it
@@ -268,7 +269,7 @@ Pro tips:
 - **Parallel operations**: VM/container describe operations run config and status fetches concurrently (5-10x faster)
 - **One cluster listing per command**: name lookups, suggestions and tags all share a single `/cluster/resources` request (kept for 10 seconds, cleared when a command creates a guest)
 - **One login per command, and often none**: every part of a command uses the same client, so the configuration is read and the ticket requested once. A profile stored in the keychain also keeps the last login there for up to ~110 minutes, so consecutive commands and TAB completion skip the login altogether (`PROX_SESSION_CACHE=off` turns this off; see SECURITY.md)
-- **Concurrent workers**: IP lookups for `vm list --ip` and `ct list` run on a pool of 10 workers
+- **Concurrent workers**: IP lookups for `vm list --ip` and `ct list --ip` run on a pool of 10 workers
 
 **Real-time Feedback:**
 - **Progress spinners**: All async operations (create, clone, migrate, start, stop, delete) show visual progress
@@ -349,7 +350,7 @@ Containers (ct)
 		- prox ct create ci debian:12 --vmid 9002 --cores 2
 
 - list
-	- Flags: -n, --node <node>; -r, --running (only running); -t, --tag <tag> (filter by tag)
+	- Flags: -n, --node <node>; -r, --running (only running); -t, --tag <tag> (filter by tag); -i, --ip (show IP addresses; looked up only with this flag, as in vm list)
 	- Example: prox ct list --running --tag production
 
 - describe <name|id>

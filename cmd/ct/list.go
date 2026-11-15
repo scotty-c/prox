@@ -12,13 +12,23 @@ var listCmd = &cobra.Command{
 	Use:     "list",
 	Aliases: []string{"ls"},
 	Short:   "List LXC containers",
-	Long:    `List all LXC containers on Proxmox VE with their status, resource usage, and node information.`,
+	Long: `List all LXC containers on Proxmox VE with their status, resource usage, and node information.
+
+By default, this command shows basic information quickly. Use --ip to show IP
+addresses (slower: it asks Proxmox about each running container).`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		node, _ := cmd.Flags().GetString("node")
 		running, _ := cmd.Flags().GetBool("running")
 		jsonOutput := cmdutil.StructuredOutput(cmd)
 		tag, _ := cmd.Flags().GetString("tag")
-		if err := container.ListContainers(cmd.Context(), node, running, jsonOutput, tag); err != nil {
+		showIPs, _ := cmd.Flags().GetBool("ip")
+		if err := container.ListContainers(cmd.Context(), container.ListContainersOptions{
+			Node:        node,
+			RunningOnly: running,
+			ShowIPs:     showIPs,
+			JSONOutput:  jsonOutput,
+			Tag:         tag,
+		}); err != nil {
 			return err
 		}
 		return nil
@@ -28,6 +38,7 @@ var listCmd = &cobra.Command{
 func init() {
 	listCmd.Flags().StringP("node", "n", "", "Proxmox node name (optional - will show containers from all nodes if not specified)")
 	listCmd.Flags().BoolP("running", "r", false, "Show only running containers")
+	listCmd.Flags().BoolP("ip", "i", false, "Show IP addresses (slower, requires additional API calls)")
 	listCmd.Flags().Bool("json", false, "Output as JSON (same as -o json)")
 	listCmd.Flags().StringP("tag", "t", "", "Filter by tag (e.g., 'production', 'database')")
 	ctCmd.AddCommand(listCmd)

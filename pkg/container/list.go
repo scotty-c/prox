@@ -12,8 +12,19 @@ import (
 	"github.com/scotty-c/prox/pkg/util"
 )
 
-// ListContainers lists all LXC containers
-func ListContainers(ctx context.Context, node string, runningOnly bool, jsonOutput bool, tag string) error {
+// ListContainersOptions contains options for listing containers; they mirror
+// ListVMsOptions so that vm list and ct list behave the same
+type ListContainersOptions struct {
+	Node        string // Filter by specific node (empty for all nodes)
+	RunningOnly bool   // Show only running containers
+	ShowIPs     bool   // Fetch and display IP addresses (slower)
+	JSONOutput  bool   // Output as JSON instead of table
+	Tag         string // Filter by tag (empty for all containers)
+}
+
+// ListContainers lists LXC containers
+func ListContainers(ctx context.Context, opts ListContainersOptions) error {
+	node, runningOnly, jsonOutput, tag := opts.Node, opts.RunningOnly, opts.JSONOutput, opts.Tag
 	client, err := c.CreateClient()
 	if err != nil {
 		return fmt.Errorf("failed to create client: %w", err)
@@ -64,8 +75,10 @@ func ListContainers(ctx context.Context, node string, runningOnly bool, jsonOutp
 	// Proxmox returns resources in no particular order; list them by ID
 	sort.SliceStable(containers, func(i, j int) bool { return containers[i].ID < containers[j].ID })
 
-	// Fetch IP addresses concurrently for all running containers
-	guest.LookupIPs(ctx, containers, client.GetContainerIP)
+	// Fetch IPs concurrently if requested (for performance)
+	if opts.ShowIPs && len(containers) > 0 {
+		guest.LookupIPs(ctx, containers, client.GetContainerIP)
+	}
 
 	if jsonOutput {
 		if containers == nil {
@@ -87,19 +100,24 @@ func ListContainers(ctx context.Context, node string, runningOnly bool, jsonOutp
 	}
 
 	// Display containers in a table
-	displayContainersTable(containers, runningOnly)
+	displayContainersTable(containers, runningOnly, opts.ShowIPs)
 	return nil
 }
 
 // displayContainersTable displays containers in a formatted table
-func displayContainersTable(containers []Container, runningOnly bool) {
+func displayContainersTable(containers []Container, runningOnly bool, showIPs bool) {
 	t := table.NewWriter()
 	if runningOnly {
 		t.SetTitle("Running LXC Containers")
 	} else {
 		t.SetTitle("LXC Containers")
 	}
-	t.AppendHeader(table.Row{"NAME", "ID", "STATUS", "CPU%", "MEMORY", "DISK", "UPTIME", "IP", "NODE"})
+	header := []interface{}{"NAME", "ID", "STATUS", "CPU%", "MEMORY", "DISK", "UPTIME"}
+	if showIPs {
+		header = append(header, "IP")
+	}
+	header = append(header, "NODE")
+	t.AppendHeader(table.Row(header))
 
 	for _, container := range containers {
 		// Format disk usage
@@ -109,17 +127,12 @@ func displayContainersTable(containers []Container, runningOnly bool) {
 				float64(container.Disk)/float64(container.MaxDisk)*100)
 		}
 
-		t.AppendRow(table.Row{
-			container.Name,
-			container.ID,
-			container.Status,
-			container.CPUText(),
-			container.MemoryText(),
-			diskStr,
-			container.UptimeText(),
-			container.IP,
-			container.Node,
-		})
+		row := []interface{}{container.Name, container.ID, container.Status, container.CPUText(), container.MemoryText(), diskStr, container.UptimeText()}
+		if showIPs {
+			row = append(row, container.IP)
+		}
+		row = append(row, container.Node)
+		t.AppendRow(table.Row(row))
 	}
 
 	t.SetStyle(table.StyleRounded)

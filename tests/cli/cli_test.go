@@ -39,6 +39,15 @@ func TestContainerListTable(t *testing.T) {
 		t.Fatalf("exit %d: %s", r.code, r.stderr)
 	}
 	golden(t, "ct_list_table", r.stdout)
+	excludes(t, "ct list", r.stdout, "IP")
+}
+
+func TestContainerListTableWithIPs(t *testing.T) {
+	r := run(t, fakepve.New(t), "", "ct", "list", "--ip")
+	if r.code != 0 {
+		t.Fatalf("exit %d: %s", r.code, r.stderr)
+	}
+	golden(t, "ct_list_ip_table", r.stdout)
 }
 
 func TestStructuredOutputKeepsStdoutClean(t *testing.T) {
@@ -866,7 +875,7 @@ func TestTagListIsAnArrayOfTags(t *testing.T) {
 }
 
 func TestIPAddressIsOnlyPresentWhenKnown(t *testing.T) {
-	r := run(t, fakepve.New(t), "", "ct", "list", "-o", "json")
+	r := run(t, fakepve.New(t), "", "ct", "list", "--ip", "-o", "json")
 	var rows []map[string]interface{}
 	_ = json.Unmarshal([]byte(r.stdout), &rows)
 	for _, row := range rows {
@@ -1609,11 +1618,11 @@ func TestWaitDefaultsAreTheSameEverywhere(t *testing.T) {
 // add requests that cannot succeed.
 func TestContainerAddressesNeedOneRequestEach(t *testing.T) {
 	srv := fakepve.New(t)
-	r := run(t, srv, "", "ct", "list")
+	r := run(t, srv, "", "ct", "list", "--ip")
 	if r.code != 0 {
 		t.Fatalf("exit %d: %s", r.code, r.stderr)
 	}
-	contains(t, "ct list", r.stdout, "10.0.0.50")
+	contains(t, "ct list --ip", r.stdout, "10.0.0.50")
 	if n := gets(srv, "/nodes/pve1/lxc/200/interfaces"); n != 1 {
 		t.Errorf("%d interface requests for container 200, want 1", n)
 	}
@@ -1629,5 +1638,38 @@ func TestContainerAddressesNeedOneRequestEach(t *testing.T) {
 	}
 	if n := gets(srv, "/nodes/pve1/lxc/200/agent"); n != 0 {
 		t.Errorf("prox ssh asked a container's guest agent %d times; containers have none", n)
+	}
+}
+
+// vm list and ct list work the same way: addresses cost a request per guest,
+// so they are fetched, shown and put in JSON only when asked for with --ip
+func TestVMAndContainerListsHandleAddressesTheSame(t *testing.T) {
+	for _, kind := range []struct{ cmd, lookup, name string }{
+		{"vm", "/qemu/", "web"},
+		{"ct", "/lxc/", "ct1"},
+	} {
+		// default: no IP column, no field in JSON, no per-guest lookups
+		srv := fakepve.New(t)
+		r := run(t, srv, "", kind.cmd, "list")
+		if r.code != 0 {
+			t.Fatalf("%s list: exit %d: %s", kind.cmd, r.code, r.stderr)
+		}
+		excludes(t, kind.cmd+" list", r.stdout, " IP ")
+		r = run(t, srv, "", kind.cmd, "list", "-o", "json")
+		excludes(t, kind.cmd+" list -o json", r.stdout, "ip_address")
+		for _, req := range srv.Requests() {
+			if strings.Contains(req, kind.lookup) {
+				t.Errorf("%s list made a per-guest request without --ip: %s", kind.cmd, req)
+			}
+		}
+
+		// -i and --ip both turn it on
+		for _, flag := range []string{"-i", "--ip"} {
+			r = run(t, fakepve.New(t), "", kind.cmd, "list", flag)
+			if r.code != 0 {
+				t.Fatalf("%s list %s: exit %d: %s", kind.cmd, flag, r.code, r.stderr)
+			}
+			contains(t, kind.cmd+" list "+flag, r.stdout, " IP ")
+		}
 	}
 }
