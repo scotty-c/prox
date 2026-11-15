@@ -7,6 +7,7 @@ import (
 
 	"github.com/scotty-c/prox/pkg/client"
 	"github.com/scotty-c/prox/pkg/output"
+	"github.com/scotty-c/prox/pkg/util"
 )
 
 // NodeDetails holds all information about a node for JSON output
@@ -74,7 +75,7 @@ func GetNodeDetails(name string) (*NodeDetails, error) {
 					details.DiskTotal = uint64(*r.MaxDisk)
 				}
 				if r.Uptime != nil {
-					details.Uptime = formatUptime(int64(*r.Uptime))
+					details.Uptime = util.FormatUptime(int64(*r.Uptime))
 				}
 				break
 			}
@@ -118,10 +119,10 @@ func DescribeNode(name string) error {
 		output.Result("   CPU: %s\n", details.CPU)
 	}
 	if details.MemTotal > 0 {
-		output.Result("   Memory: %s / %s (%.1f%%)\n", formatSize(details.MemUsed), formatSize(details.MemTotal), (float64(details.MemUsed)/float64(details.MemTotal))*100)
+		output.Result("   Memory: %s / %s (%.1f%%)\n", util.FormatSize(details.MemUsed), util.FormatSize(details.MemTotal), (float64(details.MemUsed)/float64(details.MemTotal))*100)
 	}
 	if details.DiskTotal > 0 {
-		output.Result("   Disk: %s / %s (%.1f%%)\n", formatSize(details.DiskUsed), formatSize(details.DiskTotal), (float64(details.DiskUsed)/float64(details.DiskTotal))*100)
+		output.Result("   Disk: %s / %s (%.1f%%)\n", util.FormatSize(details.DiskUsed), util.FormatSize(details.DiskTotal), (float64(details.DiskUsed)/float64(details.DiskTotal))*100)
 	}
 	if details.Uptime != "" {
 		output.Result("   Uptime: %s\n", details.Uptime)

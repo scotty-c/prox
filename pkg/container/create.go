@@ -13,11 +13,6 @@ import (
 	"github.com/scotty-c/prox/pkg/output"
 )
 
-// CreateContainer creates a new LXC container and waits for it to be created
-func CreateContainer(node, name, template string, vmid int, memory, disk int, cores int, password, sshKeys, storage string) error {
-	return CreateContainerWithWait(node, name, template, vmid, memory, disk, cores, password, sshKeys, storage, true)
-}
-
 // CreateOptions describes a container to create
 type CreateOptions struct {
 	Node     string // empty: the node holding the template
@@ -33,16 +28,6 @@ type CreateOptions struct {
 	Network  NetworkOptions
 	Wait     bool
 	Start    bool // start it once created (needs Wait)
-}
-
-// CreateContainerWithWait creates a new LXC container, optionally returning as
-// soon as the creation task has started
-func CreateContainerWithWait(node, name, template string, vmid int, memory, disk int, cores int, password, sshKeys, storage string, wait bool) error {
-	return CreateContainerWithOptions(CreateOptions{
-		Node: node, Name: name, Template: template, VMID: vmid,
-		Memory: memory, Disk: disk, Cores: cores,
-		Password: password, SSHKeys: sshKeys, Storage: storage, Wait: wait,
-	})
 }
 
 // CreateContainerWithOptions creates a new LXC container

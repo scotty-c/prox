@@ -35,16 +35,6 @@ func (v *VirtualMachine) Shutdown(ctx context.Context) (*Task, error) {
 	return task, nil
 }
 
-// ShutdownVM shuts down a VM by ID and node
-func ShutdownVM(ctx context.Context, id int, node string) error {
-	return ShutdownVMWithWait(ctx, id, node, false, nil)
-}
-
-// ShutdownVMWithWait shuts down a VM by ID and node with optional wait
-func ShutdownVMWithWait(ctx context.Context, id int, node string, wait bool, client c.ProxmoxClientInterface) error {
-	return ShutdownVMWithOptions(ctx, id, node, wait, false, client)
-}
-
 // ShutdownVMWithOptions shuts down a VM by ID and node. With force, the VM is
 // stopped immediately instead of being asked to shut down cleanly.
 func ShutdownVMWithOptions(ctx context.Context, id int, node string, wait bool, force bool, client c.ProxmoxClientInterface) error {
@@ -116,11 +106,6 @@ func (v *VirtualMachine) Start(ctx context.Context) (*Task, error) {
 	return task, nil
 }
 
-// StartVM starts a VM by ID and node
-func StartVM(ctx context.Context, id int, node string) error {
-	return StartVMWithWait(ctx, id, node, false, nil)
-}
-
 // StartVMWithWait starts a VM by ID and node with optional wait
 func StartVMWithWait(ctx context.Context, id int, node string, wait bool, client c.ProxmoxClientInterface) error {
 	if client == nil {
@@ -180,11 +165,6 @@ func (v *VirtualMachine) Clone(ctx context.Context, name string, newId int, full
 
 	task := NewTask(upid)
 	return task, nil
-}
-
-// CloneVM clones a VM by ID and node
-func CloneVM(ctx context.Context, id int, node string, name string, newId int, full bool) error {
-	return CloneVMWithWait(ctx, id, node, name, newId, full, true)
 }
 
 // CloneVMWithWait clones a VM by ID and node with optional wait
@@ -270,11 +250,6 @@ func (v *VirtualMachine) Delete(ctx context.Context) (*Task, error) {
 	return task, nil
 }
 
-// DeleteVM deletes a VM by ID and node without waiting for it to finish
-func DeleteVM(ctx context.Context, id int, node string) error {
-	return DeleteVMWithWait(ctx, id, node, false)
-}
-
 // DeleteVMWithWait deletes a VM by ID and node, optionally waiting for the
 // deletion to finish
 func DeleteVMWithWait(ctx context.Context, id int, node string, wait bool) error {
@@ -320,11 +295,6 @@ func DeleteVMWithWait(ctx context.Context, id int, node string, wait bool) error
 
 	output.Info("Tip: Follow progress with 'prox logs --follow %s'\n", task.ID)
 	return nil
-}
-
-// MigrateVM migrates a VM from one node to another
-func MigrateVM(ctx context.Context, id int, sourceNode, targetNode string, online bool, withLocalDisks bool) error {
-	return MigrateVMWithWait(ctx, id, sourceNode, targetNode, online, withLocalDisks, true)
 }
 
 // MigrateVMWithWait migrates a VM, optionally returning as soon as the
@@ -397,11 +367,6 @@ func MigrateVMWithWait(ctx context.Context, id int, sourceNode, targetNode strin
 	return nil
 }
 
-// StartVMByNameOrID starts a VM by name or ID
-func StartVMByNameOrID(nameOrID string) error {
-	return StartVMByNameOrIDWithWait(nameOrID, "", false)
-}
-
 // StartVMByNameOrIDWithWait starts a VM by name or ID with optional wait.
 // If node is not empty, only VMs on that node are considered.
 func StartVMByNameOrIDWithWait(nameOrID string, node string, wait bool) error {
@@ -422,17 +387,6 @@ func StartVMByNameOrIDWithWait(nameOrID string, node string, wait bool) error {
 		return fmt.Errorf("failed to start VM: %w", err)
 	}
 	return nil
-}
-
-// ShutdownVMByNameOrID shuts down a VM by name or ID
-func ShutdownVMByNameOrID(nameOrID string) error {
-	return ShutdownVMByNameOrIDWithWait(nameOrID, "", false)
-}
-
-// ShutdownVMByNameOrIDWithWait shuts down a VM by name or ID with optional wait.
-// If node is not empty, only VMs on that node are considered.
-func ShutdownVMByNameOrIDWithWait(nameOrID string, node string, wait bool) error {
-	return ShutdownVMByNameOrIDWithOptions(nameOrID, node, wait, false)
 }
 
 // ShutdownVMByNameOrIDWithOptions shuts down a VM by name or ID. With force,
@@ -457,36 +411,6 @@ func ShutdownVMByNameOrIDWithOptions(nameOrID string, node string, wait bool, fo
 	return nil
 }
 
-// DeleteVMByNameOrID deletes a VM by name or ID.
-// If node is not empty, only VMs on that node are considered.
-func DeleteVMByNameOrID(nameOrID string, node string) error {
-	return DeleteVMByNameOrIDWithWait(nameOrID, node, false)
-}
-
-// DeleteVMByNameOrIDWithWait deletes a VM by name or ID, optionally waiting
-// for the deletion to finish
-func DeleteVMByNameOrIDWithWait(nameOrID string, node string, wait bool) error {
-	ctx := context.Background()
-	client, err := c.CreateClient()
-	if err != nil {
-		return fmt.Errorf("failed to create client: %w", err)
-	}
-
-	// Find the VM by name or ID
-	vm, err := FindByNameOrIDOnNode(ctx, client, nameOrID, node)
-	if err != nil {
-		return fmt.Errorf("failed to find VM: %w", err)
-	}
-
-	// Delete the VM
-	return DeleteVMWithWait(ctx, vm.ID, vm.Node, wait)
-}
-
-// CloneVMByNameOrID clones a VM by name or ID
-func CloneVMByNameOrID(sourceNameOrID string, name string, newID int, full bool) error {
-	return CloneVMByNameOrIDWithWait(sourceNameOrID, "", name, newID, full, true)
-}
-
 // CloneVMByNameOrIDWithWait clones a VM by name or ID with optional wait.
 // If node is not empty, only source VMs on that node are considered.
 func CloneVMByNameOrIDWithWait(sourceNameOrID string, node string, name string, newID int, full bool, wait bool) error {
@@ -504,11 +428,6 @@ func CloneVMByNameOrIDWithWait(sourceNameOrID string, node string, name string, 
 
 	// Clone the VM
 	return CloneVMWithWait(ctx, vm.ID, vm.Node, name, newID, full, wait)
-}
-
-// MigrateVMByNameOrID migrates a VM by name or ID and waits for it to finish
-func MigrateVMByNameOrID(nameOrID string, sourceNode, targetNode string, online bool, withLocalDisks bool) error {
-	return MigrateVMByNameOrIDWithWait(nameOrID, sourceNode, targetNode, online, withLocalDisks, true)
 }
 
 // MigrateVMByNameOrIDWithWait migrates a VM by name or ID, optionally without

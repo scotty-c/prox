@@ -7,8 +7,6 @@ import (
 	"io"
 	"net"
 	"os"
-	"os/exec"
-	"os/signal"
 	"os/user"
 	"path/filepath"
 	"slices"
@@ -18,6 +16,7 @@ import (
 	"github.com/jedib0t/go-pretty/v6/table"
 	"github.com/scotty-c/prox/pkg/apierr"
 	"github.com/scotty-c/prox/pkg/client"
+	"github.com/scotty-c/prox/pkg/cmdutil"
 	"github.com/scotty-c/prox/pkg/container"
 	"github.com/scotty-c/prox/pkg/sshconfig"
 	"github.com/scotty-c/prox/pkg/util"
@@ -307,22 +306,7 @@ func runSSH(nameOrID, username string, port int, keyPath string, skipHostKeyChec
 		return nil
 	}
 
-	sshPath, err := exec.LookPath("ssh")
-	if err != nil {
-		return fmt.Errorf("ssh client not found in PATH: %w", err)
-	}
-	c := exec.Command(sshPath, args[1:]...)
-	c.Stdin, c.Stdout, c.Stderr = os.Stdin, os.Stdout, os.Stderr
-	// Let ssh handle Ctrl-C itself
-	signal.Ignore(os.Interrupt)
-	if err := c.Run(); err != nil {
-		var exitErr *exec.ExitError
-		if errors.As(err, &exitErr) {
-			os.Exit(exitErr.ExitCode())
-		}
-		return fmt.Errorf("failed to run ssh: %w", err)
-	}
-	return nil
+	return cmdutil.RunSSH(args[1:])
 }
 
 func isValidIP(ip string) bool {

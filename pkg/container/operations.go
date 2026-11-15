@@ -9,11 +9,6 @@ import (
 	"github.com/scotty-c/prox/pkg/output"
 )
 
-// StartContainer starts a container by name or ID and waits for it to start
-func StartContainer(nameOrID string) error {
-	return StartContainerWithWait(nameOrID, true)
-}
-
 // StartContainerWithWait starts a container, optionally without waiting
 func StartContainerWithWait(nameOrID string, wait bool) error {
 	ctx := context.Background()
@@ -56,11 +51,6 @@ func StartContainerWithWait(nameOrID string, wait bool) error {
 
 	output.Result("Container %s started successfully\n", nameOrID)
 	return nil
-}
-
-// StopContainer stops a container by name or ID
-func StopContainer(nameOrID string) error {
-	return StopContainerWithOptions(nameOrID, false, true)
 }
 
 // StopContainerWithOptions stops a container by name or ID. With force, the
@@ -112,11 +102,6 @@ func StopContainerWithOptions(nameOrID string, force bool, wait bool) error {
 
 	output.Result("Container %s stopped successfully\n", nameOrID)
 	return nil
-}
-
-// DeleteContainer deletes a container by name or ID and waits for it to finish
-func DeleteContainer(nameOrID string) error {
-	return DeleteContainerWithWait(nameOrID, true)
 }
 
 // DeleteContainerWithWait deletes a container, optionally without waiting

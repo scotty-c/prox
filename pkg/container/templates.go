@@ -105,11 +105,6 @@ func displayTemplatesTable(templates []Template) {
 	output.Result("Found %d container template(s)\n", len(templates))
 }
 
-// ResolveTemplate resolves a short template name (e.g., "ubuntu:22.04") to a full template path and node
-func ResolveTemplate(shortName string) (*ResolvedTemplate, error) {
-	return ResolveTemplateOnNode(shortName, "")
-}
-
 // ResolveTemplateOnNode resolves a template like ResolveTemplate. If preferredNode
 // is not empty and the template is available on that node (for example on shared
 // storage), that node is used; otherwise the first node holding the template is used.
