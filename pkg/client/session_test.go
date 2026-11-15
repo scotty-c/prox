@@ -201,7 +201,7 @@ func TestEnvironmentCredentialsNeverKeepASession(t *testing.T) {
 
 func TestAKeychainProfileKeepsAndReusesASession(t *testing.T) {
 	sandboxConfig(t, "keychain")
-	if err := config.CreateProfile("default", "root@pam", "pw", "https://pve:8006"); err != nil {
+	if _, err := config.SaveProfile("default", "root@pam", "pw", "https://pve:8006", config.TLSOptions{}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -225,11 +225,11 @@ func TestAKeychainProfileKeepsAndReusesASession(t *testing.T) {
 
 func TestChangingTheProfileDropsTheKeptSession(t *testing.T) {
 	sandboxConfig(t, "keychain")
-	_ = config.CreateProfile("default", "root@pam", "pw", "https://pve:8006")
+	_, _ = config.SaveProfile("default", "root@pam", "pw", "https://pve:8006", config.TLSOptions{})
 	conn, _ := readConnection()
 	conn.SaveSession("t", "c")
 
-	if err := config.CreateProfile("default", "root@pam", "new-pw", "https://pve:8006"); err != nil { // as 'config update' does
+	if _, err := config.SaveProfile("default", "root@pam", "new-pw", "https://pve:8006", config.TLSOptions{}); err != nil { // as 'config update' does
 		t.Fatal(err)
 	}
 	conn, err := readConnection()
@@ -240,7 +240,7 @@ func TestChangingTheProfileDropsTheKeptSession(t *testing.T) {
 
 func TestTheSwitchTurnsTheSessionCacheOff(t *testing.T) {
 	sandboxConfig(t, "keychain")
-	_ = config.CreateProfile("default", "root@pam", "pw", "https://pve:8006")
+	_, _ = config.SaveProfile("default", "root@pam", "pw", "https://pve:8006", config.TLSOptions{})
 	t.Setenv(secrets.EnvSessionCache, "off")
 	conn, err := readConnection()
 	if err != nil || conn.SaveSession != nil || conn.Session.Ticket != "" {
@@ -250,7 +250,7 @@ func TestTheSwitchTurnsTheSessionCacheOff(t *testing.T) {
 
 func TestAKeyFileProfileKeepsNothing(t *testing.T) {
 	sandboxConfig(t, "file")
-	_ = config.CreateProfile("default", "root@pam", "pw", "https://pve:8006")
+	_, _ = config.SaveProfile("default", "root@pam", "pw", "https://pve:8006", config.TLSOptions{})
 	conn, err := readConnection()
 	if err != nil || conn.SaveSession != nil || conn.Session.Ticket != "" || conn.User != "root@pam" {
 		t.Errorf("%+v, %v; only the keychain keeps a session", conn, err)

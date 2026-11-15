@@ -44,10 +44,11 @@ Configuration:
     PROX_PASSWORD - Password, or the token secret when PROX_USER is a token ID
     PROX_INSECURE - Set to true to skip TLS certificate verification
     PROX_CA_CERT  - Path to a PEM file with the Proxmox CA certificate
+    PROX_FINGERPRINT - SHA-256 fingerprint of the one server certificate to trust
 
 Examples:
   prox config setup                    # Configure connection to Proxmox server
-  prox config create homelab -u user -p pass -l https://homelab:8006  # Create profile
+  prox config setup homelab -u user -p pass -l https://homelab:8006  # Create or change a profile
   prox config list                     # List all profiles
   prox config use homelab              # Switch to homelab profile
   prox --profile production vm list   # Use specific profile for one command
@@ -94,7 +95,8 @@ Use "prox [command] --help" for more information about a command.`,
 		// TLS overrides (take precedence over env vars and the profile)
 		insecure, _ := cmd.Flags().GetBool("insecure")
 		caCert, _ := cmd.Flags().GetString("ca-cert")
-		client.SetTLSFlagOverrides(insecure, cmd.Flags().Changed("insecure"), caCert)
+		fingerprint, _ := cmd.Flags().GetString("fingerprint")
+		client.SetTLSFlagOverrides(insecure, cmd.Flags().Changed("insecure"), caCert, fingerprint)
 
 		// Output format
 		format, _ := cmd.Flags().GetString("output")
@@ -149,6 +151,7 @@ func init() {
 	})
 	RootCmd.PersistentFlags().Duration("timeout", 0, "Stop waiting for Proxmox tasks after this long, e.g. 10m (0 = no limit; the task keeps running)")
 	RootCmd.PersistentFlags().Bool("insecure", false, "Skip TLS certificate verification (for self-signed certificates)")
+	RootCmd.PersistentFlags().String("fingerprint", "", "Trust only the server certificate with this SHA-256 fingerprint (as shown in the Proxmox web interface)")
 	RootCmd.PersistentFlags().String("ca-cert", "", "Trust the CA certificate(s) in this PEM file (e.g. a copy of /etc/pve/pve-root-ca.pem)")
 
 	RootCmd.SetVersionTemplate("prox {{.Version}}\n")

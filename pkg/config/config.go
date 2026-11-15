@@ -193,19 +193,13 @@ func ProfileExists(profile string) bool {
 	return err == nil
 }
 
-// CreateProfile creates a profile with the given credentials, or replaces the
-// credentials of an existing one (keeping its TLS settings). The credentials
-// are protected by package secrets: in the OS keychain when there is one,
+// SaveProfile writes a profile with the given credentials, URL and TLS
+// settings, replacing any profile of that name, and reports how the credentials
+// were protected so the caller can tell the user. The credentials are
+// protected by package secrets: in the OS keychain when there is one,
 // otherwise sealed with a key file.
-func CreateProfile(profile, username, password, url string) error {
-	_, err := createProfile(profile, username, password, url)
-	return err
-}
-
-// SaveProfile is CreateProfile, also reporting how the credentials were
-// protected so the caller can tell the user
-func SaveProfile(profile, username, password, url string) (secrets.Method, error) {
-	return createProfile(profile, username, password, url)
+func SaveProfile(profile, username, password, url string, tlsOpts TLSOptions) (secrets.Method, error) {
+	return createProfile(profile, username, password, url, tlsOpts)
 }
 
 // DescribeMethod says in a sentence where credentials protected by method live
@@ -219,9 +213,8 @@ func DescribeMethod(m secrets.Method) string {
 	return "using the " + string(m) + " scheme"
 }
 
-// createProfile is CreateProfile, also reporting how the credentials were
-// protected
-func createProfile(profile, username, password, url string) (secrets.Method, error) {
+// createProfile is SaveProfile
+func createProfile(profile, username, password, url string, tlsOpts TLSOptions) (secrets.Method, error) {
 	if profile == "" {
 		return "", fmt.Errorf("profile name cannot be empty")
 	}
@@ -246,9 +239,6 @@ func createProfile(profile, username, password, url string) (secrets.Method, err
 	if sealed.Note != "" {
 		output.Errorln("Note: " + sealed.Note)
 	}
-
-	// Keep TLS settings from an existing profile with the same name
-	tlsOpts, _ := ReadTLSOptions(profile)
 
 	var content strings.Builder
 	if marker, ok := sealed.Entries["credentials"]; ok {
@@ -465,7 +455,7 @@ func decryptError(profile, storedFingerprint string, err error) error {
 	if current, fpErr := crypto.GetKeyFingerprint(); fpErr == nil && storedFingerprint != "" && storedFingerprint != current {
 		detail = fmt.Sprintf(" (profile key fingerprint %s, current %s)", storedFingerprint, current)
 	}
-	return fmt.Errorf("%w%s. Re-enter your credentials with: prox config create %s -u <user> -p <password> -l <url>", err, detail, profile)
+	return fmt.Errorf("%w%s. Re-enter your credentials with: prox config setup %s -u <user> -p <password> -l <url>", err, detail, profile)
 }
 
 // MigrateToProfiles migrates the old single config file to the new profile system
@@ -498,7 +488,7 @@ func MigrateToProfiles() error {
 	}
 
 	// Create default profile
-	if err := CreateProfile(defaultProfile, username, password, url); err != nil {
+	if _, err := SaveProfile(defaultProfile, username, password, url, TLSOptions{}); err != nil {
 		return fmt.Errorf("failed to create default profile: %w", err)
 	}
 
@@ -568,22 +558,6 @@ func Check() bool {
 	return true
 }
 
-// Create writes a config for the current profile, makes it the current
-// profile, and reports how the credentials were protected
-func Create(username string, password string, url string) (secrets.Method, error) {
-	profile := GetCurrentProfile()
-	method, err := SaveProfile(profile, username, password, url)
-	if err != nil {
-		return "", err
-	}
-
-	// Make it the current profile. Failure here is not fatal: the profile
-	// was created, and GetCurrentProfile already resolves to it.
-	_ = SetCurrentProfile(profile)
-
-	return method, nil
-}
-
 // Read reads the current profile's config file and decrypts sensitive data
 func Read() (string, string, string, error) {
 	detail, err := ReadDetail()
@@ -591,44 +565,6 @@ func Read() (string, string, string, error) {
 		return "", "", "", err
 	}
 	return detail.Username, detail.Password, detail.URL, nil
-}
-
-// Update updates the current profile's config file with encrypted data
-func Update(username string, password string, url string) error {
-	if !Check() {
-		return fmt.Errorf("config file does not exist")
-	}
-
-	profile := GetCurrentProfile()
-
-	// Read current values
-	currentUser, currentPass, currentURL, err := ReadProfile(profile)
-	if err != nil {
-		return fmt.Errorf("failed to read current config: %w", err)
-	}
-
-	// Use new values if provided, otherwise keep current
-	newUsername := currentUser
-	newPassword := currentPass
-	newURL := currentURL
-
-	if len(strings.TrimSpace(username)) > 0 {
-		newUsername = username
-	}
-	if len(strings.TrimSpace(password)) > 0 {
-		newPassword = password
-	}
-	if len(strings.TrimSpace(url)) > 0 {
-		newURL = url
-	}
-
-	// Create new config with updated values
-	if err := CreateProfile(profile, newUsername, newPassword, newURL); err != nil {
-		return fmt.Errorf("failed to update config: %w", err)
-	}
-
-	output.Resultln("Config updated successfully")
-	return nil
 }
 
 // UpgradeResult is what happened to one profile in UpgradeProfiles
@@ -687,7 +623,9 @@ func upgradeProfile(profile string) UpgradeResult {
 		return result
 	}
 
-	method, err := createProfile(profile, before.Username, before.Password, before.URL)
+	// the TLS settings are kept as they were
+	tlsOpts, _ := ReadTLSOptions(profile)
+	method, err := createProfile(profile, before.Username, before.Password, before.URL, tlsOpts)
 	if err != nil {
 		// the original file is untouched; don't leave a keychain item behind
 		_ = secrets.Forget(profile, map[string]string{"credentials": "keychain"})

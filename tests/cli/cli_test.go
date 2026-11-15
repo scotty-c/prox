@@ -487,7 +487,7 @@ func profiles(t *testing.T, home string, srv *fakepve.Server) []string {
 
 func TestConfigCreateRefusesToSaveAnIncompleteProfile(t *testing.T) {
 	home, srv := t.TempDir(), fakepve.New(t)
-	r := runInHome(t, home, srv, "", "config", "create", "lab", "-u", "root@pam")
+	r := runInHome(t, home, srv, "", "config", "setup", "--no-verify", "lab", "-u", "root@pam")
 	if r.code != 1 {
 		t.Errorf("exit %d, want 1", r.code)
 	}
@@ -496,7 +496,7 @@ func TestConfigCreateRefusesToSaveAnIncompleteProfile(t *testing.T) {
 		t.Errorf("a profile was saved anyway: %v", got)
 	}
 	// no flags at all
-	if r := runInHome(t, home, srv, "", "config", "create", "lab"); r.code != 1 {
+	if r := runInHome(t, home, srv, "", "config", "setup", "--no-verify", "lab"); r.code != 1 {
 		t.Errorf("exit %d, want 1", r.code)
 	}
 	if got := profiles(t, home, srv); len(got) != 0 {
@@ -506,7 +506,7 @@ func TestConfigCreateRefusesToSaveAnIncompleteProfile(t *testing.T) {
 
 func TestConfigCreateSavesAProfileThatHasEverything(t *testing.T) {
 	home, srv := t.TempDir(), fakepve.New(t)
-	r := runInHome(t, home, srv, "", "config", "create", "lab", "-u", "root@pam", "-p", "pw", "-l", "https://pve:8006")
+	r := runInHome(t, home, srv, "", "config", "setup", "--no-verify", "lab", "-u", "root@pam", "-p", "pw", "-l", "https://pve:8006")
 	if r.code != 0 {
 		t.Fatalf("exit %d: %s", r.code, r.stderr)
 	}
@@ -517,7 +517,7 @@ func TestConfigCreateSavesAProfileThatHasEverything(t *testing.T) {
 
 func TestConfigDeleteAsksFirstAndNeedsAnAnswer(t *testing.T) {
 	home, srv := t.TempDir(), fakepve.New(t)
-	runInHome(t, home, srv, "", "config", "create", "lab", "-u", "u@pam", "-p", "pw", "-l", "https://pve:8006")
+	runInHome(t, home, srv, "", "config", "setup", "--no-verify", "lab", "-u", "u@pam", "-p", "pw", "-l", "https://pve:8006")
 
 	r := runInHome(t, home, srv, "", "config", "delete", "lab")
 	if r.code != 1 {
@@ -542,8 +542,8 @@ func TestConfigDeleteAsksFirstAndNeedsAnAnswer(t *testing.T) {
 
 func TestConfigDeleteCanRemoveTheDefaultProfile(t *testing.T) {
 	home, srv := t.TempDir(), fakepve.New(t)
-	runInHome(t, home, srv, "", "config", "create", "default", "-u", "u@pam", "-p", "pw", "-l", "https://pve:8006")
-	runInHome(t, home, srv, "", "config", "create", "other", "-u", "u@pam", "-p", "pw", "-l", "https://pve:8006")
+	runInHome(t, home, srv, "", "config", "setup", "--no-verify", "default", "-u", "u@pam", "-p", "pw", "-l", "https://pve:8006")
+	runInHome(t, home, srv, "", "config", "setup", "--no-verify", "other", "-u", "u@pam", "-p", "pw", "-l", "https://pve:8006")
 
 	r := runInHome(t, home, srv, "", "config", "delete", "default", "--force")
 	if r.code != 0 {
@@ -589,7 +589,7 @@ func TestYesSkipsSnapshotAndConfigPrompts(t *testing.T) {
 		t.Errorf("snapshot rollback: exit %d\n%s", r.code, r.stderr)
 	}
 	home := t.TempDir()
-	runInHome(t, home, srv, "", "config", "create", "lab", "-u", "u@pam", "-p", "pw", "-l", "https://pve:8006")
+	runInHome(t, home, srv, "", "config", "setup", "--no-verify", "lab", "-u", "u@pam", "-p", "pw", "-l", "https://pve:8006")
 	if r := runInHome(t, home, srv, "", "config", "delete", "lab", "-y"); r.code != 0 {
 		t.Errorf("config delete -y: exit %d\n%s", r.code, r.stderr)
 	}
@@ -1282,8 +1282,8 @@ func TestTemplatePullDownloadsAShortcutAndSkipsOnesThatAreThere(t *testing.T) {
 
 func TestConfigListShowsURLAndUserButNeverThePassword(t *testing.T) {
 	home, srv := t.TempDir(), fakepve.New(t)
-	runInHome(t, home, srv, "", "config", "create", "lab", "-u", "root@pam", "-p", "s3cret-lab", "-l", "https://lab.example.com:8006")
-	runInHome(t, home, srv, "", "config", "create", "prod", "-u", "ci@pve!deploy", "-p", "s3cret-prod", "-l", "https://prod.example.com:8006", "--use")
+	runInHome(t, home, srv, "", "config", "setup", "--no-verify", "lab", "-u", "root@pam", "-p", "s3cret-lab", "-l", "https://lab.example.com:8006")
+	runInHome(t, home, srv, "", "config", "setup", "--no-verify", "prod", "-u", "ci@pve!deploy", "-p", "s3cret-prod", "-l", "https://prod.example.com:8006", "--use")
 
 	r := runInHome(t, home, srv, "", "config", "list")
 	if r.code != 0 {
@@ -1318,17 +1318,17 @@ func TestConfigListShowsURLAndUserButNeverThePassword(t *testing.T) {
 
 func TestPasswordStdinKeepsThePasswordOffTheCommandLine(t *testing.T) {
 	home, srv := t.TempDir(), fakepve.New(t)
-	r := runInHome(t, home, srv, "from-stdin\n", "config", "create", "lab", "-u", "u@pam", "-l", "https://pve:8006", "--password-stdin")
+	r := runInHome(t, home, srv, "from-stdin\n", "config", "setup", "--no-verify", "lab", "-u", "u@pam", "-l", "https://pve:8006", "--password-stdin")
 	if r.code != 0 {
 		t.Fatalf("exit %d: %s", r.code, r.stderr)
 	}
 	r = runInHome(t, home, srv, "", "config", "read", "--profile", "lab", "--show-password")
 	contains(t, "config read", r.stdout, "from-stdin")
 
-	// update can change it the same way
+	// setup on the existing profile can change it the same way
 	runInHome(t, home, srv, "", "config", "use", "lab")
-	if r := runInHome(t, home, srv, "second-secret\n", "config", "update", "--password-stdin"); r.code != 0 {
-		t.Fatalf("update: exit %d: %s", r.code, r.stderr)
+	if r := runInHome(t, home, srv, "second-secret\n", "config", "setup", "--no-verify", "--password-stdin"); r.code != 0 {
+		t.Fatalf("setup: exit %d: %s", r.code, r.stderr)
 	}
 	r = runInHome(t, home, srv, "", "config", "read", "--show-password")
 	contains(t, "config read", r.stdout, "second-secret")
@@ -1336,14 +1336,14 @@ func TestPasswordStdinKeepsThePasswordOffTheCommandLine(t *testing.T) {
 
 func TestPasswordStdinMistakesAreReported(t *testing.T) {
 	srv := fakepve.New(t)
-	r := runInHome(t, t.TempDir(), srv, "x\n", "config", "create", "lab", "-u", "u@pam", "-l", "https://pve:8006", "-p", "a", "--password-stdin")
+	r := runInHome(t, t.TempDir(), srv, "x\n", "config", "setup", "--no-verify", "lab", "-u", "u@pam", "-l", "https://pve:8006", "-p", "a", "--password-stdin")
 	if r.code != 1 {
 		t.Errorf("both given: exit %d, want 1", r.code)
 	}
 	contains(t, "stderr", r.stderr, "either --password or --password-stdin")
 
 	home := t.TempDir()
-	r = runInHome(t, home, srv, "", "config", "create", "lab", "-u", "u@pam", "-l", "https://pve:8006", "--password-stdin")
+	r = runInHome(t, home, srv, "", "config", "setup", "--no-verify", "lab", "-u", "u@pam", "-l", "https://pve:8006", "--password-stdin")
 	if r.code != 1 {
 		t.Errorf("nothing on stdin: exit %d, want 1", r.code)
 	}
@@ -1352,7 +1352,7 @@ func TestPasswordStdinMistakesAreReported(t *testing.T) {
 		t.Errorf("nothing should be saved: %v", got)
 	}
 
-	r = runInHome(t, home, srv, "\n", "config", "create", "lab", "-u", "u@pam", "-l", "https://pve:8006", "--password-stdin")
+	r = runInHome(t, home, srv, "\n", "config", "setup", "--no-verify", "lab", "-u", "u@pam", "-l", "https://pve:8006", "--password-stdin")
 	contains(t, "stderr", r.stderr, "is empty")
 }
 
@@ -1364,7 +1364,7 @@ func TestURLsAreTidiedBeforeTheyAreSaved(t *testing.T) {
 		"https://pve.example.com:8006/api2/json": "https://pve.example.com:8006",
 	} {
 		home := t.TempDir()
-		if r := runInHome(t, home, srv, "", "config", "create", "lab", "-u", "u@pam", "-p", "pw", "-l", in); r.code != 0 {
+		if r := runInHome(t, home, srv, "", "config", "setup", "--no-verify", "lab", "-u", "u@pam", "-p", "pw", "-l", in); r.code != 0 {
 			t.Fatalf("%q: exit %d: %s", in, r.code, r.stderr)
 		}
 		r := runInHome(t, home, srv, "", "config", "read", "--profile", "lab")
@@ -1374,7 +1374,7 @@ func TestURLsAreTidiedBeforeTheyAreSaved(t *testing.T) {
 
 func TestURLWithoutAPortGetsANoteButIsNotChanged(t *testing.T) {
 	home, srv := t.TempDir(), fakepve.New(t)
-	r := runInHome(t, home, srv, "", "config", "create", "lab", "-u", "u@pam", "-p", "pw", "-l", "https://pve.example.com")
+	r := runInHome(t, home, srv, "", "config", "setup", "--no-verify", "lab", "-u", "u@pam", "-p", "pw", "-l", "https://pve.example.com")
 	if r.code != 0 {
 		t.Fatalf("exit %d: %s", r.code, r.stderr)
 	}
@@ -1384,7 +1384,7 @@ func TestURLWithoutAPortGetsANoteButIsNotChanged(t *testing.T) {
 
 func TestAnUnusableURLIsRejectedBeforeAnythingIsSaved(t *testing.T) {
 	home, srv := t.TempDir(), fakepve.New(t)
-	r := runInHome(t, home, srv, "", "config", "create", "lab", "-u", "u@pam", "-p", "pw", "-l", "ftp://pve:8006")
+	r := runInHome(t, home, srv, "", "config", "setup", "--no-verify", "lab", "-u", "u@pam", "-p", "pw", "-l", "ftp://pve:8006")
 	if r.code != 1 {
 		t.Errorf("exit %d, want 1", r.code)
 	}
@@ -1397,7 +1397,8 @@ func TestAnUnusableURLIsRejectedBeforeAnythingIsSaved(t *testing.T) {
 func TestConfigHelpHasRealDescriptions(t *testing.T) {
 	r := run(t, fakepve.New(t), "", "config", "--help")
 	excludes(t, "config help", r.stdout, "This command")
-	contains(t, "config help", r.stdout, "Save connection details", "Change details saved in the current profile")
+	contains(t, "config help", r.stdout, "Create a connection profile, or change a saved one")
+	excludes(t, "config help", r.stdout, "Update the", "  create ", "  update ")
 }
 
 // Requests per command

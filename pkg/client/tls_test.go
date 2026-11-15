@@ -72,9 +72,9 @@ func TestResolveTLSOptionsPrecedence(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	t.Setenv("PROX_INSECURE", "")
 	t.Setenv("PROX_CA_CERT", "")
-	t.Cleanup(func() { SetTLSFlagOverrides(false, false, "") })
+	t.Cleanup(func() { SetTLSFlagOverrides(false, false, "", "") })
 
-	if err := config.CreateProfile("default", "u", "p", "https://pve:8006"); err != nil {
+	if _, err := config.SaveProfile("default", "u", "p", "https://pve:8006", config.TLSOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	if err := config.SetTLSOptions("default", TLSOptions{Insecure: true, CACert: "/profile.pem"}); err != nil {
@@ -93,7 +93,7 @@ func TestResolveTLSOptionsPrecedence(t *testing.T) {
 		t.Fatalf("env should override profile: got %+v", got)
 	}
 
-	SetTLSFlagOverrides(true, true, "/flag.pem")
+	SetTLSFlagOverrides(true, true, "/flag.pem", "")
 	got, _ = ResolveTLSOptions()
 	if !got.Insecure || got.CACert != "/flag.pem" {
 		t.Fatalf("flags should override env: got %+v", got)

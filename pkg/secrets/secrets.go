@@ -179,7 +179,7 @@ func sealWithKeyFile(creds Credentials) (Sealed, error) {
 // were sealed by a key or keychain item that is gone or does not match says so
 // and how to fix it.
 func Open(profile string, entries map[string]string) (Credentials, Method, error) {
-	reenter := fmt.Sprintf("re-enter them with: prox config create %s -u <user> -p <password> -l <url>", profile)
+	reenter := fmt.Sprintf("re-enter them with: prox config setup %s -u <user> -p <password> -l <url>", profile)
 
 	if entries[keychainEntry] == keychainMarker {
 		creds, err := keychainGet(profile)

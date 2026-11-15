@@ -42,7 +42,7 @@ Logging in to Proxmox costs a request on every run, and every TAB press. For a p
 
 - A ticket is a session credential: anyone who can read the keychain item can act as you until it expires. It is no more exposed than the password stored beside it, and it is never written to a file.
 - Nothing is kept for profiles stored with a key file, for credentials from `PROX_URL`/`PROX_USER`/`PROX_PASSWORD`, or for API tokens (which have no login).
-- Saving the profile again (`config create`, `setup`, `update`) discards the kept ticket.
+- Saving the profile again (`config setup`) discards the kept ticket.
 - To turn it off, set `PROX_SESSION_CACHE=off`; every run then logs in afresh.
 
 ### Profiles saved by older versions
@@ -53,7 +53,7 @@ Earlier versions encrypted the login with a key derived from your user ID, user 
 
 - **The key file is gone or replaced:** the credentials sealed with it cannot be recovered, and prox says so rather than create a new key. Save the profile again:
   ```bash
-  prox config create <profile> -u root@pam --password-stdin -l https://your-proxmox:8006
+  prox config setup <profile> -u root@pam --password-stdin -l https://your-proxmox:8006
   ```
   Back up the key file with your profiles if you want to restore them together.
 - **The keychain item was deleted:** the same fix.
@@ -63,7 +63,17 @@ Earlier versions encrypted the login with a key derived from your user ID, user 
 ### Other protections
 - Profile files are written with mode `600`, through a temporary file and a rename, so a failure never leaves a half-written profile.
 - `prox config read` masks the password unless you pass `--show-password`; `prox config list` never shows it.
-- TLS certificates are verified by default (see the README).
+- TLS certificates are verified by default. For a server with a self-signed certificate, `prox config setup` can pin its SHA-256 fingerprint (see below); the alternatives are trusting a CA file (`--ca-cert`) or turning verification off (`--insecure`).
+
+### Trusting a self-signed certificate
+
+When a certificate is not trusted, `config setup` connects once, only to complete the TLS handshake, and shows the certificate it was given (subject, issuer, validity and SHA-256 fingerprint). No credentials are sent on that connection. You compare the fingerprint with the Proxmox web interface and type `yes`; prox then saves the fingerprint in the profile and logs in with the certificate pinned, so the password only ever goes to a server that presented exactly that certificate.
+
+- **What you are protected from:** someone who can intercept the connection later, or who presents another certificate, including one signed by a real CA. A pinned profile accepts only the one certificate, whatever name it carries.
+- **What you are not protected from:** an interceptor present *at the moment you accept*. The fingerprint is only as good as your comparison with the web interface, which is why prox shows it to you and never accepts one by itself. Without a terminal it prints the fingerprint and stops; `--fingerprint` is how a script says which certificate it already checked.
+- **Renewal:** a renewed certificate has a new fingerprint, so a pinned profile stops working and says why. Run `prox config setup` again and compare the new fingerprint before accepting it. Pinning the Proxmox CA (`--ca-cert`) avoids this, because a renewed certificate from the same CA still verifies.
+- **The pin replaces certificate checking** (chain, expiry and host name) for that profile. An expired certificate with the pinned fingerprint is still accepted; renew it on the server and pin again.
+- `--insecure` still overrides everything, and verifies nothing.
 
 ---
 For architecture context see ARCHITECTURE.md.

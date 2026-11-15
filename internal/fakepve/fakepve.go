@@ -7,6 +7,7 @@
 package fakepve
 
 import (
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -53,6 +54,30 @@ func New(t testing.TB) *Server {
 		s.Close()
 	})
 	return s
+}
+
+// NewTLS is New for a server that speaks HTTPS with a self-signed certificate,
+// like a Proxmox node that has not been given a real one
+func NewTLS(t testing.TB) *Server {
+	t.Helper()
+	s := &Server{failures: map[string]failure{}, bodies: map[string]string{}, release: make(chan struct{})}
+	s.Server = httptest.NewTLSServer(http.HandlerFunc(s.handle))
+	t.Cleanup(func() {
+		close(s.release)
+		s.Close()
+	})
+	return s
+}
+
+// Fingerprint is the SHA-256 fingerprint of a TLS server's certificate, as the
+// Proxmox web interface shows it
+func (s *Server) Fingerprint() string {
+	sum := sha256.Sum256(s.Certificate().Raw)
+	pairs := make([]string, len(sum))
+	for i, b := range sum {
+		pairs[i] = fmt.Sprintf("%02X", b)
+	}
+	return strings.Join(pairs, ":")
 }
 
 // FailRequest makes requests to "METHOD /path" (the path without /api2/json)

@@ -54,7 +54,7 @@ Guiding principles:
 
 ## The Client (`pkg/client`)
 - Password logins use a ticket and CSRF token; usernames containing `!` are API tokens and send an `Authorization` header instead. For a profile in the keychain the last ticket is kept in the same keychain item (`secrets.Session`) and used while it is under ~110 minutes old; `newClient` applies it and passes each fresh login to `connection.SaveSession`. A rejected ticket still costs one re-login.
-- TLS is verified unless `--insecure`/`PROX_INSECURE`/the profile says otherwise; a CA file can be trusted with `--ca-cert`.
+- TLS is verified unless `--insecure`/`PROX_INSECURE`/the profile says otherwise; a CA file can be trusted with `--ca-cert`, or one certificate pinned by its SHA-256 fingerprint (`--fingerprint`; the pin replaces chain checking, via `VerifyPeerCertificate`). `config setup` verifies the details before saving them; for an untrusted certificate it shows `client.ProbeCertificate`'s result and asks, in `verifyAndTrust` (`cmd/config/setup.go`), which takes its input and output as parameters so the prompts are unit-tested.
 - Responses are decoded straight into types (`requestData[T]`). A missing task ID or config is an error, not an empty value. Some values arrive as strings or numbers depending on the Proxmox version, so `ConfigNumber`/`ConfigFlag` accept both.
 - The cluster listing (needed by every name lookup) is fetched once and kept for ten seconds; `ClearClusterResourcesCache` forgets it after a command creates a guest.
 - "Unknown" is the empty string (an IP address that cannot be found, for example). The packages that display it decide how to show it (`N/A`).

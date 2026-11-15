@@ -105,7 +105,7 @@ func TestForgetRemovesTheKeychainItemOnlyWhenTheProfileHasOne(t *testing.T) {
 	if err := Forget("prod", sealed.Entries); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := Open("prod", sealed.Entries); err == nil || !strings.Contains(err.Error(), "not in the keychain") || !strings.Contains(err.Error(), "prox config create prod") {
+	if _, _, err := Open("prod", sealed.Entries); err == nil || !strings.Contains(err.Error(), "not in the keychain") || !strings.Contains(err.Error(), "prox config setup prod") {
 		t.Errorf("after Forget: %v", err)
 	}
 	// a profile that does not use the keychain never touches it
@@ -197,7 +197,7 @@ func TestAMissingKeyFileIsReportedNotRecreated(t *testing.T) {
 	}
 
 	_, _, err := Open("lab", sealed.Entries)
-	if err == nil || !strings.Contains(err.Error(), "missing") || !strings.Contains(err.Error(), path) || !strings.Contains(err.Error(), "prox config create lab") {
+	if err == nil || !strings.Contains(err.Error(), "missing") || !strings.Contains(err.Error(), path) || !strings.Contains(err.Error(), "prox config setup lab") {
 		t.Errorf("got %v", err)
 	}
 	if fileExists(path) {

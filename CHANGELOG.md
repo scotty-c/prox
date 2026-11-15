@@ -11,7 +11,7 @@ All notable changes to prox are recorded here. The format follows [Keep a Change
 #### Things that will stop a script or a setup working
 
 1. **TLS certificates are verified.** Earlier versions never checked the server's certificate. A Proxmox install with its default self-signed certificate now fails with `TLS certificate verification failed`.
-   *Do:* trust the Proxmox CA with `--ca-cert /path/to/pve-root-ca.pem` (copy `/etc/pve/pve-root-ca.pem` from any node), or skip verification with `--insecure`. Either can also be saved in the profile (`prox config update --ca-cert ...` / `--insecure`) or set as `PROX_CA_CERT` / `PROX_INSECURE=true`.
+   *Do:* run `prox config setup` on a terminal. It shows the server's SHA-256 fingerprint, you compare it with the Proxmox web interface (node > System > Certificates) and type `yes`, and the profile then trusts only that certificate. In a script, pass the fingerprint you checked with `--fingerprint` (or `PROX_FINGERPRINT`). The alternatives are `--ca-cert /path/to/pve-root-ca.pem` (copy `/etc/pve/pve-root-ca.pem` from any node) and `--insecure` (`PROX_CA_CERT`, `PROX_INSECURE=true`). A pinned certificate that is later renewed is refused with the new fingerprint; run `prox config setup` again to accept it.
 
 2. **VM commands wait for their task.** `vm start`, `vm shutdown` (and `stop`), `vm reboot`, `vm delete` and `vm create --start` used to return as soon as Proxmox accepted the task, so they could report success and fail afterwards. They now wait and report how long it took, as `ct` commands, `vm clone`, `vm migrate`, snapshots and template downloads already did. `vm shutdown` can therefore block on a guest that ignores ACPI shutdown.
    *Do:* add `--no-wait` where you relied on returning immediately; `--timeout 5m` or Ctrl-C stop the wait without stopping the task; `vm shutdown --force` is the hard stop. `-w`/`--wait` is still accepted and changes nothing.
@@ -43,7 +43,10 @@ All notable changes to prox are recorded here. The format follows [Keep a Change
    - Entries are inserted after the global section of `~/.ssh/config` (they used to go at the very top, which turned your global settings into settings for that one host), and each carries a `# managed by prox` comment.
    Existing entries change only when they are next updated.
 
-10. **`config` commands.** `config read` masks the password (use `--show-password`). `config create` refuses to save a profile without a URL, username and password (it prompts on a terminal). `config delete` takes an optional profile name, asks first, and can delete the default profile. `config migrate` now moves profiles to the new storage (see 3). Profile names containing path separators are rejected.
+10. **`config create` and `config update` are gone; `config setup [profile]` does both.** It creates the profile or changes the existing one (anything you leave out keeps its saved value), prompts on a terminal for what a new profile is missing, and refuses to save a profile without a URL, username and password. Calling the old commands exits 1 and says what to use.
+    *Do:* replace `prox config create NAME ...` with `prox config setup NAME ...`, and `prox config update ...` with `prox config setup ...` (it works on the current profile, or the one you name). Two behaviours differ from the old commands: `setup` connects with the details **before saving** and saves nothing if the login fails, so a script that saves a profile for a server that is not up yet needs `--no-verify`; and a new named profile becomes the current one only if it is your first, or with `--use` (as `create` did).
+
+11. **Other `config` changes.** `config read` masks the password (use `--show-password`). `config delete` takes an optional profile name, asks first, and can delete the default profile. `config migrate` now moves profiles to the new storage (see 3). Profile names containing path separators are rejected.
 
 #### Output you may be matching on
 
@@ -74,9 +77,10 @@ The packages under `pkg/` are an implementation detail of the command, not a sup
 - `ct create` gains `--bridge`, `--ip`, `--gateway`, `--vlan`, `--cpu`, `--id`, `--start`, and picks a storage that exists (`local-lvm`, else the first that can hold containers).
 - `--force` on `vm shutdown` and `ct stop` for a hard stop.
 - `-y`/`--yes` on every command that asks for confirmation.
-- Global `-o/--output table|json|yaml`, `--timeout`, `--insecure` and `--ca-cert`.
+- Global `-o/--output table|json|yaml`, `--timeout`, `--insecure`, `--ca-cert` and `--fingerprint`.
+- `prox config setup` checks the connection before saving (`--no-verify` skips it), reports the Proxmox version it connected to, and on a terminal offers to trust an untrusted server certificate by its fingerprint. `PROX_FINGERPRINT` sets the pin for one run.
 - Proxmox API token authentication (`user@realm!name` as the username, the secret as the password).
-- `--password-stdin` on `config setup`, `create` and `update`, which keeps the password out of shell history and process listings. URLs are tidied before saving (`https://` added, trailing `/` and `/api2/json` removed).
+- `--password-stdin` on `config setup`, which keeps the password out of shell history and process listings. URLs are tidied before saving (`https://` added, trailing `/` and `/api2/json` removed).
 - `prox config list` shows each profile's URL, user and where its credentials are stored; `prox config migrate` upgrades them.
 
 **Output**
@@ -111,7 +115,7 @@ The packages under `pkg/` are an implementation detail of the command, not a sup
 
 ### Security
 
-- Certificates are verified (see Upgrading, 1).
+- Certificates are verified (see Upgrading, 1). Trusting a self-signed certificate is a decision you make by comparing a fingerprint, never one prox makes for you: without a terminal it prints the fingerprint and stops, and nothing is sent to a server before its certificate is trusted. `docs/SECURITY.md` says what pinning protects against and what it does not (an interceptor present at the moment you accept).
 - Saved credentials are no longer protected by a key derived from your user and host name (see Upgrading, 3). `docs/SECURITY.md` now states what each storage option does and does not protect against; in short, nothing prox can store stops code running as you from reading your credentials, so use an API token supplied through your secret manager for CI.
 - `prox ssh` keeps host key checking on by default; `config read` masks passwords; `--profile ../x` can no longer reach files outside the profiles directory; the key file is created with mode 0600 in a 0700 directory, and a key file that other users can read is refused.
 

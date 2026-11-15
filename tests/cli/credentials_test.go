@@ -64,12 +64,12 @@ func writeLegacyProfile(t *testing.T, home, name, url, user, password, extra str
 
 func TestNewProfilesHoldNoReadableSecretAndUseAPrivateKeyFile(t *testing.T) {
 	home, srv := t.TempDir(), fakepve.New(t)
-	r := runInHome(t, home, srv, "", "config", "create", "lab", "-u", "root@pam", "-p", "hunter2-secret", "-l", "https://pve:8006")
+	r := runInHome(t, home, srv, "", "config", "setup", "--no-verify", "lab", "-u", "root@pam", "-p", "hunter2-secret", "-l", "https://pve:8006")
 	if r.code != 0 {
 		t.Fatalf("exit %d: %s", r.code, r.stderr)
 	}
 
-	contains(t, "create output", r.stdout, "Profile 'lab' created successfully (credentials stored sealed with a key file)")
+	contains(t, "setup output", r.stdout, "Profile 'lab' saved (credentials stored sealed with a key file)")
 
 	saved := profileFile(t, home, "lab")
 	excludes(t, "profile file", saved, "root@pam", "hunter2-secret")
@@ -184,7 +184,7 @@ func TestMigrateOnePlainTextProfileLeavesTheOthersAlone(t *testing.T) {
 
 func TestAMissingKeyFileIsExplainedAndNeverQuietlyReplaced(t *testing.T) {
 	home, srv := t.TempDir(), fakepve.New(t)
-	runInHome(t, home, srv, "", "config", "create", "lab", "-u", "u@pam", "-p", "pw", "-l", "https://pve:8006")
+	runInHome(t, home, srv, "", "config", "setup", "--no-verify", "lab", "-u", "u@pam", "-p", "pw", "-l", "https://pve:8006")
 	key := findKeyFile(t, home)
 	if err := os.Remove(key); err != nil {
 		t.Fatal(err)
@@ -194,7 +194,7 @@ func TestAMissingKeyFileIsExplainedAndNeverQuietlyReplaced(t *testing.T) {
 	if r.code != 1 {
 		t.Errorf("exit %d, want 1", r.code)
 	}
-	contains(t, "stderr", r.stderr, "missing", "prox config create lab")
+	contains(t, "stderr", r.stderr, "missing", "prox config setup lab")
 	if findKeyFile(t, home) != "" {
 		t.Error("reading must not create a key: a new one could not open the old values")
 	}
@@ -202,7 +202,7 @@ func TestAMissingKeyFileIsExplainedAndNeverQuietlyReplaced(t *testing.T) {
 
 func TestReplacingTheKeyFileIsReportedNotSilentlyAccepted(t *testing.T) {
 	home, srv := t.TempDir(), fakepve.New(t)
-	runInHome(t, home, srv, "", "config", "create", "lab", "-u", "u@pam", "-p", "pw", "-l", "https://pve:8006")
+	runInHome(t, home, srv, "", "config", "setup", "--no-verify", "lab", "-u", "u@pam", "-p", "pw", "-l", "https://pve:8006")
 	key := findKeyFile(t, home)
 	other, _ := crypto.NewKey()
 	if err := os.WriteFile(key, []byte(encodeKey(other)+"\n"), 0o600); err != nil {
@@ -217,8 +217,8 @@ func TestReplacingTheKeyFileIsReportedNotSilentlyAccepted(t *testing.T) {
 
 func TestDeletingAProfileKeepsTheSharedKeyForTheOthers(t *testing.T) {
 	home, srv := t.TempDir(), fakepve.New(t)
-	runInHome(t, home, srv, "", "config", "create", "a", "-u", "u@pam", "-p", "pw-a", "-l", "https://a:8006")
-	runInHome(t, home, srv, "", "config", "create", "b", "-u", "u@pam", "-p", "pw-b", "-l", "https://b:8006")
+	runInHome(t, home, srv, "", "config", "setup", "--no-verify", "a", "-u", "u@pam", "-p", "pw-a", "-l", "https://a:8006")
+	runInHome(t, home, srv, "", "config", "setup", "--no-verify", "b", "-u", "u@pam", "-p", "pw-b", "-l", "https://b:8006")
 	if r := runInHome(t, home, srv, "", "config", "delete", "a", "--yes"); r.code != 0 {
 		t.Fatalf("exit %d: %s", r.code, r.stderr)
 	}
@@ -228,7 +228,7 @@ func TestDeletingAProfileKeepsTheSharedKeyForTheOthers(t *testing.T) {
 
 func TestListJSONSaysHowEachProfileIsStored(t *testing.T) {
 	home, srv := t.TempDir(), fakepve.New(t)
-	runInHome(t, home, srv, "", "config", "create", "new", "-u", "u@pam", "-p", "pw", "-l", "https://pve:8006")
+	runInHome(t, home, srv, "", "config", "setup", "--no-verify", "new", "-u", "u@pam", "-p", "pw", "-l", "https://pve:8006")
 	writeLegacyProfile(t, home, "old", "https://pve:8006", "u@pam", "pw", "")
 	r := runInHome(t, home, srv, "", "config", "list", "-o", "json")
 	contains(t, "json", r.stdout, `"storage": "key file"`, `"storage": "legacy"`)
@@ -238,23 +238,27 @@ func TestListJSONSaysHowEachProfileIsStored(t *testing.T) {
 func encodeKey(key []byte) string { return base64.StdEncoding.EncodeToString(key) }
 
 func TestSetupSaysWhereTheCredentialsWentToo(t *testing.T) {
-	r := runInHome(t, t.TempDir(), fakepve.New(t), "", "config", "setup", "-u", "u@pam", "-p", "pw", "-l", "https://pve:8006")
+	r := runInHome(t, t.TempDir(), fakepve.New(t), "", "config", "setup", "--no-verify", "-u", "u@pam", "-p", "pw", "-l", "https://pve:8006")
 	if r.code != 0 {
 		t.Fatalf("exit %d: %s", r.code, r.stderr)
 	}
-	contains(t, "setup output", r.stdout, "Config setup completed successfully (credentials stored sealed with a key file)")
+	contains(t, "setup output", r.stdout, "Profile 'default' saved (credentials stored sealed with a key file)")
 }
 
 func TestKeyFileProfilesLogInEveryRunAndKeepNoSession(t *testing.T) {
 	home, srv := t.TempDir(), fakepve.New(t)
-	runInHome(t, home, srv, "", "config", "create", "default", "-u", "root@pam", "-p", "pw", "-l", srv.URL)
+	runInHome(t, home, srv, "", "config", "setup", "default", "-u", "root@pam", "-p", "pw", "-l", srv.URL)
+	setupLogins := srv.Count("POST", "/access/ticket") // setup logs in once to check the details
+	if setupLogins != 1 {
+		t.Fatalf("setup made %d logins, want 1", setupLogins)
+	}
 
 	for i := 1; i <= 2; i++ {
 		if r := runWithProfile(t, home, "", "vm", "list"); r.code != 0 {
 			t.Fatalf("run %d: exit %d: %s", i, r.code, r.stderr)
 		}
 	}
-	if n := srv.Count("POST", "/access/ticket"); n != 2 {
+	if n := srv.Count("POST", "/access/ticket") - setupLogins; n != 2 {
 		t.Errorf("%d logins over 2 runs, want 2: only keychain profiles keep a session", n)
 	}
 

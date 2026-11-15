@@ -99,20 +99,23 @@ prox vm migrate myv<TAB>     # Completes VM names starting with "myv"
 ## Quick Start
 Configure (saved in your keychain, with profile support):
 ```bash
-# Set up the default profile
+# Set up the default profile (prompts for anything you leave out)
 prox config setup -u admin@pam -p secret -l https://proxmox.example.com:8006
 
-# Or create multiple profiles for different environments
-prox config create homelab -u admin@pam -p secret -l https://homelab:8006
-prox config create production -u admin@pam -p secret -l https://prod:8006 --use
+# Or set up several profiles for different environments
+prox config setup homelab -u admin@pam -p secret -l https://homelab:8006
+prox config setup production -u admin@pam -p secret -l https://prod:8006 --use
+prox config setup homelab -l https://homelab2:8006   # change one thing; the rest is kept
 prox config list                    # List profiles with their URL and user (never the password)
 prox config use homelab             # Switch to homelab profile
 prox --profile production vm list   # Use specific profile for one command
 ```
 
+`config setup` creates a profile or changes an existing one, and connects with the details first: nothing is saved if the login fails (`--no-verify` saves without checking). `--use` makes a profile the current one; your first profile, and the one you set up without naming it, are current already.
+
 `-p` puts the password in your shell history and in `ps`. To keep it out of both, leave `-p` off and either type it at the prompt (on a terminal) or pipe it in:
 ```bash
-echo "$PVE_PASSWORD" | prox config create ci -u 'automation@pve!ci' -l https://pve.example.com:8006 --password-stdin
+echo "$PVE_PASSWORD" | prox config setup ci -u 'automation@pve!ci' -l https://pve.example.com:8006 --password-stdin
 ```
 URLs are tidied before they are saved: `pve.example.com:8006` becomes `https://pve.example.com:8006`, and a trailing `/` or `/api2/json` is dropped. A URL without a port gets a note (Proxmox listens on 8006) but is kept as you wrote it, since one behind a reverse proxy has none.
 
@@ -122,7 +125,7 @@ for accounts with two-factor authentication. Create one in the Proxmox UI under
 *Datacenter → Permissions → API Tokens*, then use the token ID as the username
 and the token secret as the password:
 ```bash
-prox config create ci -u 'automation@pve!ci' -p <token-secret> -l https://proxmox.example.com:8006
+prox config setup ci -u 'automation@pve!ci' -p <token-secret> -l https://proxmox.example.com:8006
 # or
 export PROX_USER='automation@pve!ci' PROX_PASSWORD=<token-secret> PROX_URL=https://proxmox.example.com:8006
 ```
@@ -131,19 +134,42 @@ separation is enabled for the token, give the token itself the permissions it ne
 
 ### TLS certificates
 prox verifies the Proxmox server's TLS certificate. A default Proxmox install uses a
-self-signed certificate, so tell prox to trust the Proxmox CA (recommended) or to
-skip verification:
+self-signed certificate, which nothing trusts yet, so the first time you set up a
+server like that, `prox config setup` shows its fingerprint and asks:
+```
+https://pve.example.com:8006 presented a certificate that is not trusted:
+  Subject:      CN=pve.example.com
+  Issuer:       (self-signed)
+  SHA-256:      46:81:74:FD:...
+
+Compare the SHA-256 fingerprint with the one in the Proxmox web interface
+(node > System > Certificates), not with anything this server sends you.
+
+Type 'yes' to trust this certificate and save its fingerprint in profile 'default':
+```
+Compare it with the fingerprint shown in the Proxmox web interface (*node → System →
+Certificates*) and type `yes`. The fingerprint is saved in the profile, and from then on
+only that exact certificate is accepted for it, the way ssh remembers a host key. If the
+certificate is later renewed, prox refuses to connect, says so, and shows the new
+fingerprint; run `prox config setup` again to accept it.
+
+Without a terminal, prox never trusts a certificate by itself: it prints the fingerprint
+and stops. Pass the one you checked with `--fingerprint`, or use one of the alternatives:
 ```bash
-# Trust the Proxmox CA (copy /etc/pve/pve-root-ca.pem from any node)
+# Pin the certificate whose fingerprint you checked (also works on any command)
+prox config setup -u admin@pam -l https://pve:8006 --fingerprint 46:81:74:FD:...
+
+# Or trust the Proxmox CA (copy /etc/pve/pve-root-ca.pem from any node)
 scp root@pve:/etc/pve/pve-root-ca.pem ~/.prox/pve-root-ca.pem
-prox config update --ca-cert ~/.prox/pve-root-ca.pem
+prox config setup --ca-cert ~/.prox/pve-root-ca.pem
 
 # Or skip verification for this profile
-prox config update --insecure
+prox config setup --insecure
 ```
-Both also work per command (`--ca-cert`, `--insecure`) and as environment variables
-(`PROX_CA_CERT`, `PROX_INSECURE=true`). Flags override environment variables, which
-override the profile.
+All three also work per command (`--fingerprint`, `--ca-cert`, `--insecure`) and as
+environment variables (`PROX_FINGERPRINT`, `PROX_CA_CERT`, `PROX_INSECURE=true`). Flags
+override environment variables, which override the profile. A CA and a fingerprint are
+alternatives, so setting one replaces the other.
 
 > **Upgrading from an earlier release:** earlier versions never verified certificates.
 > If prox now reports `TLS certificate verification failed`, use one of the options above.
@@ -254,12 +280,11 @@ These improvements make Prox fast, forgiving, and informative—whether you're m
 ## Core Commands
 Config (with profile support):
 ```bash
-prox config setup -u user -p pass -l https://host:8006  # Set up default profile
-prox config create <profile> -u user -p pass -l https://host:8006  # Create a new profile
+prox config setup -u user -p pass -l https://host:8006  # Set up the current profile (creates or changes it)
+prox config setup <profile> -u user -p pass -l https://host:8006  # Set up a named profile (--use to switch to it)
 prox config list                                         # List all profiles
 prox config use <profile>                                # Switch to a different profile
 prox config read                                         # Read current profile (masked)
-prox config update                                       # Update current profile
 prox config delete [profile]                             # Delete a profile (the current one by default; asks first, -f skips)
 prox --profile <name> [command]                          # Use specific profile for one command
 ```
@@ -405,8 +430,8 @@ SSH (manage ~/.ssh/config entries)
 	- Notes: --list and --delete are mutually exclusive with add/update mode
 
 Global config
-- prox config setup -u/--username -p/--password -l/--url [--ca-cert <pem>] [--insecure]
-- Global flags: --profile <name>; -o/--output table|json|yaml; --ca-cert <pem>; --insecure; --timeout <duration>; -q/--quiet
+- prox config setup [profile] -u/--username -p/--password -l/--url [--password-stdin] [--use] [--no-verify] [--fingerprint <sha256>] [--ca-cert <pem>] [--insecure]
+- Global flags: --profile <name>; -o/--output table|json|yaml; --fingerprint <sha256>; --ca-cert <pem>; --insecure; --timeout <duration>; -q/--quiet
 
 Output formats
 - `-o json` or `-o yaml` works on the list and describe commands, plus `status`, `config list` and `ct templates`. YAML uses the same field names as JSON.
