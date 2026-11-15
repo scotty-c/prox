@@ -25,7 +25,9 @@ func fetchContainerIPs(ctx context.Context, client c.ProxmoxClientInterface, con
 		ct := &containers[running[k]]
 		ip, err := client.GetContainerIPAlternative(ctx, ct.Node, ct.ID)
 		if err != nil || ip == "" {
-			ip = "N/A" // shown as-is in tables and JSON
+			ip = "N/A" // shown as-is in tables and in "ip"
+		} else {
+			ct.IPAddress = ip
 		}
 		ct.IP = ip
 	})
@@ -75,37 +77,7 @@ func ListContainers(ctx context.Context, node string, runningOnly bool, jsonOutp
 			continue
 		}
 
-		// Create container object
-		container := Container{
-			ID:     int(*resource.VMID),
-			Name:   resource.Name,
-			Status: resource.Status,
-			Node:   resource.Node,
-			Tags:   resource.Tags,
-		}
-
-		// Add resource information if available
-		if resource.MaxMem != nil {
-			container.MaxMemory = uint64(*resource.MaxMem)
-		}
-		if resource.Mem != nil {
-			container.Memory = uint64(*resource.Mem)
-		}
-		if resource.MaxDisk != nil {
-			container.MaxDisk = uint64(*resource.MaxDisk)
-		}
-		if resource.Disk != nil {
-			container.Disk = uint64(*resource.Disk)
-		}
-		if resource.CPU != nil {
-			container.CPUs = int(*resource.CPU * c.CPUPercentageMultiplier) // Convert to percentage
-		}
-		if resource.Uptime != nil {
-			container.Uptime = util.FormatUptime(int64(*resource.Uptime))
-		}
-
-		// Initialize IP as N/A (will be updated concurrently for running containers)
-		container.IP = "N/A"
+		container := containerFromResource(resource)
 
 		containers = append(containers, container)
 	}
@@ -205,4 +177,42 @@ func displayContainersTable(containers []Container, runningOnly bool) {
 	} else {
 		output.Result("Found %d container(s)\n", len(containers))
 	}
+}
+
+// containerFromResource converts a cluster resource into a Container for
+// display and lookup
+func containerFromResource(resource c.Resource) Container {
+	ct := Container{
+		ID:      *resource.VMID,
+		Name:    resource.Name,
+		Status:  resource.Status,
+		Node:    resource.Node,
+		Tags:    resource.Tags,
+		TagList: util.SplitTags(resource.Tags),
+		IP:      "N/A", // until looked up
+	}
+	if resource.MaxMem != nil {
+		ct.MaxMemory = uint64(*resource.MaxMem)
+	}
+	if resource.Mem != nil {
+		ct.Memory = uint64(*resource.Mem)
+	}
+	if resource.MaxDisk != nil {
+		ct.MaxDisk = uint64(*resource.MaxDisk)
+	}
+	if resource.Disk != nil {
+		ct.Disk = uint64(*resource.Disk)
+	}
+	if resource.CPU != nil {
+		ct.CPUPercent = *resource.CPU * c.CPUPercentageMultiplier
+		ct.CPUs = int(ct.CPUPercent)
+	}
+	if resource.MaxCPU != nil {
+		ct.CPUCount = *resource.MaxCPU
+	}
+	if resource.Uptime != nil {
+		ct.Uptime = util.FormatUptime(*resource.Uptime)
+		ct.UptimeSeconds = *resource.Uptime
+	}
+	return ct
 }

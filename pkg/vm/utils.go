@@ -28,10 +28,13 @@ func FindByNameOrIDOnNode(ctx context.Context, client c.ProxmoxClientInterface, 
 // vmFromResource converts a cluster resource into a VM for display and lookup
 func vmFromResource(resource c.Resource) VM {
 	vm := VM{
-		ID:     *resource.VMID,
-		Name:   resource.Name,
-		Status: resource.Status,
-		Node:   resource.Node,
+		ID:      *resource.VMID,
+		Name:    resource.Name,
+		Status:  resource.Status,
+		Node:    resource.Node,
+		Tags:    resource.Tags,
+		TagList: util.SplitTags(resource.Tags),
+		IP:      "N/A", // until looked up (and only on request)
 	}
 	if resource.MaxMem != nil {
 		vm.MaxMemory = uint64(*resource.MaxMem)
@@ -46,10 +49,15 @@ func vmFromResource(resource c.Resource) VM {
 		vm.Disk = uint64(*resource.Disk)
 	}
 	if resource.CPU != nil {
-		vm.CPUs = int(*resource.CPU * c.CPUPercentageMultiplier)
+		vm.CPUPercent = *resource.CPU * c.CPUPercentageMultiplier
+		vm.CPUs = int(vm.CPUPercent)
+	}
+	if resource.MaxCPU != nil {
+		vm.CPUCount = *resource.MaxCPU
 	}
 	if resource.Uptime != nil {
 		vm.Uptime = util.FormatUptime(*resource.Uptime)
+		vm.UptimeSeconds = *resource.Uptime
 	}
 	return vm
 }

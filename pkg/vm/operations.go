@@ -3,7 +3,6 @@ package vm
 import (
 	"context"
 	"fmt"
-	"time"
 
 	c "github.com/scotty-c/prox/pkg/client"
 	"github.com/scotty-c/prox/pkg/cmdutil"
@@ -190,32 +189,14 @@ func CloneVMWithWait(ctx context.Context, id int, node string, name string, newI
 	}
 	output.Info("Cloning VM %d to new VM %d (%s) on node %s using %s clone...\n", id, newId, name, node, cloneType)
 
-	startTime := time.Now()
 	task, err := vm.Clone(ctx, name, newId, full)
 	if err != nil {
 		return fmt.Errorf("failed to clone VM %d: %w", id, err)
 	}
 
-	output.Result("VM %d clone command issued successfully\n", id)
-	output.Result("Task ID: %s\n", task.ID)
-
-	if wait {
-		output.Infoln("Waiting for clone operation to complete...")
-
-		// Wait for the clone task to complete
-		err = cmdutil.WaitForTask(ctx, client, node, task.ID)
-		if err != nil {
-			return fmt.Errorf("clone failed: %w", err)
-		}
-
-		duration := time.Since(startTime)
-		output.Result("VM clone completed successfully in %s!\n", duration.Round(time.Millisecond))
-		output.Result("New VM: %s (ID: %d)\n", name, newId)
-	} else {
-		output.Result("VM clone started successfully\n")
-		output.Result("New VM: %s (ID: %d)\n", name, newId)
+	if err := cmdutil.FinishTask(ctx, client, node, task.ID, wait, fmt.Sprintf("VM %s (ID %d) cloned from %s", name, newId, vmLabel(ctx, client, id))); err != nil {
+		return fmt.Errorf("clone failed: %w", err)
 	}
-
 	output.Info("Tip: Use 'prox vm list' to check the new VM\n")
 	return nil
 }
@@ -308,33 +289,18 @@ func MigrateVMWithWait(ctx context.Context, id int, sourceNode, targetNode strin
 
 	output.Info("Migrating VM %d from %s to %s...\n", id, sourceNode, targetNode)
 
-	startTime := time.Now()
-	// Start the migration
+	label := vmLabel(ctx, client, id)
 	taskID, err := client.MigrateVM(ctx, sourceNode, id, targetNode, options)
 	if err != nil {
 		return fmt.Errorf("failed to start migration: %w", err)
 	}
 
-	output.Result("Migration task started: %s\n", taskID)
-	if !wait {
-		output.Info("Tip: Follow progress with 'prox logs --follow %s'\n", taskID)
-		return nil
-	}
-	output.Infoln("Waiting for migration to complete...")
-
-	// Wait for the migration task to complete
-	err = cmdutil.WaitForTask(ctx, client, sourceNode, taskID)
-	if err != nil {
+	if err := cmdutil.FinishTask(ctx, client, sourceNode, taskID, wait, fmt.Sprintf("VM %s is now on node %s", label, targetNode)); err != nil {
 		return fmt.Errorf("migration failed: %w", err)
 	}
-
-	duration := time.Since(startTime)
-	output.Result("VM %d migration completed successfully in %s!\n", id, duration.Round(time.Millisecond))
-	output.Result("VM %d is now on node: %s\n", id, targetNode)
-
-	if online {
-		output.Resultln("VM remained online during migration")
-	} else {
+	if wait && online {
+		output.Info("The VM stayed online during the migration\n")
+	} else if wait {
 		output.Info("Tip: Use 'prox vm start %d' to start the VM on the new node\n", id)
 	}
 	return nil

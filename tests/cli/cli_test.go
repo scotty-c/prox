@@ -794,3 +794,181 @@ func TestCompletionGivesUpWhenTheClusterDoesNotAnswer(t *testing.T) {
 		t.Errorf("nothing to offer, got %v", got)
 	}
 }
+
+// Structured output
+
+func TestListJSONHasMachineFriendlyFieldsAlongsideTheOldOnes(t *testing.T) {
+	srv := fakepve.New(t)
+	for _, tc := range []struct {
+		args []string
+		name string
+	}{{[]string{"vm", "list", "-o", "json"}, "web"}, {[]string{"ct", "list", "-o", "json"}, "ct1"}} {
+		r := run(t, srv, "", tc.args...)
+		var rows []map[string]interface{}
+		if err := json.Unmarshal([]byte(r.stdout), &rows); err != nil {
+			t.Fatalf("%v: %v\n%s", tc.args, err, r.stdout)
+		}
+		var row map[string]interface{}
+		for _, candidate := range rows {
+			if candidate["name"] == tc.name && candidate["status"] == "running" {
+				row = candidate
+			}
+		}
+		if row == nil {
+			t.Fatalf("%v: no running %s in %v", tc.args, tc.name, rows)
+		}
+		// the original fields keep their original meaning
+		for _, key := range []string{"id", "name", "status", "node", "cpus", "memory", "max_memory", "disk", "max_disk", "uptime", "ip"} {
+			if _, ok := row[key]; !ok {
+				t.Errorf("%v: original field %q is gone", tc.args, key)
+			}
+		}
+		if _, isString := row["uptime"].(string); !isString {
+			t.Errorf("%v: uptime should still be the human string, got %#v", tc.args, row["uptime"])
+		}
+		// the new ones
+		if cpu, ok := row["cpu_percent"].(float64); !ok || cpu <= 0 || cpu != row["cpus"].(float64) && int(cpu) != int(row["cpus"].(float64)) {
+			t.Errorf("%v: cpu_percent = %#v (cpus %v)", tc.args, row["cpu_percent"], row["cpus"])
+		}
+		if n, ok := row["cpu_count"].(float64); !ok || n < 1 {
+			t.Errorf("%v: cpu_count = %#v", tc.args, row["cpu_count"])
+		}
+		if secs, ok := row["uptime_seconds"].(float64); !ok || secs <= 0 {
+			t.Errorf("%v: uptime_seconds = %#v", tc.args, row["uptime_seconds"])
+		}
+		if _, ok := row["tag_list"].([]interface{}); !ok {
+			t.Errorf("%v: tag_list should be an array even when empty, got %#v", tc.args, row["tag_list"])
+		}
+	}
+}
+
+func TestTagListIsAnArrayOfTags(t *testing.T) {
+	r := run(t, fakepve.New(t), "", "vm", "list", "-o", "json")
+	var rows []struct {
+		ID      int      `json:"id"`
+		TagList []string `json:"tag_list"`
+	}
+	if err := json.Unmarshal([]byte(r.stdout), &rows); err != nil {
+		t.Fatal(err)
+	}
+	for _, row := range rows {
+		switch row.ID {
+		case 100:
+			if strings.Join(row.TagList, ",") != "prod,web" {
+				t.Errorf("VM 100 tag_list = %v", row.TagList)
+			}
+		case 102:
+			if row.TagList == nil || len(row.TagList) != 0 {
+				t.Errorf("VM 102 has no tags; tag_list should be [] not %#v", row.TagList)
+			}
+		}
+	}
+}
+
+func TestIPAddressIsOnlyPresentWhenKnown(t *testing.T) {
+	r := run(t, fakepve.New(t), "", "ct", "list", "-o", "json")
+	var rows []map[string]interface{}
+	_ = json.Unmarshal([]byte(r.stdout), &rows)
+	for _, row := range rows {
+		ip, has := row["ip_address"]
+		switch row["name"] {
+		case "ct1": // running with an address
+			if !has || ip != "10.0.0.50" || row["ip"] != "10.0.0.50" {
+				t.Errorf("ct1: ip_address %v, ip %v", ip, row["ip"])
+			}
+		case "ct2": // stopped: unknown
+			if has || row["ip"] != "N/A" {
+				t.Errorf("ct2 should have no ip_address and ip N/A: %v", row)
+			}
+		}
+	}
+}
+
+func taskResult(t *testing.T, stdout string) map[string]interface{} {
+	t.Helper()
+	var got map[string]interface{}
+	if err := json.Unmarshal([]byte(stdout), &got); err != nil {
+		t.Fatalf("stdout should be one JSON object: %v\n%s", err, stdout)
+	}
+	return got
+}
+
+func TestTaskCommandsPrintOneJSONObjectWithOutputJSON(t *testing.T) {
+	srv := fakepve.New(t)
+	r := run(t, srv, "", "vm", "start", "100", "--wait", "-o", "json")
+	if r.code != 0 {
+		t.Fatalf("exit %d: %s", r.code, r.stderr)
+	}
+	got := taskResult(t, r.stdout)
+	if got["task"] != upid || got["node"] != "pve1" || got["waited"] != true || got["status"] != "ok" || got["message"] != "VM web (ID 100) started" {
+		t.Errorf("result = %v", got)
+	}
+	if secs, _ := got["seconds"].(float64); secs < 0 {
+		t.Errorf("seconds = %v", got["seconds"])
+	}
+	excludes(t, "stdout", r.stdout, "Task started", " in ")
+}
+
+func TestTaskCommandsWithoutWaitSayTheTaskStarted(t *testing.T) {
+	r := run(t, fakepve.New(t), "", "vm", "start", "100", "-o", "json")
+	got := taskResult(t, r.stdout)
+	if got["task"] != upid || got["waited"] != false || got["status"] != "started" {
+		t.Errorf("result = %v", got)
+	}
+	if _, has := got["message"]; has {
+		t.Errorf("nothing has finished, so there is no message: %v", got)
+	}
+	excludes(t, "stderr", r.stderr, "Tip:") // progress hints are text-mode only
+}
+
+func TestTaskResultsAreAvailableAsYAMLToo(t *testing.T) {
+	r := run(t, fakepve.New(t), "", "ct", "stop", "ct1", "-o", "yaml")
+	if r.code != 0 {
+		t.Fatalf("exit %d: %s", r.code, r.stderr)
+	}
+	contains(t, "stdout", r.stdout, "task: '"+upid+"'", "node: pve1", "status: ok", "waited: true")
+}
+
+func TestEveryTaskCommandSupportsStructuredResults(t *testing.T) {
+	for _, args := range [][]string{
+		{"vm", "start", "100"},
+		{"vm", "shutdown", "100", "--wait"},
+		{"vm", "reboot", "100", "--wait"},
+		{"vm", "delete", "100", "--yes", "--wait"},
+		{"vm", "clone", "100", "web3", "--wait"},
+		{"vm", "migrate", "100", "pve2"},
+		{"vm", "snapshot", "create", "100", "before"},
+		{"ct", "start", "ct2"},
+		{"ct", "stop", "ct1"},
+		{"ct", "delete", "ct1", "--yes"},
+		{"ct", "clone", "ct1", "ct1-copy", "--full"},
+		{"ct", "snapshot", "delete", "ct1", "snap1", "--yes"},
+	} {
+		r := run(t, fakepve.New(t), "", append(args, "-o", "json")...)
+		if r.code != 0 {
+			t.Errorf("prox %v: exit %d: %s", args, r.code, r.stderr)
+			continue
+		}
+		if got := taskResult(t, r.stdout); got["task"] != upid {
+			t.Errorf("prox %v: result = %v", args, got)
+		}
+	}
+}
+
+func TestAFailedTaskStillFailsInStructuredMode(t *testing.T) {
+	srv := fakepve.New(t)
+	srv.FailRequest("POST /nodes/pve1/qemu/101/status/start", "VM 101 is locked (backup)")
+	r := run(t, srv, "", "vm", "start", "db", "-o", "json")
+	if r.code != 1 || strings.TrimSpace(r.stdout) != "" {
+		t.Errorf("exit %d, stdout %q; want exit 1 and nothing on stdout", r.code, r.stdout)
+	}
+	contains(t, "stderr", r.stderr, "VM 101 is locked")
+}
+
+func TestTextModeIsUnchangedByTheStructuredOption(t *testing.T) {
+	r := run(t, fakepve.New(t), "", "vm", "start", "100", "--wait")
+	contains(t, "stdout", r.stdout, "Task started: "+upid, "VM web (ID 100) started in ")
+	if strings.HasPrefix(strings.TrimSpace(r.stdout), "{") {
+		t.Errorf("text mode printed JSON:\n%s", r.stdout)
+	}
+}

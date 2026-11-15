@@ -48,13 +48,34 @@ func ResolveWait(cmd *cobra.Command, defaultWait bool) bool {
 	return defaultWait
 }
 
-// FinishTask is the ending every Proxmox task command shares. It prints the
-// task ID. Without wait it points at 'prox logs --follow' and returns; with
-// wait it waits for the task, then prints done and how long it took. A task
-// that fails is returned as an error for the caller to describe.
+// TaskResult is what a command that starts a Proxmox task prints with
+// --output json or yaml
+type TaskResult struct {
+	Task    string  `json:"task"`              // the task ID (UPID), for 'prox logs'
+	Node    string  `json:"node"`              // the node the task runs on
+	Waited  bool    `json:"waited"`            // whether prox waited for it to finish
+	Status  string  `json:"status"`            // "started" if not waited for, "ok" if it finished successfully
+	Message string  `json:"message,omitempty"` // what was done, once it finished
+	Seconds float64 `json:"seconds,omitempty"` // how long the wait took
+}
+
+// FinishTask is the ending every Proxmox task command shares. Without wait
+// it reports the task and returns; with wait it waits for the task, then
+// reports done and how long it took. A task that fails is returned as an
+// error for the caller to describe.
+//
+// As text it prints the task ID and a result line (with a pointer to
+// 'prox logs --follow' when not waiting). With --output json or yaml it prints
+// one TaskResult instead.
 func FinishTask(ctx context.Context, client c.TaskStatusGetter, node, taskID string, wait bool, done string) error {
-	output.Result("Task started: %s\n", taskID)
+	structured := output.Structured()
+	if !structured {
+		output.Result("Task started: %s\n", taskID)
+	}
 	if !wait {
+		if structured {
+			return output.OutputJSON(TaskResult{Task: taskID, Node: node, Status: "started"})
+		}
 		output.Info("Tip: Follow progress with 'prox logs --follow %s'\n", taskID)
 		return nil
 	}
@@ -62,6 +83,10 @@ func FinishTask(ctx context.Context, client c.TaskStatusGetter, node, taskID str
 	if err := WaitForTask(ctx, client, node, taskID); err != nil {
 		return err
 	}
-	output.Result("%s in %s\n", done, time.Since(start).Round(time.Millisecond))
+	took := time.Since(start)
+	if structured {
+		return output.OutputJSON(TaskResult{Task: taskID, Node: node, Waited: true, Status: "ok", Message: done, Seconds: took.Seconds()})
+	}
+	output.Result("%s in %s\n", done, took.Round(time.Millisecond))
 	return nil
 }

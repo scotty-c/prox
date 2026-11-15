@@ -11,7 +11,14 @@
     "max_disk": 34359738368,
     "uptime": "3d 0h 0m",
     "ip": "N/A",
-    "tags": "prod;web"
+    "tags": "prod;web",
+    "cpu_percent": 2,
+    "cpu_count": 2,
+    "uptime_seconds": 259200,
+    "tag_list": [
+      "prod",
+      "web"
+    ]
   },
   {
     "id": 101,
@@ -25,7 +32,13 @@
     "max_disk": 34359738368,
     "uptime": "",
     "ip": "N/A",
-    "tags": "prod"
+    "tags": "prod",
+    "cpu_percent": 0,
+    "cpu_count": 2,
+    "uptime_seconds": 0,
+    "tag_list": [
+      "prod"
+    ]
   },
   {
     "id": 102,
@@ -38,7 +51,11 @@
     "disk": 0,
     "max_disk": 34359738368,
     "uptime": "",
-    "ip": "N/A"
+    "ip": "N/A",
+    "cpu_percent": 0,
+    "cpu_count": 2,
+    "uptime_seconds": 0,
+    "tag_list": []
   },
   {
     "id": 1000,
@@ -51,6 +68,10 @@
     "disk": 0,
     "max_disk": 68719476736,
     "uptime": "1h 0m 0s",
-    "ip": "N/A"
+    "ip": "N/A",
+    "cpu_percent": 50,
+    "cpu_count": 4,
+    "uptime_seconds": 3600,
+    "tag_list": []
   }
 ]

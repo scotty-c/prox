@@ -34,7 +34,9 @@ func fetchIPs(ctx context.Context, client c.ProxmoxClientInterface, vms []VM) {
 		vm := &vms[running[k]]
 		ip, err := client.GetVMIP(ctx, vm.Node, vm.ID)
 		if err != nil || ip == "" {
-			ip = "N/A" // shown as-is in tables and JSON
+			ip = "N/A" // shown as-is in tables and in "ip"
+		} else {
+			vm.IPAddress = ip
 		}
 		vm.IP = ip
 	})
@@ -84,43 +86,7 @@ func ListVMs(ctx context.Context, opts ListVMsOptions) error {
 			continue
 		}
 
-		// Create VM object
-		vm := VM{
-			ID:     int(*resource.VMID),
-			Name:   resource.Name,
-			Status: resource.Status,
-			Node:   resource.Node,
-			Tags:   resource.Tags,
-		}
-
-		// Add resource information if available
-		if resource.MaxMem != nil {
-			vm.MaxMemory = uint64(*resource.MaxMem)
-		}
-		if resource.Mem != nil {
-			vm.Memory = uint64(*resource.Mem)
-		}
-		if resource.MaxDisk != nil {
-			vm.MaxDisk = uint64(*resource.MaxDisk)
-		}
-		if resource.Disk != nil {
-			vm.Disk = uint64(*resource.Disk)
-		}
-		if resource.CPU != nil {
-			vm.CPUs = int(*resource.CPU * c.CPUPercentageMultiplier) // Convert to percentage
-		}
-		if resource.Uptime != nil {
-			vm.Uptime = util.FormatUptime(int64(*resource.Uptime))
-		}
-
-		// Get more accurate disk information if cluster resources don't provide it
-		// Use resource data for disk info when available, skip expensive API calls for list view
-		if resource.MaxDisk != nil && *resource.MaxDisk > 0 {
-			vm.MaxDisk = uint64(*resource.MaxDisk)
-		}
-		if resource.Disk != nil && *resource.Disk > 0 {
-			vm.Disk = uint64(*resource.Disk)
-		}
+		vm := vmFromResource(resource)
 
 		// Use detailed disk info if requested (slower but more accurate)
 		if opts.Detailed && (vm.MaxDisk == 0 || vm.Disk == 0) {
@@ -133,9 +99,6 @@ func ListVMs(ctx context.Context, opts ListVMsOptions) error {
 				}
 			}
 		}
-
-		// Set IP to N/A initially - will be fetched concurrently later if requested
-		vm.IP = "N/A"
 
 		vms = append(vms, vm)
 	}

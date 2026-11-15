@@ -214,6 +214,8 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 		} else {
 			reply(w, []map[string]interface{}{}, 200, "")
 		}
+	case strings.HasSuffix(p, "/migrate") && r.Method == http.MethodPost:
+		reply(w, UPID, 200, "")
 	case reCreateGuest.MatchString(p) && r.Method == http.MethodPost, strings.HasSuffix(p, "/clone") && r.Method == http.MethodPost:
 		s.addGuest(p, body)
 		reply(w, UPID, 200, "")
@@ -223,7 +225,7 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 		reply(w, UPID, 200, "")
 	case reSnapshots.MatchString(p) && r.Method == http.MethodGet:
 		reply(w, []map[string]interface{}{{"name": "snap1", "snaptime": 1700000000, "description": "before"}, {"name": "current"}}, 200, "")
-	case strings.Contains(p, "/snapshot/"):
+	case reSnapshots.MatchString(p) && r.Method == http.MethodPost, strings.Contains(p, "/snapshot/"):
 		reply(w, UPID, 200, "")
 	case reAction.MatchString(p) && r.Method == http.MethodPost:
 		reply(w, UPID, 200, "")

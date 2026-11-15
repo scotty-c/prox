@@ -76,6 +76,7 @@ func getNodeTemplates(ctx context.Context, client c.ProxmoxClientInterface, node
 			OS:          parseTemplateOS(template.VolID),
 			Version:     parseTemplateVersion(template.VolID),
 			Size:        util.FormatSize(template.Size),
+			SizeBytes:   template.Size,
 			Node:        node,
 		}
 		result = append(result, tmpl)

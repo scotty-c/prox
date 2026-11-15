@@ -403,6 +403,13 @@ Global config
 Output formats
 - `-o json` or `-o yaml` works on the list and describe commands, plus `status`, `config list` and `ct templates`. YAML uses the same field names as JSON.
 - The existing `--json` flags still work and mean `-o json`.
+- `vm list` and `ct list` also include fields meant for scripts, next to the human-formatted ones that were already there: `cpu_percent` (a number; `cpus` is the same figure as a whole number), `cpu_count` (vCPUs), `uptime_seconds`, `tag_list` (an array, `[]` when there are none) and `ip_address` (present only when an address is known; `ip` still says `N/A`). `ct templates` adds `size_bytes` and `node describe` adds `cpu_percent`.
+- Commands that start a task (`vm start`, `shutdown`, `reboot`, `delete`, `clone`, `migrate`, `ct start`, `stop`, `delete`, `clone`, `migrate`, snapshots, template pull) print one object with `-o json`/`-o yaml` instead of text:
+
+  ```json
+  {"task": "UPID:pve1:...", "node": "pve1", "waited": true, "status": "ok", "message": "VM web (ID 100) started", "seconds": 1.2}
+  ```
+  Without `--wait` it is `"waited": false, "status": "started"`; use the `task` with `prox logs --follow`. A command that does several steps (`vm create`, `ct create --start`) prints one object per task, and `vm create` and `vm edit` still print text.
 
 Confirmation prompts
 - Deleting a VM, container, snapshot or profile, rolling back a snapshot, and the `--tag` bulk commands ask first. Skip the question with `-y`/`--yes`; `--force` still works on the delete commands.

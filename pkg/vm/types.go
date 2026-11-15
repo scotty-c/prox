@@ -31,6 +31,15 @@ type VM struct {
 	Uptime    string `json:"uptime"`
 	IP        string `json:"ip"`
 	Tags      string `json:"tags,omitempty"` // Semicolon-separated tags
+
+	// Machine-friendly forms of the fields above, which are formatted for
+	// people (cpus is a percentage, uptime is "3d 0h 0m", ip is "N/A" when
+	// unknown). Added alongside so existing consumers keep working.
+	CPUPercent    float64  `json:"cpu_percent"`
+	CPUCount      int      `json:"cpu_count"`
+	UptimeSeconds int64    `json:"uptime_seconds"`
+	TagList       []string `json:"tag_list"`
+	IPAddress     string   `json:"ip_address,omitempty"` // only when an address is known
 }
 
 // NewTask creates a new Task instance

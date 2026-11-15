@@ -7,6 +7,7 @@ type Template struct {
 	OS          string `json:"os"`
 	Version     string `json:"version"`
 	Size        string `json:"size"`
+	SizeBytes   uint64 `json:"size_bytes"`
 	Node        string `json:"node"`
 }
 
@@ -24,6 +25,13 @@ type Container struct {
 	Uptime    string `json:"uptime"`
 	IP        string `json:"ip"`
 	Tags      string `json:"tags,omitempty"` // Semicolon-separated tags
+
+	// Machine-friendly forms of the fields above (see vm.VM)
+	CPUPercent    float64  `json:"cpu_percent"`
+	CPUCount      int      `json:"cpu_count"`
+	UptimeSeconds int64    `json:"uptime_seconds"`
+	TagList       []string `json:"tag_list"`
+	IPAddress     string   `json:"ip_address,omitempty"` // only when an address is known
 }
 
 // ResolvedTemplate represents a resolved template with its node location
