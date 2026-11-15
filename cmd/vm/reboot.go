@@ -20,7 +20,7 @@ Examples:
 	ValidArgsFunction: completion.FirstArgOnly(completion.RunningVMs),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		node, _ := cmd.Flags().GetString("node")
-		wait := cmdutil.ResolveWait(cmd, false)
+		wait := cmdutil.ResolveWait(cmd, true)
 		if err := vm.RebootVMByNameOrID(cmd.Context(), args[0], node, wait); err != nil {
 			return err
 		}
@@ -29,7 +29,7 @@ Examples:
 }
 
 func init() {
-	cmdutil.AddWaitFlags(rebootCmd, false)
+	cmdutil.AddWaitFlags(rebootCmd, true)
 	rebootCmd.Flags().StringP("node", "n", "", "Only match VMs on this node")
 	vmCmd.AddCommand(rebootCmd)
 	completion.RegisterNodeFlag(rebootCmd, "node")

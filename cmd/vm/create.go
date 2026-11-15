@@ -41,7 +41,7 @@ Examples:
 		opts.Gateway, _ = cmd.Flags().GetString("gateway")
 		opts.CIUser, _ = cmd.Flags().GetString("ci-user")
 		opts.Start, _ = cmd.Flags().GetBool("start")
-		opts.Wait = cmdutil.ResolveWait(cmd, false)
+		opts.Wait = cmdutil.ResolveWait(cmd, true)
 
 		if keysFile, _ := cmd.Flags().GetString("ssh-keys-file"); keysFile != "" {
 			keys, err := readKeysFile(keysFile)
@@ -96,7 +96,7 @@ func init() {
 	createCmd.Flags().String("ci-user", "", "Cloud-init user name (default: template's)")
 	createCmd.Flags().String("ssh-keys-file", "", "Public SSH key file for cloud-init, or '-' for stdin")
 	createCmd.Flags().Bool("start", false, "Start the VM after creating it")
-	cmdutil.AddWaitFlags(createCmd, false)
+	cmdutil.AddWaitFlags(createCmd, true)
 	vmCmd.AddCommand(createCmd)
 	completion.RegisterNodeFlag(createCmd, "node")
 }

@@ -409,7 +409,7 @@ func RebootVMByNameOrID(ctx context.Context, nameOrID, node string, wait bool) e
 	if err != nil {
 		return fmt.Errorf("failed to reboot VM %d: %w", vm.ID, err)
 	}
-	if err := cmdutil.FinishTask(ctx, client, vm.Node, taskID, wait, fmt.Sprintf("VM %s rebooted", vm.Name)); err != nil {
+	if err := cmdutil.FinishTask(ctx, client, vm.Node, taskID, wait, fmt.Sprintf("VM %s (ID %d) rebooted", vm.Name, vm.ID)); err != nil {
 		return fmt.Errorf("reboot failed: %w", err)
 	}
 	return nil

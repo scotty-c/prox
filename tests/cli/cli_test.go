@@ -353,7 +353,7 @@ func TestStartNamesTheVMAndReportsOneResultLine(t *testing.T) {
 }
 
 func TestStartWithoutWaitPointsAtTheLog(t *testing.T) {
-	r := run(t, fakepve.New(t), "", "vm", "start", "100")
+	r := run(t, fakepve.New(t), "", "vm", "start", "100", "--no-wait")
 	contains(t, "stdout", r.stdout, "Task started: "+upid)
 	contains(t, "stderr", r.stderr, "prox logs --follow "+upid)
 	excludes(t, "stdout", r.stdout, "started in")
@@ -910,7 +910,7 @@ func TestTaskCommandsPrintOneJSONObjectWithOutputJSON(t *testing.T) {
 }
 
 func TestTaskCommandsWithoutWaitSayTheTaskStarted(t *testing.T) {
-	r := run(t, fakepve.New(t), "", "vm", "start", "100", "-o", "json")
+	r := run(t, fakepve.New(t), "", "vm", "start", "100", "--no-wait", "-o", "json")
 	got := taskResult(t, r.stdout)
 	if got["task"] != upid || got["waited"] != false || got["status"] != "started" {
 		t.Errorf("result = %v", got)
@@ -1492,4 +1492,112 @@ func TestAMistypedNodeStillExplainsWhereTheTemplateIs(t *testing.T) {
 		t.Errorf("exit %d, want 1", r.code)
 	}
 	contains(t, "stderr", r.stderr, "is not on node nope", "it is on pve1")
+}
+
+// Waiting is the default for every command that starts a task
+
+func taskPolls(srv *fakepve.Server) int { return srv.Count("GET", "/nodes/pve1/tasks/") }
+
+func TestVMOperationsWaitForTheTaskByDefault(t *testing.T) {
+	for _, tc := range []struct {
+		args []string
+		done string
+	}{
+		{[]string{"vm", "start", "100"}, "VM web (ID 100) started in "},
+		{[]string{"vm", "shutdown", "100"}, "VM web (ID 100) shut down in "},
+		{[]string{"vm", "stop", "100"}, "VM web (ID 100) shut down in "},
+		{[]string{"vm", "reboot", "100"}, "VM web (ID 100) rebooted in "},
+		{[]string{"vm", "delete", "100", "--yes"}, "VM web (ID 100) deleted in "},
+	} {
+		srv := fakepve.New(t)
+		r := run(t, srv, "", tc.args...)
+		if r.code != 0 {
+			t.Errorf("prox %v: exit %d: %s", tc.args, r.code, r.stderr)
+			continue
+		}
+		if n := taskPolls(srv); n == 0 {
+			t.Errorf("prox %v never checked on its task: it should wait by default", tc.args)
+		}
+		contains(t, strings.Join(tc.args, " "), r.stdout, "Task started: "+upid, tc.done)
+	}
+}
+
+func TestNoWaitReturnsOnceTheTaskHasStarted(t *testing.T) {
+	for _, args := range [][]string{
+		{"vm", "start", "100"}, {"vm", "shutdown", "100"}, {"vm", "reboot", "100"}, {"vm", "delete", "100", "--yes"},
+	} {
+		srv := fakepve.New(t)
+		r := run(t, srv, "", append(args, "--no-wait")...)
+		if r.code != 0 {
+			t.Errorf("prox %v: exit %d: %s", args, r.code, r.stderr)
+			continue
+		}
+		if n := taskPolls(srv); n != 0 {
+			t.Errorf("prox %v --no-wait polled the task %d times", args, n)
+		}
+		contains(t, "stdout", r.stdout, "Task started: "+upid)
+		contains(t, "stderr", r.stderr, "prox logs --follow "+upid)
+		excludes(t, "stdout", r.stdout, " in ")
+	}
+}
+
+func TestTheOldWaitFlagsStillWork(t *testing.T) {
+	// scripts written when waiting was opt-in keep working unchanged
+	for _, flag := range []string{"--wait", "-w"} {
+		srv := fakepve.New(t)
+		r := run(t, srv, "", "vm", "start", "100", flag)
+		if r.code != 0 || taskPolls(srv) == 0 {
+			t.Errorf("vm start %s: exit %d, polls %d\n%s", flag, r.code, taskPolls(srv), r.stderr)
+		}
+	}
+}
+
+func TestVMCreateWaitsForTheVMToStartByDefault(t *testing.T) {
+	waiting, early := fakepve.New(t), fakepve.New(t)
+	if r := run(t, waiting, "", "vm", "create", "web3", "--from", "100", "--start"); r.code != 0 {
+		t.Fatalf("exit %d: %s", r.code, r.stderr)
+	}
+	if r := run(t, early, "", "vm", "create", "web3", "--from", "100", "--start", "--no-wait"); r.code != 0 {
+		t.Fatalf("exit %d: %s", r.code, r.stderr)
+	}
+	// the clone is always waited for; the start only by default
+	if taskPolls(waiting) != taskPolls(early)+1 {
+		t.Errorf("polls: default %d, --no-wait %d; the default should also wait for the start", taskPolls(waiting), taskPolls(early))
+	}
+}
+
+func TestBulkOperationsWaitForEachTarget(t *testing.T) {
+	srv := fakepve.New(t)
+	r := run(t, srv, "", "vm", "start", "--tag", "prod", "--yes")
+	if r.code != 0 {
+		t.Fatalf("exit %d: %s", r.code, r.stderr)
+	}
+	// two VMs carry the tag prod (web and db)
+	if n := taskPolls(srv); n != 2 {
+		t.Errorf("polled %d times for 2 targets, want 2", n)
+	}
+	contains(t, "stdout", r.stdout, "VM web (ID 100) started in ", "VM db (ID 101) started in ")
+}
+
+func TestWaitDefaultsAreTheSameEverywhere(t *testing.T) {
+	// Every command that starts a task says (default) beside --wait, not --no-wait
+	for _, args := range [][]string{
+		{"vm", "start"}, {"vm", "shutdown"}, {"vm", "reboot"}, {"vm", "delete"}, {"vm", "create"}, {"vm", "clone"}, {"vm", "migrate"},
+		{"ct", "start"}, {"ct", "stop"}, {"ct", "delete"}, {"ct", "create"}, {"ct", "clone"}, {"ct", "migrate"}, {"ct", "reboot"},
+		{"vm", "snapshot", "create"}, {"ct", "templates", "pull"},
+	} {
+		r := run(t, fakepve.New(t), "", append(args, "--help")...)
+		var waitLine, noWaitLine string
+		for _, line := range strings.Split(r.stdout, "\n") {
+			if strings.Contains(line, "--wait") {
+				waitLine = line
+			}
+			if strings.Contains(line, "--no-wait") {
+				noWaitLine = line
+			}
+		}
+		if !strings.Contains(waitLine, "(default)") || strings.Contains(noWaitLine, "(default)") {
+			t.Errorf("prox %v: --wait should be the default\n  %s\n  %s", args, waitLine, noWaitLine)
+		}
+	}
 }

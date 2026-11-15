@@ -26,7 +26,7 @@ Examples:
 	Args:              cobra.ExactArgs(1),
 	ValidArgsFunction: completion.FirstArgOnly(completion.GetVMNames),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		wait := cmdutil.ResolveWait(cmd, false)
+		wait := cmdutil.ResolveWait(cmd, true)
 		nameOrID := args[0]
 
 		// Get flags
@@ -60,7 +60,7 @@ Examples:
 }
 
 func init() {
-	cmdutil.AddWaitFlags(delCmd, false)
+	cmdutil.AddWaitFlags(delCmd, true)
 	delCmd.Flags().StringP("node", "n", "", "Only match VMs on this node (optional - auto-discovered if not specified)")
 	delCmd.Flags().BoolP("force", "f", false, "Skip the confirmation prompt (same as --yes)")
 	cmdutil.AddYesFlag(delCmd)

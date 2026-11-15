@@ -27,7 +27,7 @@ Examples:
 	Args:              cmdutil.NameOrTagArgs,
 	ValidArgsFunction: completion.FirstArgOnly(completion.RunningVMs),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		wait := cmdutil.ResolveWait(cmd, false)
+		wait := cmdutil.ResolveWait(cmd, true)
 		force, _ := cmd.Flags().GetBool("force")
 		node, _ := cmd.Flags().GetString("node")
 
@@ -55,7 +55,7 @@ Examples:
 }
 
 func init() {
-	cmdutil.AddWaitFlags(sdCmd, false)
+	cmdutil.AddWaitFlags(sdCmd, true)
 	cmdutil.AddTagFlags(sdCmd, "VM")
 	sdCmd.Flags().StringP("node", "n", "", "Only match VMs on this node (optional - auto-discovered if not specified)")
 	sdCmd.Flags().BoolP("force", "f", false, "Stop immediately instead of an ACPI shutdown (like pulling the power)")

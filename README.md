@@ -347,7 +347,7 @@ VMs (vm)
 	- Flags: -n, --node <node> (optional)
 
 - start <id> | shutdown <id>
-	- Flags: -n, --node <node> (optional); -w, --wait; shutdown: -f, --force (hard stop)
+	- Flags: -n, --node <node> (optional); --no-wait (they wait for the task by default); shutdown: -f, --force (hard stop)
 
 - edit <id>
 	- Flags:
@@ -424,7 +424,8 @@ Confirmation prompts
 - If there is no way to answer (stdin is closed, as in a CI job), the command fails and names the flag to pass instead of assuming "no" and exiting 0.
 
 Waiting for tasks
-- Commands that start a Proxmox task accept both -w/--wait and --no-wait. Defaults are unchanged: vm start, shutdown and delete return immediately; vm clone, vm migrate and the ct commands wait.
+- Every command that starts a Proxmox task waits for it to finish by default, and says how long it took. Pass `--no-wait` to return as soon as the task has started (prox prints the task ID and the `prox logs --follow` command to watch it). `-w`/`--wait` is still accepted and changes nothing.
+- This applies to `vm` start, shutdown/stop, reboot, delete, create (waiting for the VM to start with `--start`), clone and migrate; the `ct` equivalents; snapshots; and `ct templates pull`. Until version 1.0 the `vm` start, shutdown, reboot and delete commands returned immediately unless you passed `--wait`; scripts that relied on that need `--no-wait`.
 - --timeout 10m stops waiting after 10 minutes; Ctrl-C also stops waiting. The task keeps running on the server, and prox prints the 'prox logs --follow' command to watch it.
 - Lost the task ID? `prox tasks` lists recent tasks (what ran, where, who started it, how long, whether it worked); `--running`, `--failed` and `--node` filter it, and `--upid` or `-o json` show the IDs for `prox logs --follow`.
 

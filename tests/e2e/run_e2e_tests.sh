@@ -337,7 +337,7 @@ check_prerequisites() {
             if [[ "$AUTO_CLEAN_LEFTOVERS" == "true" ]]; then
                 print_info "AUTO_CLEAN_LEFTOVERS enabled; deleting leftovers automatically"
                 [[ "$leftover_vm" == true ]] && safe_vm_shutdown "$TEST_VM_ID" "auto-clean leftover" 2>/dev/null || true
-                [[ "$leftover_vm" == true ]] && run_command "$PROX_BINARY vm delete $TEST_VM_ID" "Delete leftover VM ($TEST_VM_ID)" || true
+                [[ "$leftover_vm" == true ]] && run_command "$PROX_BINARY vm delete $TEST_VM_ID --yes" "Delete leftover VM ($TEST_VM_ID)" || true
                 [[ "$leftover_ct" == true ]] && $PROX_BINARY ct stop "$TEST_CT_ID" 2>/dev/null || true
                 [[ "$leftover_ct" == true ]] && run_command "$PROX_BINARY ct delete $TEST_CT_ID" "Delete leftover CT ($TEST_CT_ID)" || true
             else
@@ -356,7 +356,7 @@ check_prerequisites() {
                             d|D)
                                 print_info "Deleting leftover resources..."
                                 [[ "$leftover_vm" == true ]] && safe_vm_shutdown "$TEST_VM_ID" "interactive clean leftover" 2>/dev/null || true
-                                [[ "$leftover_vm" == true ]] && run_command "$PROX_BINARY vm delete $TEST_VM_ID" "Delete leftover VM ($TEST_VM_ID)" || true
+                                [[ "$leftover_vm" == true ]] && run_command "$PROX_BINARY vm delete $TEST_VM_ID --yes" "Delete leftover VM ($TEST_VM_ID)" || true
                                 [[ "$leftover_ct" == true ]] && $PROX_BINARY ct stop "$TEST_CT_ID" 2>/dev/null || true
                                 [[ "$leftover_ct" == true ]] && run_command "$PROX_BINARY ct delete $TEST_CT_ID" "Delete leftover CT ($TEST_CT_ID)" || true
                                 ;;
@@ -372,7 +372,7 @@ check_prerequisites() {
                             *)
                                 print_info "Unknown choice; defaulting to delete"
                                 [[ "$leftover_vm" == true ]] && safe_vm_shutdown "$TEST_VM_ID" "default delete leftover" 2>/dev/null || true
-                                [[ "$leftover_vm" == true ]] && run_command "$PROX_BINARY vm delete $TEST_VM_ID" "Delete leftover VM ($TEST_VM_ID)" || true
+                                [[ "$leftover_vm" == true ]] && run_command "$PROX_BINARY vm delete $TEST_VM_ID --yes" "Delete leftover VM ($TEST_VM_ID)" || true
                                 [[ "$leftover_ct" == true ]] && $PROX_BINARY ct stop "$TEST_CT_ID" 2>/dev/null || true
                                 [[ "$leftover_ct" == true ]] && run_command "$PROX_BINARY ct delete $TEST_CT_ID" "Delete leftover CT ($TEST_CT_ID)" || true
                                 ;;
@@ -670,7 +670,7 @@ cleanup_test_resources() {
         # Stop VM safely (ignore errors if VM doesn't exist)
         safe_vm_shutdown "$TEST_VM_ID" "cleanup" 2>/dev/null || true
         # Delete VM
-        run_command "$PROX_BINARY vm delete $TEST_VM_ID" "Delete test VM ($TEST_VM_ID)" || true
+        run_command "$PROX_BINARY vm delete $TEST_VM_ID --yes" "Delete test VM ($TEST_VM_ID)" || true
     else
         print_info "[DRY RUN] Would stop and delete test VM ($TEST_VM_ID)"
     fi
@@ -719,7 +719,7 @@ test_vm_operations() {
     print_info "Testing VM power operations..."
     
     # Test VM start
-    run_command "$PROX_BINARY vm start $TEST_VM_ID" "Start test VM ($TEST_VM_ID)"
+    run_command "$PROX_BINARY vm start $TEST_VM_ID --no-wait" "Start test VM ($TEST_VM_ID)"
 
     # Wait for VM to start and verify
     if [[ "$DRY_RUN" != "true" ]]; then
@@ -770,7 +770,7 @@ test_vm_migration() {
 
     # Test online migration back to source node
     # Start VM first for online migration
-    run_command "$PROX_BINARY vm start $TEST_VM_ID" "Start test VM for online migration ($TEST_VM_ID)"
+    run_command "$PROX_BINARY vm start $TEST_VM_ID --no-wait" "Start test VM for online migration ($TEST_VM_ID)"
     
     if [[ "$DRY_RUN" != "true" ]]; then
         wait_for_vm_status "$TEST_VM_ID" "running" 60 "before online migration"
@@ -1249,7 +1249,7 @@ safe_vm_shutdown() {
     print_info "Attempting graceful shutdown of VM $vm_id (agent=${agent_enabled})"
     local graceful_error_marker="" shutdown_out shutdown_exit
     if [[ "$RETRY_TRANSIENT" == "true" ]]; then
-        if retry_run 5 2 "$PROX_BINARY vm shutdown $vm_id" "Graceful shutdown command"; then
+        if retry_run 5 2 "$PROX_BINARY vm shutdown $vm_id --no-wait" "Graceful shutdown command"; then
             shutdown_exit=0
         else
             shutdown_exit=1
@@ -1257,7 +1257,7 @@ safe_vm_shutdown() {
         fi
     else
         set +e
-        shutdown_out=$($PROX_BINARY vm shutdown "$vm_id" 2>&1)
+        shutdown_out=$($PROX_BINARY vm shutdown "$vm_id" --no-wait 2>&1)
         shutdown_exit=$?
         set -e
     fi
@@ -1303,7 +1303,7 @@ safe_vm_shutdown() {
         print_info "Force stop attempt $force_attempt for VM $vm_id"
         local stop_out stop_exit
         if [[ "$RETRY_TRANSIENT" == "true" ]]; then
-            if retry_run 5 2 "$PROX_BINARY vm stop $vm_id" "Force stop command"; then
+            if retry_run 5 2 "$PROX_BINARY vm stop $vm_id --force --no-wait" "Force stop command"; then
                 stop_exit=0
             else
                 stop_exit=1
@@ -1311,7 +1311,7 @@ safe_vm_shutdown() {
             fi
         else
             set +e
-            stop_out=$($PROX_BINARY vm stop "$vm_id" 2>&1)
+            stop_out=$($PROX_BINARY vm stop "$vm_id" --force --no-wait 2>&1)
             stop_exit=$?
             set -e
         fi
@@ -1331,7 +1331,7 @@ safe_vm_shutdown() {
     wait_for_vm_unlock "$vm_id" 40 "final unlock wait" true || true
 
     set +e
-    shutdown_out=$($PROX_BINARY vm shutdown "$vm_id" 2>&1)
+    shutdown_out=$($PROX_BINARY vm shutdown "$vm_id" --no-wait 2>&1)
     shutdown_exit=$?
     set -e
     if [[ $shutdown_exit -eq 0 ]]; then
