@@ -106,9 +106,14 @@ Examples:
 		ValidArgsFunction: complete,
 		Run: func(cmd *cobra.Command, args []string) {
 			force, _ := cmd.Flags().GetBool("force")
-			if !force && !output.Confirm(fmt.Sprintf("Roll %s '%s' back to snapshot '%s'? Changes since the snapshot will be lost", label, args[0], args[1])) {
-				fmt.Println("Rollback cancelled")
-				return
+			if !force {
+				_, _, t, err := prepare(guestType, args[0], node(cmd))
+				exitOn("rolling back", err)
+				if !cmdutil.ConfirmOrExit(
+					fmt.Sprintf("Roll %s '%s' (ID %d, on %s) back to snapshot '%s'? Changes since the snapshot will be lost", label, t.name, t.id, t.node, args[1]),
+					"--force", "Rollback cancelled") {
+					return
+				}
 			}
 			wait := cmdutil.ResolveWait(cmd, true)
 			exitOn("rolling back", Rollback(guestType, args[0], node(cmd), args[1], wait))
@@ -126,9 +131,14 @@ Examples:
 		ValidArgsFunction: complete,
 		Run: func(cmd *cobra.Command, args []string) {
 			force, _ := cmd.Flags().GetBool("force")
-			if !force && !output.Confirm(fmt.Sprintf("Delete snapshot '%s' of %s '%s'?", args[1], label, args[0])) {
-				fmt.Println("Deletion cancelled")
-				return
+			if !force {
+				_, _, t, err := prepare(guestType, args[0], node(cmd))
+				exitOn("deleting snapshot", err)
+				if !cmdutil.ConfirmOrExit(
+					fmt.Sprintf("Delete snapshot '%s' of %s '%s' (ID %d, on %s)?", args[1], label, t.name, t.id, t.node),
+					"--force", "Deletion cancelled") {
+					return
+				}
 			}
 			wait := cmdutil.ResolveWait(cmd, true)
 			exitOn("deleting snapshot", Delete(guestType, args[0], node(cmd), args[1], wait))

@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 	"time"
@@ -129,20 +130,28 @@ func OutputJSON(data interface{}) error {
 	return encoder.Encode(data)
 }
 
-// Confirm prompts the user for confirmation before a destructive action
-// Returns true if the user confirms (y/yes), false otherwise
-// The prompt should be phrased as a yes/no question
-func Confirm(prompt string) bool {
-	fmt.Fprintf(os.Stderr, "%s [y/N]: ", prompt)
+// Confirm asks a yes/no question on stderr and reads the answer from stdin.
+// It returns true for y/yes and false for anything else that was typed.
+//
+// If no answer can be read at all (stdin is closed, e.g. </dev/null or a CI
+// job), it returns an error rather than false: treating that as "no" would let
+// a script carry on as if the command had succeeded. skipFlag names the flag
+// that skips the question, e.g. "--force", and is used in that error.
+func Confirm(prompt, skipFlag string) (bool, error) {
+	return confirmFrom(os.Stdin, os.Stderr, prompt, skipFlag)
+}
 
-	reader := bufio.NewReader(os.Stdin)
-	response, err := reader.ReadString('\n')
-	if err != nil {
-		return false
+func confirmFrom(in io.Reader, out io.Writer, prompt, skipFlag string) (bool, error) {
+	fmt.Fprintf(out, "%s [y/N]: ", prompt)
+
+	response, err := bufio.NewReader(in).ReadString('\n')
+	if err != nil && strings.TrimSpace(response) == "" {
+		fmt.Fprintln(out)
+		return false, fmt.Errorf("no answer to the confirmation prompt (stdin is closed or not a terminal); pass %s to skip it", skipFlag)
 	}
 
 	response = strings.ToLower(strings.TrimSpace(response))
-	return response == "y" || response == "yes"
+	return response == "y" || response == "yes", nil
 }
 
 // ClientError prints an error message for client creation failures with actionable advice

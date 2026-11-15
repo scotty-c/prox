@@ -44,9 +44,15 @@ func RunBulk(verb, kind, tag string, targets []BulkTarget, skipConfirm bool) err
 	for _, t := range targets {
 		output.Error("  • %s\n", t.Label)
 	}
-	if !skipConfirm && !output.Confirm("Continue?") {
-		output.Errorln("Cancelled")
-		return nil
+	if !skipConfirm {
+		ok, err := output.Confirm("Continue?", "--yes")
+		if err != nil {
+			return err
+		}
+		if !ok {
+			output.Errorln("Cancelled")
+			return nil
+		}
 	}
 
 	failed := 0

@@ -1,9 +1,13 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
-	"github.com/scotty-c/prox/pkg/cmdutil"
 	"os"
+	"strconv"
+
+	c "github.com/scotty-c/prox/pkg/client"
+	"github.com/scotty-c/prox/pkg/cmdutil"
 
 	"github.com/scotty-c/prox/pkg/completion"
 	"github.com/scotty-c/prox/pkg/container"
@@ -24,16 +28,26 @@ var deleteCmd = &cobra.Command{
 		nameOrID := args[0]
 		force, _ := cmd.Flags().GetBool("force")
 
-		// Confirm deletion unless --force is used
-		if !force {
-			if !output.Confirm(fmt.Sprintf("Are you sure you want to delete container '%s'? This action cannot be undone", nameOrID)) {
-				fmt.Println("Deletion cancelled")
-				return
-			}
+		cl, err := c.CreateClient()
+		if err != nil {
+			output.ClientError(err)
+			os.Exit(1)
+		}
+		// Look the container up first so the question says exactly what will be deleted
+		target, err := container.FindByNameOrID(context.Background(), cl, nameOrID)
+		if err != nil {
+			output.ContainerError("delete", err)
+			os.Exit(1)
 		}
 
-		err := container.DeleteContainerWithWait(nameOrID, wait)
-		if err != nil {
+		if !force && !cmdutil.ConfirmOrExit(
+			fmt.Sprintf("Delete container '%s' (ID %d, %s, on %s)? This action cannot be undone", target.Name, target.ID, target.Status, target.Node),
+			"--force", "Deletion cancelled") {
+			return
+		}
+
+		// Delete by ID: the name may be shared by another container
+		if err := container.DeleteContainerWithWait(strconv.Itoa(target.ID), wait); err != nil {
 			output.UserError("deleting container", err)
 			os.Exit(1)
 		}

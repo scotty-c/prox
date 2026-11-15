@@ -1,9 +1,12 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
-	"github.com/scotty-c/prox/pkg/cmdutil"
 	"os"
+
+	c "github.com/scotty-c/prox/pkg/client"
+	"github.com/scotty-c/prox/pkg/cmdutil"
 
 	"github.com/scotty-c/prox/pkg/completion"
 	"github.com/scotty-c/prox/pkg/output"
@@ -33,16 +36,26 @@ Examples:
 		force, _ := cmd.Flags().GetBool("force")
 		node, _ := cmd.Flags().GetString("node")
 
-		// Confirm deletion unless --force is used
-		if !force {
-			if !output.Confirm(fmt.Sprintf("Are you sure you want to delete VM '%s'? This action cannot be undone", nameOrID)) {
-				fmt.Println("Deletion cancelled")
-				return
-			}
+		ctx := context.Background()
+		cl, err := c.CreateClient()
+		if err != nil {
+			output.ClientError(err)
+			os.Exit(1)
+		}
+		// Look the VM up first so the question says exactly what will be deleted
+		target, err := vm.FindByNameOrIDOnNode(ctx, cl, nameOrID, node)
+		if err != nil {
+			output.VMError("delete", err)
+			os.Exit(1)
 		}
 
-		// Delete the VM
-		if err := vm.DeleteVMByNameOrIDWithWait(nameOrID, node, wait); err != nil {
+		if !force && !cmdutil.ConfirmOrExit(
+			fmt.Sprintf("Delete VM '%s' (ID %d, %s, on %s)? This action cannot be undone", target.Name, target.ID, target.Status, target.Node),
+			"--force", "Deletion cancelled") {
+			return
+		}
+
+		if err := vm.DeleteVMWithWait(ctx, target.ID, target.Node, wait); err != nil {
 			output.VMError("delete", err)
 			os.Exit(1)
 		}
