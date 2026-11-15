@@ -181,6 +181,12 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 		all := append(append([]map[string]interface{}{}, cluster...), s.created...)
 		s.mu.Unlock()
 		reply(w, all, 200, "")
+	case p == "/cluster/tasks":
+		reply(w, []map[string]interface{}{
+			{"upid": "UPID:pve1:00000001:00000001:6A000000:qmstart:100:root@pam:", "node": "pve1", "type": "qmstart", "id": "100", "user": "root@pam", "starttime": 1700000000, "endtime": 1700000005, "status": "OK"},
+			{"upid": "UPID:pve2:00000002:00000002:6A000100:vzdump:101:root@pam:", "node": "pve2", "type": "vzdump", "id": "101", "user": "backup@pve", "starttime": 1700000100},
+			{"upid": "UPID:pve1:00000003:00000003:6A000050:qmclone:102:root@pam:", "node": "pve1", "type": "qmclone", "id": "102", "user": "root@pam", "starttime": 1700000050, "endtime": 1700000060, "status": "clone failed: storage 'local-lvm' is not online"},
+		}, 200, "")
 	case p == "/cluster/nextid":
 		reply(w, "103", 200, "")
 	case reQemuConfig.MatchString(p):

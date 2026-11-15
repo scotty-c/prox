@@ -96,6 +96,19 @@ type Task struct {
 	ExitCode string `json:"exitstatus,omitempty"`
 }
 
+// ClusterTask is an entry in the cluster's list of recent tasks. A task that
+// is still running has no end time.
+type ClusterTask struct {
+	UPID      string `json:"upid"`
+	Node      string `json:"node"`
+	Type      string `json:"type"` // e.g. qmstart, vzcreate, vzdump
+	ID        string `json:"id"`   // the VM or container it acts on, if any
+	User      string `json:"user"`
+	StartTime int64  `json:"starttime"`
+	EndTime   int64  `json:"endtime"`
+	Status    string `json:"status"` // "OK", an error message, or empty while running
+}
+
 // ContainerTemplate represents a container template
 type ContainerTemplate struct {
 	VolID string `json:"volid"`
@@ -168,6 +181,7 @@ type ProxmoxClientInterface interface {
 	GetNextVMID(ctx context.Context) (int, error)
 	GetTaskStatus(ctx context.Context, node, upid string) (*Task, error)
 	GetTaskLog(ctx context.Context, node, upid string, start int, limit int) ([]string, error)
+	GetClusterTasks(ctx context.Context) ([]ClusterTask, error)
 }
 
 // sharedClient is the one client a prox run uses, so that its login and its
@@ -662,6 +676,12 @@ func (c *ProxmoxClient) GetTaskStatus(ctx context.Context, node, upid string) (*
 
 // taskLogPageSize is how many log lines are requested at a time
 const taskLogPageSize = 500
+
+// GetClusterTasks returns the cluster's recent tasks, newest first as
+// Proxmox lists them
+func (c *ProxmoxClient) GetClusterTasks(ctx context.Context) ([]ClusterTask, error) {
+	return requestData[[]ClusterTask](ctx, c, "GET", "/cluster/tasks", nil, "cluster tasks")
+}
 
 // GetTaskLog retrieves the log for a Proxmox task, starting at line start.
 // With limit > 0 it returns at most limit lines. With limit <= 0 it returns

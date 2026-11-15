@@ -997,3 +997,69 @@ func TestContainerCreateOnTheNodeThatHasTheTemplateWorks(t *testing.T) {
 		t.Errorf("container should be created on pve1: %v", srv.Requests())
 	}
 }
+
+// prox tasks
+
+func TestTasksListsRecentTasksNewestFirst(t *testing.T) {
+	r := run(t, fakepve.New(t), "", "tasks")
+	if r.code != 0 {
+		t.Fatalf("exit %d: %s", r.code, r.stderr)
+	}
+	contains(t, "tasks", r.stdout, "vzdump", "qmclone", "qmstart", "running", "OK", "failed: clone failed: storage 'local-lvm' is not online", "backup@pve")
+	if !(strings.Index(r.stdout, "vzdump") < strings.Index(r.stdout, "qmclone") && strings.Index(r.stdout, "qmclone") < strings.Index(r.stdout, "qmstart")) {
+		t.Errorf("tasks should be newest first:\n%s", r.stdout)
+	}
+	contains(t, "stderr", r.stderr, "--upid")
+	excludes(t, "stdout", r.stdout, "UPID:pve1")
+}
+
+func TestTasksCanShowTheTaskID(t *testing.T) {
+	r := run(t, fakepve.New(t), "", "tasks", "--upid", "--limit", "1")
+	contains(t, "tasks", r.stdout, "UPID:pve2:00000002:00000002:6A000100:vzdump:101:root@pam:", "Showing 1 task(s)")
+	excludes(t, "stderr", r.stderr, "--upid") // the hint is only for when the IDs are hidden
+}
+
+func TestTasksFilters(t *testing.T) {
+	srv := fakepve.New(t)
+	r := run(t, srv, "", "tasks", "--running")
+	contains(t, "running", r.stdout, "vzdump")
+	excludes(t, "running", r.stdout, "qmstart", "qmclone")
+
+	r = run(t, srv, "", "tasks", "--failed")
+	contains(t, "failed", r.stdout, "qmclone")
+	excludes(t, "failed", r.stdout, "vzdump", "qmstart")
+
+	r = run(t, srv, "", "tasks", "--node", "pve2")
+	contains(t, "node", r.stdout, "vzdump")
+	excludes(t, "node", r.stdout, "qmstart")
+
+	r = run(t, srv, "", "tasks", "--failed", "--node", "pve2")
+	if r.code != 0 || strings.TrimSpace(r.stdout) != "" {
+		t.Errorf("nothing matches: exit %d, stdout %q", r.code, r.stdout)
+	}
+	contains(t, "stderr", r.stderr, "No matching tasks")
+}
+
+func TestTasksJSONIncludesTheTaskIDAndStatus(t *testing.T) {
+	r := run(t, fakepve.New(t), "", "tasks", "-o", "json")
+	var rows []struct {
+		UPID, Node, Type, Target, Status, Message string
+		StartTime                                 int64 `json:"start_time"`
+		EndTime                                   int64 `json:"end_time"`
+	}
+	if err := json.Unmarshal([]byte(r.stdout), &rows); err != nil {
+		t.Fatalf("%v\n%s", err, r.stdout)
+	}
+	if len(rows) != 3 {
+		t.Fatalf("got %d tasks: %v", len(rows), rows)
+	}
+	want := []struct{ typ, status string }{{"vzdump", "running"}, {"qmclone", "failed"}, {"qmstart", "ok"}}
+	for i, w := range want {
+		if rows[i].Type != w.typ || rows[i].Status != w.status || !strings.HasPrefix(rows[i].UPID, "UPID:") {
+			t.Errorf("row %d = %+v, want %s/%s", i, rows[i], w.typ, w.status)
+		}
+	}
+	if rows[0].EndTime != 0 || rows[1].Message != "clone failed: storage 'local-lvm' is not online" {
+		t.Errorf("running task has no end time, failed task carries Proxmox's message: %+v", rows)
+	}
+}

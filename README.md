@@ -418,6 +418,7 @@ Confirmation prompts
 Waiting for tasks
 - Commands that start a Proxmox task accept both -w/--wait and --no-wait. Defaults are unchanged: vm start, shutdown and delete return immediately; vm clone, vm migrate and the ct commands wait.
 - --timeout 10m stops waiting after 10 minutes; Ctrl-C also stops waiting. The task keeps running on the server, and prox prints the 'prox logs --follow' command to watch it.
+- Lost the task ID? `prox tasks` lists recent tasks (what ran, where, who started it, how long, whether it worked); `--running`, `--failed` and `--node` filter it, and `--upid` or `-o json` show the IDs for `prox logs --follow`.
 
 Tip: run any command with --help for full details.
 
