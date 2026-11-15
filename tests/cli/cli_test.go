@@ -1673,3 +1673,80 @@ func TestVMAndContainerListsHandleAddressesTheSame(t *testing.T) {
 		}
 	}
 }
+
+// Bulk operations that wait: every target is started first, then all the tasks
+// are waited for together and reported in order
+
+func TestBulkWaitReportsEveryTargetInOrder(t *testing.T) {
+	srv := fakepve.New(t)
+	r := run(t, srv, "", "vm", "start", "--tag", "prod", "--yes")
+	if r.code != 0 {
+		t.Fatalf("exit %d: %s", r.code, r.stderr)
+	}
+	started := strings.Count(r.stdout, "Task started: ")
+	if started != 2 {
+		t.Errorf("%d 'Task started' lines, want 2:\n%s", started, r.stdout)
+	}
+	web := strings.Index(r.stdout, "VM web (ID 100) started in ")
+	db := strings.Index(r.stdout, "VM db (ID 101) started in ")
+	if web < 0 || db < 0 || web > db {
+		t.Errorf("want the results for web then db, in that order:\n%s", r.stdout)
+	}
+	// both are started before either result is reported
+	if last := strings.LastIndex(r.stdout, "Task started: "); last > web {
+		t.Errorf("a task was started after the first result: all targets start first\n%s", r.stdout)
+	}
+}
+
+func TestBulkWaitStillWaitsForTheOthersWhenOneFails(t *testing.T) {
+	srv := fakepve.New(t)
+	srv.FailRequest("POST /nodes/pve1/qemu/101/status/start", "VM 101 is locked (backup)")
+	r := run(t, srv, "", "vm", "start", "--tag", "prod", "--yes")
+	if r.code != 1 {
+		t.Fatalf("exit %d, want 1\n%s", r.code, r.stderr)
+	}
+	contains(t, "stderr", r.stderr, "db (ID: 101)", "locked", "1 of 2 VM(s) failed to start")
+	contains(t, "stdout", r.stdout, "VM web (ID 100) started in ")
+	if n := taskPolls(srv); n != 1 {
+		t.Errorf("polled %d tasks, want 1: only the one that started is waited for", n)
+	}
+}
+
+func TestBulkNoWaitStartsEverythingAndDoesNotPoll(t *testing.T) {
+	srv := fakepve.New(t)
+	r := run(t, srv, "", "vm", "start", "--tag", "prod", "--yes", "--no-wait")
+	if r.code != 0 {
+		t.Fatalf("exit %d: %s", r.code, r.stderr)
+	}
+	if n := taskPolls(srv); n != 0 {
+		t.Errorf("polled %d times with --no-wait", n)
+	}
+	if n := strings.Count(r.stdout, "Task started: "); n != 2 {
+		t.Errorf("%d 'Task started' lines, want 2", n)
+	}
+	excludes(t, "stdout", r.stdout, " in ")
+}
+
+func TestBulkWaitWithJSONPrintsOneResultPerTarget(t *testing.T) {
+	r := run(t, fakepve.New(t), "", "vm", "start", "--tag", "prod", "--yes", "-o", "json")
+	if r.code != 0 {
+		t.Fatalf("exit %d: %s", r.code, r.stderr)
+	}
+	dec := json.NewDecoder(strings.NewReader(r.stdout))
+	var got []map[string]interface{}
+	for dec.More() {
+		var m map[string]interface{}
+		if err := dec.Decode(&m); err != nil {
+			t.Fatalf("stdout is not a stream of JSON objects: %v\n%s", err, r.stdout)
+		}
+		got = append(got, m)
+	}
+	if len(got) != 2 {
+		t.Fatalf("%d results, want 2:\n%s", len(got), r.stdout)
+	}
+	for _, m := range got {
+		if m["waited"] != true || m["status"] != "ok" || m["task"] != upid {
+			t.Errorf("result %v: want waited, ok and the task ID", m)
+		}
+	}
+}

@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"github.com/scotty-c/prox/pkg/cmdutil"
 	"github.com/scotty-c/prox/pkg/completion"
@@ -26,8 +27,8 @@ Examples:
 		wait := cmdutil.ResolveWait(cmd, true)
 
 		if tag, _ := cmd.Flags().GetString("tag"); tag != "" {
-			err := runOnTaggedContainers(cmd, "start", func(id string) error {
-				return container.StartContainerWithWait(cmd.Context(), id, wait)
+			err := runOnTaggedContainers(cmd, "start", wait, func(ctx context.Context, id string) error {
+				return container.StartContainerWithWait(ctx, id, wait)
 			})
 			if err != nil {
 				return fmt.Errorf("starting containers: %w", err)

@@ -11,7 +11,7 @@ import (
 )
 
 // runOnTaggedVMs runs fn on every VM with the --tag value, after confirmation
-func runOnTaggedVMs(cmd *cobra.Command, verb string, fn func(ctx context.Context, cl c.ProxmoxClientInterface, v vm.VM) error) error {
+func runOnTaggedVMs(cmd *cobra.Command, verb string, wait bool, fn func(ctx context.Context, cl c.ProxmoxClientInterface, v vm.VM) error) error {
 	tag, _ := cmd.Flags().GetString("tag")
 	node, _ := cmd.Flags().GetString("node")
 	yes, _ := cmd.Flags().GetBool("yes")
@@ -31,8 +31,8 @@ func runOnTaggedVMs(cmd *cobra.Command, verb string, fn func(ctx context.Context
 		v := v
 		targets = append(targets, cmdutil.BulkTarget{
 			Label: fmt.Sprintf("%s (ID: %d) on %s", v.Name, v.ID, v.Node),
-			Run:   func() error { return fn(ctx, cl, v) },
+			Run:   func(ctx context.Context) error { return fn(ctx, cl, v) },
 		})
 	}
-	return cmdutil.RunBulk(verb, "VM", tag, targets, yes)
+	return cmdutil.RunBulk(ctx, cl, verb, "VM", tag, targets, yes, wait)
 }

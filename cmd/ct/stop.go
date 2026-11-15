@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"github.com/scotty-c/prox/pkg/cmdutil"
 	"github.com/scotty-c/prox/pkg/completion"
@@ -33,8 +34,8 @@ Examples:
 			if force {
 				verb = "force stop"
 			}
-			err := runOnTaggedContainers(cmd, verb, func(id string) error {
-				return container.StopContainerWithOptions(cmd.Context(), id, force, wait)
+			err := runOnTaggedContainers(cmd, verb, wait, func(ctx context.Context, id string) error {
+				return container.StopContainerWithOptions(ctx, id, force, wait)
 			})
 			if err != nil {
 				return fmt.Errorf("stopping containers: %w", err)

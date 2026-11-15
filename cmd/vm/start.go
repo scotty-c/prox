@@ -29,7 +29,7 @@ Examples:
 		node, _ := cmd.Flags().GetString("node")
 
 		if tag, _ := cmd.Flags().GetString("tag"); tag != "" {
-			err := runOnTaggedVMs(cmd, "start", func(ctx context.Context, cl c.ProxmoxClientInterface, v vm.VM) error {
+			err := runOnTaggedVMs(cmd, "start", wait, func(ctx context.Context, cl c.ProxmoxClientInterface, v vm.VM) error {
 				return vm.StartVMWithWait(ctx, v.ID, v.Node, wait, cl)
 			})
 			if err != nil {

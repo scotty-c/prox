@@ -71,7 +71,7 @@ The packages under `pkg/` are an implementation detail of the command, not a sup
 - `prox vm reboot`, and for containers `ct clone`, `ct migrate`, `ct edit` and `ct reboot`.
 - `prox vm snapshot` and `prox ct snapshot`: `list`, `create`, `rollback`, `delete`.
 - `ct templates --available` and `ct templates pull <os:version>` to download templates.
-- Bulk operations by tag: `prox vm start --tag web`, and the same for shutdown, `ct start` and `ct stop`. They list the targets and ask first.
+- Bulk operations by tag: `prox vm start --tag web`, and the same for shutdown, `ct start` and `ct stop`. They list the targets and ask first. When waiting (the default) they start every target and then wait for all the tasks together, so ten VMs take about as long as the slowest, and report each result in order. Everything is started at once, which can load a busy node; use `--no-wait` to only start them.
 - `prox ssh --connect`, `--print` and `--prune` (remove entries prox wrote for VMs that no longer exist; asks first and supports `--dry-run`), and a `MANAGED` column in `--list`.
 - `prox node list` (alias of `ls`) and `prox --version`.
 - `vm clone` and `ct clone` take the new ID as an optional argument and use the next free one without it.
@@ -123,5 +123,4 @@ The packages under `pkg/` are an implementation detail of the command, not a sup
 ### Known limitations
 
 - The Linux Secret Service and Windows Credential Manager storage was exercised only through an in-memory test double; the macOS Keychain path was verified on a real machine, except updating an item that already exists (the case that saves a login ticket). If saving fails, prox logs in on the next run.
-- With `--tag`, VMs are processed one at a time, so `--wait` over many VMs takes the sum of their tasks.
 - The bash end-to-end suite under `tests/e2e` was updated for the new defaults but has not been run against a cluster since.

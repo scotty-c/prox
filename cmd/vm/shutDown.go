@@ -36,7 +36,7 @@ Examples:
 			if force {
 				verb = "force stop"
 			}
-			err := runOnTaggedVMs(cmd, verb, func(ctx context.Context, cl c.ProxmoxClientInterface, v vm.VM) error {
+			err := runOnTaggedVMs(cmd, verb, wait, func(ctx context.Context, cl c.ProxmoxClientInterface, v vm.VM) error {
 				return vm.ShutdownVMWithOptions(ctx, v.ID, v.Node, wait, force, cl)
 			})
 			if err != nil {

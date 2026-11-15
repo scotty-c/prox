@@ -67,10 +67,17 @@ type TaskResult struct {
 // As text it prints the task ID and a result line (with a pointer to
 // 'prox logs --follow' when not waiting). With --output json or yaml it prints
 // one TaskResult instead.
+//
+// Inside RunBulk, a command that waits does not wait here: it reports the task
+// as started and leaves it for RunBulk to wait for together with the others.
 func FinishTask(ctx context.Context, client c.TaskStatusGetter, node, taskID string, wait bool, done string) error {
 	structured := output.Structured()
 	if !structured {
 		output.Result("Task started: %s\n", taskID)
+	}
+	if b := batchFrom(ctx); b != nil && wait {
+		b.tasks = append(b.tasks, pendingTask{node: node, id: taskID, done: done, started: time.Now()})
+		return nil
 	}
 	if !wait {
 		if structured {
