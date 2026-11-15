@@ -1202,3 +1202,78 @@ func TestSSHPruneRejectsArgumentsAndOtherModes(t *testing.T) {
 		contains(t, "stderr", r.stderr, "--prune takes no arguments")
 	}
 }
+
+// ct shortcuts and templates pull
+
+func TestShortcutsComeFromWhatTheClusterCanDownload(t *testing.T) {
+	r := run(t, fakepve.New(t), "", "ct", "shortcuts")
+	if r.code != 0 {
+		t.Fatalf("exit %d: %s", r.code, r.stderr)
+	}
+	contains(t, "shortcuts", r.stdout, "debian:12", "debian:11", "ubuntu:24.04", "ubuntu:22.04", "alpine:3.20", "alpine:3.9")
+	excludes(t, "shortcuts", r.stdout, "turnkey", "wordpress", "alpine:3.18", "fedora:38", "centos:8")
+	order := func(s string) int { return strings.Index(r.stdout, s) }
+	if !(order("ubuntu:24.04") < order("ubuntu:22.04") && order("alpine:3.20") < order("alpine:3.9")) {
+		t.Errorf("newest version should come first within an OS:\n%s", r.stdout)
+	}
+	// debian 12 is on the node (see the fake's storage); the others are not
+	for _, line := range strings.Split(r.stdout, "\n") {
+		switch {
+		case strings.Contains(line, "debian:12"):
+			contains(t, "debian:12 row", line, "yes")
+		case strings.Contains(line, "ubuntu:24.04"):
+			contains(t, "ubuntu:24.04 row", line, "no")
+		}
+	}
+}
+
+func TestShortcutsJSON(t *testing.T) {
+	r := run(t, fakepve.New(t), "", "ct", "shortcuts", "-o", "json")
+	var rows []struct {
+		Shortcut, Template string
+		Downloaded         bool
+	}
+	if err := json.Unmarshal([]byte(r.stdout), &rows); err != nil {
+		t.Fatalf("%v\n%s", err, r.stdout)
+	}
+	found := false
+	for _, row := range rows {
+		if row.Shortcut == "debian:12" {
+			found = true
+			if row.Template != "debian-12-standard_12.7-1_amd64.tar.zst" || !row.Downloaded {
+				t.Errorf("debian:12 = %+v", row)
+			}
+		}
+	}
+	if !found {
+		t.Errorf("no debian:12 in %+v", rows)
+	}
+}
+
+func TestShortcutsFallBackToExamplesWhenTheClusterIsUnreachable(t *testing.T) {
+	srv := fakepve.New(t)
+	srv.Close()
+	r := run(t, srv, "", "ct", "shortcuts")
+	if r.code != 0 {
+		t.Errorf("exit %d, want 0: the examples still help", r.code)
+	}
+	contains(t, "stderr", r.stderr, "Could not ask Proxmox", "showing common examples")
+	contains(t, "stdout", r.stdout, "debian:12", "ubuntu:24.04")
+}
+
+func TestTemplatePullDownloadsAShortcutAndSkipsOnesThatAreThere(t *testing.T) {
+	srv := fakepve.New(t)
+	r := run(t, srv, "", "ct", "templates", "pull", "ubuntu:24.04", "--wait")
+	if r.code != 0 {
+		t.Fatalf("exit %d: %s", r.code, r.stderr)
+	}
+	body := srv.Body("POST /nodes/pve1/aplinfo")
+	contains(t, "download request", body, `"template":"ubuntu-24.04-standard_24.04-2_amd64.tar.zst"`, `"storage":"local"`)
+
+	srv2 := fakepve.New(t)
+	r = run(t, srv2, "", "ct", "templates", "pull", "debian:12")
+	contains(t, "stdout", r.stdout, "is already on local")
+	if srv2.Count("POST", "/nodes/pve1/aplinfo") != 0 {
+		t.Errorf("nothing should be downloaded again: %v", srv2.Requests())
+	}
+}

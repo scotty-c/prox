@@ -4,7 +4,9 @@ import (
 	"context"
 	"fmt"
 	"slices"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/jedib0t/go-pretty/v6/table"
 	c "github.com/scotty-c/prox/pkg/client"
@@ -182,4 +184,138 @@ func PullTemplate(ctx context.Context, want, node, storage string, wait bool) er
 		return fmt.Errorf("failed to start download: %w", err)
 	}
 	return cmdutil.FinishTask(ctx, client, node, taskID, wait, fmt.Sprintf("Downloaded %s to %s", tmpl.Name, storage))
+}
+
+// Shortcut is an os:version name that 'ct create' and 'ct templates pull'
+// accept, with the template it stands for
+type Shortcut struct {
+	Shortcut   string `json:"shortcut"`
+	Template   string `json:"template"`
+	Downloaded bool   `json:"downloaded"` // already on the node used for the lookup
+}
+
+// shortcutsFrom builds one shortcut per OS and version in templates, each
+// pointing at the template 'ct create' would pick for it. downloaded holds the
+// file names already on the node. Newest versions come first within an OS.
+func shortcutsFrom(templates []AvailableTemplate, downloaded map[string]bool) []Shortcut {
+	seen := map[string]bool{}
+	var out []Shortcut
+	for _, t := range templates {
+		name := strings.ToLower(t.OS) + ":" + t.Version
+		if seen[name] || t.Version == "Unknown" {
+			continue
+		}
+		seen[name] = true
+		best, err := matchAvailable(templates, name)
+		if err != nil {
+			continue
+		}
+		out = append(out, Shortcut{Shortcut: name, Template: best.Name, Downloaded: downloaded[best.Name]})
+	}
+	slices.SortFunc(out, func(a, b Shortcut) int {
+		osA, verA, _ := strings.Cut(a.Shortcut, ":")
+		osB, verB, _ := strings.Cut(b.Shortcut, ":")
+		if c := strings.Compare(osA, osB); c != 0 {
+			return c
+		}
+		return compareVersions(verB, verA) // newest first
+	})
+	return out
+}
+
+// compareVersions compares dotted versions such as "3.20" and "24.04" by
+// their numbers, so 3.20 is newer than 3.9
+func compareVersions(a, b string) int {
+	as, bs := strings.Split(a, "."), strings.Split(b, ".")
+	for i := 0; i < len(as) || i < len(bs); i++ {
+		var x, y int
+		if i < len(as) {
+			x, _ = strconv.Atoi(as[i])
+		}
+		if i < len(bs) {
+			y, _ = strconv.Atoi(bs[i])
+		}
+		if x != y {
+			return x - y
+		}
+	}
+	return 0
+}
+
+// exampleShortcuts is shown when the cluster cannot be asked
+var exampleShortcuts = []string{"ubuntu:24.04", "ubuntu:22.04", "debian:12", "debian:11", "alpine:3.20"}
+
+// ListShortcuts prints the os:version shortcuts the cluster can download,
+// marking those already downloaded. If the cluster cannot be reached it says
+// so and shows a few well-known examples instead.
+func ListShortcuts(ctx context.Context) error {
+	shortcuts, err := lookupShortcuts(ctx)
+	if err != nil {
+		output.Error("Could not ask Proxmox for the available templates (%v); showing common examples\n", err)
+		shortcuts = nil
+		for _, name := range exampleShortcuts {
+			shortcuts = append(shortcuts, Shortcut{Shortcut: name})
+		}
+		if output.Structured() {
+			return output.OutputJSON(shortcuts)
+		}
+		for _, s := range shortcuts {
+			output.Resultln(s.Shortcut)
+		}
+		return nil
+	}
+
+	if output.Structured() {
+		if shortcuts == nil {
+			shortcuts = []Shortcut{}
+		}
+		return output.OutputJSON(shortcuts)
+	}
+	t := table.NewWriter()
+	t.SetTitle("Template Shortcuts")
+	t.AppendHeader(table.Row{"SHORTCUT", "TEMPLATE", "DOWNLOADED"})
+	for _, s := range shortcuts {
+		downloaded := "no"
+		if s.Downloaded {
+			downloaded = "yes"
+		}
+		t.AppendRow(table.Row{s.Shortcut, s.Template, downloaded})
+	}
+	t.SetStyle(table.StyleRounded)
+	output.Result("%s\n", t.Render())
+	output.Info("Use one with 'prox ct create <name> <shortcut>'; download it first with 'prox ct templates pull <shortcut>'\n")
+	return nil
+}
+
+func lookupShortcuts(ctx context.Context) ([]Shortcut, error) {
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	client, err := c.CreateClient()
+	if err != nil {
+		return nil, err
+	}
+	node, err := firstOnlineNode(ctx, client, "")
+	if err != nil {
+		return nil, err
+	}
+	apps, err := client.GetAvailableTemplates(ctx, node)
+	if err != nil {
+		return nil, err
+	}
+	downloaded := map[string]bool{}
+	if existing, err := client.GetContainerTemplates(ctx, node); err == nil {
+		for _, e := range existing {
+			downloaded[templateFilenameWithSuffix(e.VolID)] = true
+		}
+	}
+	return shortcutsFrom(toAvailable(apps), downloaded), nil
+}
+
+// templateFilenameWithSuffix returns the file name of a volume ID such as
+// "local:vztmpl/debian-12-standard_12.7-1_amd64.tar.zst"
+func templateFilenameWithSuffix(volID string) string {
+	if i := strings.LastIndex(volID, "/"); i != -1 {
+		return volID[i+1:]
+	}
+	return volID
 }

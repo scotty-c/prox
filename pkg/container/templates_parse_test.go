@@ -37,3 +37,19 @@ func TestParseTemplateFields(t *testing.T) {
 		})
 	}
 }
+
+func TestCompareVersions(t *testing.T) {
+	tests := []struct {
+		a, b string
+		want int // sign only
+	}{
+		{"24.04", "22.04", 1}, {"22.04", "24.04", -1}, {"3.20", "3.9", 1}, {"12", "11", 1},
+		{"12", "12.0", 0}, {"3.9", "3.9", 0}, {"10", "9", 1},
+	}
+	for _, tt := range tests {
+		got := compareVersions(tt.a, tt.b)
+		if (got > 0) != (tt.want > 0) || (got < 0) != (tt.want < 0) {
+			t.Errorf("compareVersions(%q, %q) = %d, want sign %d", tt.a, tt.b, got, tt.want)
+		}
+	}
+}

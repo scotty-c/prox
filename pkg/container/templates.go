@@ -241,17 +241,3 @@ func resolveTemplateFrom(allTemplates []Template, shortName string, preferredNod
 		Node:     bestMatch.Node,
 	}, nil
 }
-
-// ListTemplateShortcuts lists common template shortcuts for user reference
-func ListTemplateShortcuts() {
-	output.Resultln("Common template shortcuts:")
-	output.Resultln("  ubuntu:22.04    - Ubuntu 22.04 LTS")
-	output.Resultln("  ubuntu:20.04    - Ubuntu 20.04 LTS")
-	output.Resultln("  debian:12       - Debian 12 (Bookworm)")
-	output.Resultln("  debian:11       - Debian 11 (Bullseye)")
-	output.Resultln("  alpine:3.18     - Alpine Linux 3.18")
-	output.Resultln("  centos:8        - CentOS 8")
-	output.Resultln("  fedora:38       - Fedora 38")
-	output.Resultln("")
-	output.Info("Tip: Use 'prox ct templates' to see all available templates\n")
-}

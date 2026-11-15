@@ -130,6 +130,7 @@ var storages = []map[string]interface{}{
 }
 
 var (
+	reAplinfo        = regexp.MustCompile(`^/nodes/\w+/aplinfo$`)
 	reStorageList    = regexp.MustCompile(`^/nodes/\w+/storage$`)
 	reStorageContent = regexp.MustCompile(`^/nodes/\w+/storage/[\w-]+/content$`)
 	reCreateGuest    = regexp.MustCompile(`^/nodes/\w+/(lxc|qemu)$`)
@@ -187,6 +188,18 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 			{"upid": "UPID:pve2:00000002:00000002:6A000100:vzdump:101:root@pam:", "node": "pve2", "type": "vzdump", "id": "101", "user": "backup@pve", "starttime": 1700000100},
 			{"upid": "UPID:pve1:00000003:00000003:6A000050:qmclone:102:root@pam:", "node": "pve1", "type": "qmclone", "id": "102", "user": "root@pam", "starttime": 1700000050, "endtime": 1700000060, "status": "clone failed: storage 'local-lvm' is not online"},
 		}, 200, "")
+	case reAplinfo.MatchString(p) && r.Method == http.MethodGet:
+		reply(w, []map[string]interface{}{
+			{"template": "debian-12-standard_12.7-1_amd64.tar.zst", "section": "system", "headline": "Debian 12 (standard)"},
+			{"template": "debian-11-standard_11.7-1_amd64.tar.zst", "section": "system", "headline": "Debian 11 (standard)"},
+			{"template": "ubuntu-24.04-standard_24.04-2_amd64.tar.zst", "section": "system", "headline": "Ubuntu 24.04 (standard)"},
+			{"template": "ubuntu-22.04-standard_22.04-1_amd64.tar.zst", "section": "system", "headline": "Ubuntu 22.04 (standard)"},
+			{"template": "alpine-3.20-default_20240908_amd64.tar.xz", "section": "system", "headline": "Alpine 3.20 (default)"},
+			{"template": "alpine-3.9-default_20190224_amd64.tar.xz", "section": "system", "headline": "Alpine 3.9 (default)"},
+			{"template": "debian-12-turnkey-wordpress_18.1-1_amd64.tar.gz", "section": "turnkeylinux", "headline": "TurnKey WordPress"},
+		}, 200, "")
+	case reAplinfo.MatchString(p) && r.Method == http.MethodPost:
+		reply(w, UPID, 200, "")
 	case p == "/cluster/nextid":
 		reply(w, "103", 200, "")
 	case reQemuConfig.MatchString(p):

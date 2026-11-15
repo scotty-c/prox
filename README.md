@@ -204,7 +204,7 @@ prox ssh web-server --delete --dry-run
 Pro tips:
 - Skip --node: auto discovery handles it
 - Aliases: describe→desc/show, delete→del/rm, shutdown→stop
-- Template shortcuts: ubuntu:22.04 | debian:12 | alpine:3.18
+- Template shortcuts: `os:version` names such as `debian:12` or `ubuntu:24.04`; `prox ct shortcuts` lists the ones your cluster can download (and which are already downloaded)
 - SSH key file can include multiple lines (each a key)
 - Use `prox ssh <resource> --dry-run` to preview SSH config changes
 - Use `prox ssh --list` to view the entries in `~/.ssh/config`; entries prox wrote carry a `# managed by prox` comment and show `prox` in the MANAGED column (entries written by older versions, or by you, are not marked)
@@ -331,7 +331,7 @@ Containers (ct)
 	- Flags: -n, --node <node>
 
 - shortcuts
-	- Flags: none (prints common shortcuts like ubuntu:22.04)
+	- Flags: none (lists the os:version shortcuts your cluster can download, marking those already downloaded; shows a few examples if Proxmox cannot be reached)
 
 VMs (vm)
 - list

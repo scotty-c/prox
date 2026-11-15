@@ -9,11 +9,13 @@ import (
 var shortcutsCmd = &cobra.Command{
 	Use:     "shortcuts",
 	Aliases: []string{"shortcut", "sc"},
-	Short:   "Show common template shortcuts",
-	Long:    `Display common template shortcuts that can be used with the create command instead of full template paths.`,
+	Short:   "Show the os:version template shortcuts",
+	Long: `Show the os:version shortcuts (such as debian:12) that 'prox ct create' and
+'prox ct templates pull' accept instead of a full template name. They come from
+the templates your Proxmox node can download, and show which are already
+downloaded. If Proxmox cannot be reached, a few common examples are shown.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		container.ListTemplateShortcuts()
-		return nil
+		return container.ListShortcuts(cmd.Context())
 	},
 }
 
