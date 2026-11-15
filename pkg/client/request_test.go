@@ -2,11 +2,14 @@ package client
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"sync/atomic"
 	"testing"
+
+	"github.com/scotty-c/prox/pkg/apierr"
 )
 
 func TestReauthenticatesOnceWhenTicketExpires(t *testing.T) {
@@ -92,5 +95,64 @@ func TestPathSegmentsAreEscaped(t *testing.T) {
 	}
 	if !strings.HasPrefix(gotPath, "/api2/json/nodes/pve/tasks/UPID:pve:") || !strings.HasSuffix(gotPath, "/status") {
 		t.Fatalf("unexpected path %q", gotPath)
+	}
+}
+
+func TestAPIErrorsAreClassifiedByStatus(t *testing.T) {
+	for status, want := range map[int]error{401: apierr.ErrAuth, 403: apierr.ErrPermission} {
+		srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path == "/api2/json/access/ticket" {
+				w.Write([]byte(`{"data":{"ticket":"t","CSRFPreventionToken":"c"}}`))
+				return
+			}
+			w.WriteHeader(status)
+		}))
+		c, _ := NewClientWithTLS(srv.URL, "root@pam", "pw", TLSOptions{Insecure: true})
+		_, err := c.GetVersion(context.Background())
+		srv.Close()
+		if !errors.Is(err, want) {
+			t.Errorf("status %d: %v should match %v", status, err, want)
+		}
+		if errors.Is(err, apierr.ErrUnreachable) {
+			t.Errorf("status %d must not look unreachable", status)
+		}
+	}
+}
+
+func TestRefusedLoginIsAnAuthError(t *testing.T) {
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+	}))
+	defer srv.Close()
+	c, _ := NewClientWithTLS(srv.URL, "root@pam", "bad", TLSOptions{Insecure: true})
+	err := c.Authenticate(context.Background())
+	if !errors.Is(err, apierr.ErrAuth) || !strings.Contains(err.Error(), "authentication failed with status 401") {
+		t.Fatalf("got %v", err)
+	}
+}
+
+func TestClosedServerIsUnreachableNotAnAuthError(t *testing.T) {
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+	url := srv.URL
+	srv.Close()
+	c, _ := NewClientWithTLS(url, "root@pam", "pw", TLSOptions{Insecure: true})
+	_, err := c.GetVersion(context.Background())
+	if !errors.Is(err, apierr.ErrUnreachable) || errors.Is(err, apierr.ErrAuth) {
+		t.Fatalf("got %v", err)
+	}
+	if !strings.Contains(err.Error(), url) {
+		t.Errorf("error should name the server: %v", err)
+	}
+}
+
+func TestCancelledRequestIsNotReportedAsUnreachable(t *testing.T) {
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+	defer srv.Close()
+	c, _ := NewClientWithTLS(srv.URL, "root@pam", "pw", TLSOptions{Insecure: true})
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, err := c.GetVersion(ctx)
+	if errors.Is(err, apierr.ErrUnreachable) || !errors.Is(err, context.Canceled) {
+		t.Fatalf("got %v", err)
 	}
 }

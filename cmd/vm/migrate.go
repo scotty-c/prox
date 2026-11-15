@@ -1,12 +1,10 @@
 package cmd
 
 import (
-	"fmt"
+	"errors"
 	"github.com/scotty-c/prox/pkg/cmdutil"
 	"github.com/scotty-c/prox/pkg/completion"
-	"os"
 
-	"github.com/scotty-c/prox/pkg/output"
 	"github.com/scotty-c/prox/pkg/vm"
 	"github.com/spf13/cobra"
 )
@@ -35,7 +33,7 @@ Examples:
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	},
 	Args: cobra.ExactArgs(2),
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		wait := cmdutil.ResolveWait(cmd, true)
 		nameOrID := args[0]
 		targetNode := args[1]
@@ -47,15 +45,14 @@ Examples:
 
 		// Validate target node is not empty
 		if targetNode == "" {
-			fmt.Fprintln(os.Stderr, "Error: Target node cannot be empty")
-			os.Exit(1)
+			return errors.New("Target node cannot be empty")
 		}
 
 		// Perform the migration
 		if err := vm.MigrateVMByNameOrIDWithWait(nameOrID, sourceNode, targetNode, online, withLocalDisks, wait); err != nil {
-			output.VMError("migrate", err)
-			os.Exit(1)
+			return err
 		}
+		return nil
 	},
 }
 

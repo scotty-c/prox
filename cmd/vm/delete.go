@@ -3,13 +3,11 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"os"
 
 	c "github.com/scotty-c/prox/pkg/client"
 	"github.com/scotty-c/prox/pkg/cmdutil"
 
 	"github.com/scotty-c/prox/pkg/completion"
-	"github.com/scotty-c/prox/pkg/output"
 	"github.com/scotty-c/prox/pkg/vm"
 	"github.com/spf13/cobra"
 )
@@ -28,7 +26,7 @@ Examples:
   prox vm delete web-server --force`,
 	Args:              cobra.ExactArgs(1),
 	ValidArgsFunction: completion.FirstArgOnly(completion.GetVMNames),
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		wait := cmdutil.ResolveWait(cmd, false)
 		nameOrID := args[0]
 
@@ -39,26 +37,27 @@ Examples:
 		ctx := context.Background()
 		cl, err := c.CreateClient()
 		if err != nil {
-			output.ClientError(err)
-			os.Exit(1)
+			return err
 		}
 		// Look the VM up first so the question says exactly what will be deleted
 		target, err := vm.FindByNameOrIDOnNode(ctx, cl, nameOrID, node)
 		if err != nil {
-			output.VMError("delete", err)
-			os.Exit(1)
+			return err
 		}
 
-		if !force && !cmdutil.ConfirmOrExit(
-			fmt.Sprintf("Delete VM '%s' (ID %d, %s, on %s)? This action cannot be undone", target.Name, target.ID, target.Status, target.Node),
-			"--force", "Deletion cancelled") {
-			return
+		if !force {
+			ok, err := cmdutil.Confirm(
+				fmt.Sprintf("Delete VM '%s' (ID %d, %s, on %s)? This action cannot be undone", target.Name, target.ID, target.Status, target.Node),
+				"--force", "Deletion cancelled")
+			if err != nil || !ok {
+				return err
+			}
 		}
 
 		if err := vm.DeleteVMWithWait(ctx, target.ID, target.Node, wait); err != nil {
-			output.VMError("delete", err)
-			os.Exit(1)
+			return err
 		}
+		return nil
 	},
 }
 

@@ -104,7 +104,6 @@ func ListAvailableTemplates(node string) error {
 	ctx := context.Background()
 	client, err := c.CreateClient()
 	if err != nil {
-		output.ClientError(err)
 		return fmt.Errorf("failed to create client: %w", err)
 	}
 	if node, err = firstOnlineNode(ctx, client, node); err != nil {
@@ -143,7 +142,6 @@ func PullTemplate(want, node, storage string, wait bool) error {
 	ctx := context.Background()
 	client, err := c.CreateClient()
 	if err != nil {
-		output.ClientError(err)
 		return fmt.Errorf("failed to create client: %w", err)
 	}
 	if node, err = firstOnlineNode(ctx, client, node); err != nil {

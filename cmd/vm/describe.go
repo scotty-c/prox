@@ -5,7 +5,6 @@ package cmd
 
 import (
 	"fmt"
-	"os"
 
 	"github.com/scotty-c/prox/pkg/cmdutil"
 	"github.com/scotty-c/prox/pkg/completion"
@@ -36,7 +35,7 @@ Examples:
 		return nil
 	},
 	ValidArgsFunction: completion.FirstArgOnly(completion.GetVMNames),
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		// Get VM name or ID from positional argument
 		nameOrID := args[0]
 
@@ -45,22 +44,20 @@ Examples:
 		if cmdutil.StructuredOutput(cmd) {
 			details, err := vm.GetVMDetails(nameOrID, node)
 			if err != nil {
-				output.UserError("getting VM details", err)
-				os.Exit(1)
+				return fmt.Errorf("getting VM details: %w", err)
 			}
 			if err := output.OutputJSON(details); err != nil {
-				output.UserError("outputting JSON", err)
-				os.Exit(1)
+				return fmt.Errorf("outputting JSON: %w", err)
 			}
-			return
+			return nil
 		}
 
 		// Describe the VM
 		err := vm.DescribeVM(nameOrID, node)
 		if err != nil {
-			output.UserError("describing VM", err)
-			os.Exit(1)
+			return fmt.Errorf("describing VM: %w", err)
 		}
+		return nil
 	},
 }
 

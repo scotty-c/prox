@@ -3,7 +3,6 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"os"
 	"strconv"
 
 	c "github.com/scotty-c/prox/pkg/client"
@@ -11,7 +10,6 @@ import (
 
 	"github.com/scotty-c/prox/pkg/completion"
 	"github.com/scotty-c/prox/pkg/container"
-	"github.com/scotty-c/prox/pkg/output"
 	"github.com/spf13/cobra"
 )
 
@@ -23,34 +21,35 @@ var deleteCmd = &cobra.Command{
 	Long:              `Delete a container from the Proxmox VE server by providing the container ID or name. The node will be automatically discovered.`,
 	Args:              cobra.ExactArgs(1),
 	ValidArgsFunction: completion.FirstArgOnly(completion.GetContainerNames),
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		wait := cmdutil.ResolveWait(cmd, true)
 		nameOrID := args[0]
 		force, _ := cmd.Flags().GetBool("force")
 
 		cl, err := c.CreateClient()
 		if err != nil {
-			output.ClientError(err)
-			os.Exit(1)
+			return err
 		}
 		// Look the container up first so the question says exactly what will be deleted
 		target, err := container.FindByNameOrID(context.Background(), cl, nameOrID)
 		if err != nil {
-			output.ContainerError("delete", err)
-			os.Exit(1)
+			return err
 		}
 
-		if !force && !cmdutil.ConfirmOrExit(
-			fmt.Sprintf("Delete container '%s' (ID %d, %s, on %s)? This action cannot be undone", target.Name, target.ID, target.Status, target.Node),
-			"--force", "Deletion cancelled") {
-			return
+		if !force {
+			ok, err := cmdutil.Confirm(
+				fmt.Sprintf("Delete container '%s' (ID %d, %s, on %s)? This action cannot be undone", target.Name, target.ID, target.Status, target.Node),
+				"--force", "Deletion cancelled")
+			if err != nil || !ok {
+				return err
+			}
 		}
 
 		// Delete by ID: the name may be shared by another container
 		if err := container.DeleteContainerWithWait(strconv.Itoa(target.ID), wait); err != nil {
-			output.UserError("deleting container", err)
-			os.Exit(1)
+			return fmt.Errorf("deleting container: %w", err)
 		}
+		return nil
 	},
 }
 

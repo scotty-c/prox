@@ -2,12 +2,10 @@ package cmd
 
 import (
 	"context"
-	"os"
 
 	c "github.com/scotty-c/prox/pkg/client"
 	"github.com/scotty-c/prox/pkg/cmdutil"
 	"github.com/scotty-c/prox/pkg/completion"
-	"github.com/scotty-c/prox/pkg/output"
 	"github.com/scotty-c/prox/pkg/vm"
 	"github.com/spf13/cobra"
 )
@@ -28,7 +26,7 @@ Examples:
   prox vm shutdown --tag web   # Shut down every VM tagged 'web' (asks first)`,
 	Args:              cmdutil.NameOrTagArgs,
 	ValidArgsFunction: completion.FirstArgOnly(completion.GetVMNames),
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		wait := cmdutil.ResolveWait(cmd, false)
 		force, _ := cmd.Flags().GetBool("force")
 		node, _ := cmd.Flags().GetString("node")
@@ -42,18 +40,17 @@ Examples:
 				return vm.ShutdownVMWithOptions(ctx, v.ID, v.Node, wait, force, cl)
 			})
 			if err != nil {
-				output.VMError("shutdown", err)
-				os.Exit(1)
+				return err
 			}
-			return
+			return nil
 		}
 		nameOrID := args[0]
 
 		// Shutdown the VM
 		if err := vm.ShutdownVMByNameOrIDWithOptions(nameOrID, node, wait, force); err != nil {
-			output.VMError("shutdown", err)
-			os.Exit(1)
+			return err
 		}
+		return nil
 	},
 }
 

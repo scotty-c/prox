@@ -3,7 +3,6 @@ package cmd
 import (
 	"fmt"
 	"github.com/scotty-c/prox/pkg/completion"
-	"os"
 
 	c "github.com/scotty-c/prox/pkg/config"
 	"github.com/spf13/cobra"
@@ -16,15 +15,15 @@ var useCmd = &cobra.Command{
 	Long:              `Switch the active configuration profile. The specified profile must already exist.`,
 	ValidArgsFunction: completion.FirstArgOnly(completion.GetProfileNames),
 	Args:              cobra.ExactArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		profile := args[0]
 
 		if err := c.SetCurrentProfile(profile); err != nil {
-			fmt.Fprintf(os.Stderr, "Error switching profile: %v\n", err)
-			os.Exit(1)
+			return fmt.Errorf("switching profile: %w", err)
 		}
 
 		fmt.Printf("Switched to profile: %s\n", profile)
+		return nil
 	},
 }
 

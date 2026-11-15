@@ -13,13 +13,11 @@ import (
 func GetID(ctx context.Context, id int) error {
 	client, err := c.CreateClient()
 	if err != nil {
-		output.Error("Error creating client: %v\n", err)
 		return fmt.Errorf("failed to create client: %w", err)
 	}
 
 	resources, err := client.GetClusterResources(ctx)
 	if err != nil {
-		output.Error("Error getting cluster resources: %v\n", err)
 		return fmt.Errorf("failed to get cluster resources: %w", err)
 	}
 
@@ -30,7 +28,6 @@ func GetID(ctx context.Context, id int) error {
 			if resource.Type == "lxc" {
 				kind = "container"
 			}
-			output.Error("Error: ID %d is already in use by %s '%s' on node %s\n", id, kind, resource.Name, resource.Node)
 			output.Info("Tip: Please choose a different VM ID\n")
 			return fmt.Errorf("ID %d is already in use by %s '%s' on node %s", id, kind, resource.Name, resource.Node)
 		}
@@ -68,7 +65,6 @@ func ShutdownVMWithOptions(ctx context.Context, id int, node string, wait bool, 
 		var err error
 		client, err = c.CreateClient()
 		if err != nil {
-			output.Error("Error creating client: %v\n", err)
 			return fmt.Errorf("failed to create client: %w", err)
 		}
 	}
@@ -78,7 +74,6 @@ func ShutdownVMWithOptions(ctx context.Context, id int, node string, wait bool, 
 		output.Info("Finding node for VM %d...\n", id)
 		discoveredNode, err := client.GetVMNode(ctx, id)
 		if err != nil {
-			output.Error("Error: Failed to find VM %d: %v\n", id, err)
 			return fmt.Errorf("failed to find VM %d: %w", id, err)
 		}
 		node = discoveredNode
@@ -104,7 +99,6 @@ func ShutdownVMWithOptions(ctx context.Context, id int, node string, wait bool, 
 		task, err = vm.Shutdown(ctx)
 	}
 	if err != nil {
-		output.Error("Error: Failed to shutdown VM %d: %v\n", id, err)
 		return fmt.Errorf("failed to shutdown VM %d: %w", id, err)
 	}
 
@@ -119,7 +113,6 @@ func ShutdownVMWithOptions(ctx context.Context, id int, node string, wait bool, 
 		output.Infoln("Waiting for shutdown operation to complete...")
 		err = waitForTask(ctx, client, node, task.ID)
 		if err != nil {
-			output.Error("Error: Shutdown failed: %v\n", err)
 			return fmt.Errorf("shutdown failed: %w", err)
 		}
 		duration := time.Since(startTime)
@@ -153,7 +146,6 @@ func StartVMWithWait(ctx context.Context, id int, node string, wait bool, client
 		var err error
 		client, err = c.CreateClient()
 		if err != nil {
-			output.Error("Error creating client: %v\n", err)
 			return fmt.Errorf("failed to create client: %w", err)
 		}
 	}
@@ -163,7 +155,6 @@ func StartVMWithWait(ctx context.Context, id int, node string, wait bool, client
 		output.Info("Finding node for VM %d...\n", id)
 		discoveredNode, err := client.GetVMNode(ctx, id)
 		if err != nil {
-			output.Error("Error: Failed to find VM %d: %v\n", id, err)
 			return fmt.Errorf("failed to find VM %d: %w", id, err)
 		}
 		node = discoveredNode
@@ -181,7 +172,6 @@ func StartVMWithWait(ctx context.Context, id int, node string, wait bool, client
 	startTime := time.Now()
 	task, err := vm.Start(ctx)
 	if err != nil {
-		output.Error("Error: Failed to start VM %d: %v\n", id, err)
 		return fmt.Errorf("failed to start VM %d: %w", id, err)
 	}
 
@@ -192,7 +182,6 @@ func StartVMWithWait(ctx context.Context, id int, node string, wait bool, client
 		output.Infoln("Waiting for start operation to complete...")
 		err = waitForTask(ctx, client, node, task.ID)
 		if err != nil {
-			output.Error("Error: Start failed: %v\n", err)
 			return fmt.Errorf("start failed: %w", err)
 		}
 		duration := time.Since(startTime)
@@ -223,7 +212,6 @@ func CloneVM(ctx context.Context, id int, node string, name string, newId int, f
 func CloneVMWithWait(ctx context.Context, id int, node string, name string, newId int, full bool, wait bool) error {
 	client, err := c.CreateClient()
 	if err != nil {
-		output.Error("Error creating client: %v\n", err)
 		return fmt.Errorf("failed to create client: %w", err)
 	}
 
@@ -232,7 +220,6 @@ func CloneVMWithWait(ctx context.Context, id int, node string, name string, newI
 		output.Info("Finding node for source VM %d...\n", id)
 		discoveredNode, err := client.GetVMNode(ctx, id)
 		if err != nil {
-			output.Error("Error: Failed to find source VM %d: %v\n", id, err)
 			return fmt.Errorf("failed to find source VM %d: %w", id, err)
 		}
 		node = discoveredNode
@@ -260,7 +247,6 @@ func CloneVMWithWait(ctx context.Context, id int, node string, name string, newI
 	startTime := time.Now()
 	task, err := vm.Clone(ctx, name, newId, full)
 	if err != nil {
-		output.Error("Error: Failed to clone VM %d: %v\n", id, err)
 		return fmt.Errorf("failed to clone VM %d: %w", id, err)
 	}
 
@@ -273,7 +259,6 @@ func CloneVMWithWait(ctx context.Context, id int, node string, name string, newI
 		// Wait for the clone task to complete
 		err = waitForTask(ctx, client, node, task.ID)
 		if err != nil {
-			output.Error("Error: Clone failed: %v\n", err)
 			return fmt.Errorf("clone failed: %w", err)
 		}
 
@@ -364,7 +349,6 @@ func MigrateVM(ctx context.Context, id int, sourceNode, targetNode string, onlin
 func MigrateVMWithWait(ctx context.Context, id int, sourceNode, targetNode string, online bool, withLocalDisks bool, wait bool) error {
 	client, err := c.CreateClient()
 	if err != nil {
-		output.Error("Error: Error creating client: %v\n", err)
 		return fmt.Errorf("failed to create client: %w", err)
 	}
 
@@ -373,7 +357,6 @@ func MigrateVMWithWait(ctx context.Context, id int, sourceNode, targetNode strin
 		output.Info("Discovering source node for VM %d...\n", id)
 		discoveredNode, err := client.GetVMNode(ctx, id)
 		if err != nil {
-			output.Error("Error: Failed to find VM %d: %v\n", id, err)
 			return fmt.Errorf("failed to find VM %d: %w", id, err)
 		}
 		sourceNode = discoveredNode
@@ -403,7 +386,6 @@ func MigrateVMWithWait(ctx context.Context, id int, sourceNode, targetNode strin
 	// Start the migration
 	taskID, err := client.MigrateVM(ctx, sourceNode, id, targetNode, options)
 	if err != nil {
-		output.Error("Error: Failed to start migration: %v\n", err)
 		return fmt.Errorf("failed to start migration: %w", err)
 	}
 
@@ -417,7 +399,6 @@ func MigrateVMWithWait(ctx context.Context, id int, sourceNode, targetNode strin
 	// Wait for the migration task to complete
 	err = waitForTask(ctx, client, sourceNode, taskID)
 	if err != nil {
-		output.Error("Error: Migration failed: %v\n", err)
 		return fmt.Errorf("migration failed: %w", err)
 	}
 
@@ -444,7 +425,6 @@ func StartVMByNameOrIDWithWait(nameOrID string, node string, wait bool) error {
 	ctx := context.Background()
 	client, err := c.CreateClient()
 	if err != nil {
-		output.ClientError(err)
 		return fmt.Errorf("failed to create client: %w", err)
 	}
 
@@ -478,7 +458,6 @@ func ShutdownVMByNameOrIDWithOptions(nameOrID string, node string, wait bool, fo
 	ctx := context.Background()
 	client, err := c.CreateClient()
 	if err != nil {
-		output.ClientError(err)
 		return fmt.Errorf("failed to create client: %w", err)
 	}
 
@@ -507,7 +486,6 @@ func DeleteVMByNameOrIDWithWait(nameOrID string, node string, wait bool) error {
 	ctx := context.Background()
 	client, err := c.CreateClient()
 	if err != nil {
-		output.ClientError(err)
 		return fmt.Errorf("failed to create client: %w", err)
 	}
 
@@ -532,7 +510,6 @@ func CloneVMByNameOrIDWithWait(sourceNameOrID string, node string, name string, 
 	ctx := context.Background()
 	client, err := c.CreateClient()
 	if err != nil {
-		output.ClientError(err)
 		return fmt.Errorf("failed to create client: %w", err)
 	}
 
@@ -557,7 +534,6 @@ func MigrateVMByNameOrIDWithWait(nameOrID string, sourceNode, targetNode string,
 	ctx := context.Background()
 	client, err := c.CreateClient()
 	if err != nil {
-		output.ClientError(err)
 		return fmt.Errorf("failed to create client: %w", err)
 	}
 
@@ -582,7 +558,6 @@ func RebootVMByNameOrID(nameOrID, node string, wait bool) error {
 	ctx := context.Background()
 	client, err := c.CreateClient()
 	if err != nil {
-		output.ClientError(err)
 		return fmt.Errorf("failed to create client: %w", err)
 	}
 	vm, err := FindByNameOrIDOnNode(ctx, client, nameOrID, node)

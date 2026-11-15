@@ -28,15 +28,17 @@ from a node, or --insecure to skip verification.
 
 Example:
   prox config setup -u root@pam -p secret -l https://pve.example.com:8006 --ca-cert ~/pve-root-ca.pem`,
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		username, _ := cmd.Flags().GetString("username")
 		password, _ := cmd.Flags().GetString("password")
 		url, _ := cmd.Flags().GetString("url")
 
 		if c.Check() {
 			fmt.Printf("Config already exists for profile '%s'. Use 'prox config update' to change it\n", c.GetCurrentProfile())
-			saveTLSFlagsOrExit(cmd, c.GetCurrentProfile())
-			return
+			if err := saveTLSFlags(cmd, c.GetCurrentProfile()); err != nil {
+				return err
+			}
+			return nil
 		}
 
 		// On a terminal, ask for anything not given as a flag rather than
@@ -44,17 +46,18 @@ Example:
 		if term.IsTerminal(int(os.Stdin.Fd())) {
 			var err error
 			if username, password, url, err = promptMissing(username, password, url); err != nil {
-				fmt.Fprintf(os.Stderr, "Error reading input: %v\n", err)
-				os.Exit(1)
+				return fmt.Errorf("reading input: %w", err)
 			}
 		}
 
 		if err := c.Create(username, password, url); err != nil {
-			fmt.Fprintf(os.Stderr, "Error setting up config: %v\n", err)
-			os.Exit(1)
+			return fmt.Errorf("setting up config: %w", err)
 		}
-		saveTLSFlagsOrExit(cmd, c.GetCurrentProfile())
+		if err := saveTLSFlags(cmd, c.GetCurrentProfile()); err != nil {
+			return err
+		}
 		fmt.Println("Config setup completed successfully")
+		return nil
 	},
 }
 

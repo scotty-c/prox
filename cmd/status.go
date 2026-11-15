@@ -67,7 +67,6 @@ func showStatus() error {
 	// Create client
 	cl, err := client.CreateClient()
 	if err != nil {
-		output.ClientError(err)
 		return fmt.Errorf("failed to connect to Proxmox VE: %w", err)
 	}
 

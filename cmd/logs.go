@@ -3,7 +3,6 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"os"
 	"time"
 
 	"github.com/scotty-c/prox/pkg/client"
@@ -27,16 +26,16 @@ Examples:
   prox logs UPID:pve:00012345:001A2B3C:65A1B2C3:qmclone:100:root@pam: --follow
   prox logs <upid> --tail 50`,
 	Args: cobra.ExactArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		upid := args[0]
 
 		follow, _ := cmd.Flags().GetBool("follow")
 		tail, _ := cmd.Flags().GetInt("tail")
 
 		if err := viewTaskLogs(upid, follow, tail); err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
+			return fmt.Errorf("%w", err)
 		}
+		return nil
 	},
 }
 

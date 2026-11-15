@@ -39,7 +39,7 @@ var versionCmd = &cobra.Command{
 	GroupID: "utilities",
 	Short:   "Display version information",
 	Long:    `Display detailed version information including version number, git commit, build date, and Go version.`,
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		verbose, _ := cmd.Flags().GetBool("verbose")
 
 		if verbose {
@@ -51,6 +51,7 @@ var versionCmd = &cobra.Command{
 		} else {
 			fmt.Printf("prox %s\n", versionInfo.Version)
 		}
+		return nil
 	},
 }
 

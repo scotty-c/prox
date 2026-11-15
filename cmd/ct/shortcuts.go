@@ -11,8 +11,9 @@ var shortcutsCmd = &cobra.Command{
 	Aliases: []string{"shortcut", "sc"},
 	Short:   "Show common template shortcuts",
 	Long:    `Display common template shortcuts that can be used with the create command instead of full template paths.`,
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		container.ListTemplateShortcuts()
+		return nil
 	},
 }
 

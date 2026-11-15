@@ -2,12 +2,10 @@ package cmd
 
 import (
 	"context"
-	"os"
 
 	c "github.com/scotty-c/prox/pkg/client"
 	"github.com/scotty-c/prox/pkg/cmdutil"
 	"github.com/scotty-c/prox/pkg/completion"
-	"github.com/scotty-c/prox/pkg/output"
 	"github.com/scotty-c/prox/pkg/vm"
 	"github.com/spf13/cobra"
 )
@@ -26,7 +24,7 @@ Examples:
   prox vm start --tag web             # Start every VM tagged 'web' (asks first)`,
 	Args:              cmdutil.NameOrTagArgs,
 	ValidArgsFunction: completion.FirstArgOnly(completion.GetVMNames),
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		wait := cmdutil.ResolveWait(cmd, false)
 		node, _ := cmd.Flags().GetString("node")
 
@@ -35,18 +33,17 @@ Examples:
 				return vm.StartVMWithWait(ctx, v.ID, v.Node, wait, cl)
 			})
 			if err != nil {
-				output.VMError("start", err)
-				os.Exit(1)
+				return err
 			}
-			return
+			return nil
 		}
 		nameOrID := args[0]
 
 		// Start the VM
 		if err := vm.StartVMByNameOrIDWithWait(nameOrID, node, wait); err != nil {
-			output.VMError("start", err)
-			os.Exit(1)
+			return err
 		}
+		return nil
 	},
 }
 

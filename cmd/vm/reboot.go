@@ -1,11 +1,8 @@
 package cmd
 
 import (
-	"os"
-
 	"github.com/scotty-c/prox/pkg/cmdutil"
 	"github.com/scotty-c/prox/pkg/completion"
-	"github.com/scotty-c/prox/pkg/output"
 	"github.com/scotty-c/prox/pkg/vm"
 	"github.com/spf13/cobra"
 )
@@ -21,13 +18,13 @@ Examples:
   prox vm reboot 100 --wait`,
 	Args:              cobra.ExactArgs(1),
 	ValidArgsFunction: completion.FirstArgOnly(completion.GetVMNames),
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		node, _ := cmd.Flags().GetString("node")
 		wait := cmdutil.ResolveWait(cmd, false)
 		if err := vm.RebootVMByNameOrID(args[0], node, wait); err != nil {
-			output.VMError("reboot", err)
-			os.Exit(1)
+			return err
 		}
+		return nil
 	},
 }
 

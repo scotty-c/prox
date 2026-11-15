@@ -10,7 +10,6 @@ import (
 	"syscall"
 
 	"github.com/scotty-c/prox/pkg/container"
-	"github.com/scotty-c/prox/pkg/output"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 )
@@ -60,7 +59,7 @@ Examples:
 		}
 		return fmt.Errorf("requires <name> <template> (2 args) or use --name and --template flags")
 	},
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		wait := cmdutil.ResolveWait(cmd, true)
 		// Resolve name/template from positional or flags with precedence to positional.
 		posName := ""
@@ -108,8 +107,7 @@ Examples:
 			var err error
 			vmid, err = strconv.Atoi(vmidStr)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "Error: Invalid VMID: %s\n", vmidStr)
-				os.Exit(1)
+				return fmt.Errorf("Invalid VMID: %s", vmidStr)
 			}
 		}
 
@@ -118,8 +116,7 @@ Examples:
 			fmt.Print("Enter password for container: ")
 			passwordBytes, err := term.ReadPassword(int(syscall.Stdin))
 			if err != nil {
-				output.UserError("reading password", err)
-				os.Exit(1)
+				return fmt.Errorf("reading password: %w", err)
 			}
 			password = string(passwordBytes)
 			fmt.Println() // Add newline after password input
@@ -135,8 +132,7 @@ Examples:
 				}
 				keys, lineCount, err := container.ReadSSHKeys(os.Stdin)
 				if err != nil {
-					output.UserError("reading SSH keys from stdin", err)
-					os.Exit(1)
+					return fmt.Errorf("reading SSH keys from stdin: %w", err)
 				}
 				sshKeys = keys
 				if sshKeys != "" {
@@ -147,9 +143,7 @@ Examples:
 				fmt.Printf("Reading SSH keys from: %s\n", sshKeysFile)
 				keyBytes, err := os.ReadFile(sshKeysFile)
 				if err != nil {
-					output.UserError(fmt.Sprintf("reading SSH keys file '%s'", sshKeysFile), err)
-					fmt.Fprintln(os.Stderr, "Tip: Make sure the file exists and is readable")
-					os.Exit(1)
+					return fmt.Errorf("reading SSH keys file '%s': %w (make sure the file exists and is readable)", sshKeysFile, err)
 				}
 				sshKeys = strings.TrimSpace(string(keyBytes))
 				if sshKeys == "" {
@@ -170,9 +164,7 @@ Examples:
 			if sshKeys != "" {
 				validKeys, err := container.ValidateSSHKeys(sshKeys)
 				if err != nil {
-					fmt.Fprintf(os.Stderr, "Error: SSH key validation failed: %v\n", err)
-					fmt.Fprintln(os.Stderr, "Tip: Make sure your SSH keys are in the correct format (ssh-rsa, ssh-ed25519, etc.)")
-					os.Exit(1)
+					return fmt.Errorf("SSH key validation failed: %w (keys should look like ssh-ed25519 AAAA... or ssh-rsa AAAA...)", err)
 				}
 				if validKeys == 0 {
 					fmt.Fprintln(os.Stderr, "WARNING: No valid SSH keys found")
@@ -191,9 +183,9 @@ Examples:
 			Wait:    wait,
 		})
 		if err != nil {
-			output.UserError("creating container", err)
-			os.Exit(1)
+			return fmt.Errorf("creating container: %w", err)
 		}
+		return nil
 	},
 }
 

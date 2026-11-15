@@ -14,18 +14,19 @@ var createCmd = &cobra.Command{
 	Short: "Create a new configuration profile",
 	Long:  `Create a new configuration profile with the specified name and credentials.`,
 	Args:  cobra.ExactArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		profile := args[0]
 		username, _ := cmd.Flags().GetString("username")
 		password, _ := cmd.Flags().GetString("password")
 		url, _ := cmd.Flags().GetString("url")
 
 		if err := c.CreateProfile(profile, username, password, url); err != nil {
-			fmt.Fprintf(os.Stderr, "Error creating profile: %v\n", err)
-			os.Exit(1)
+			return fmt.Errorf("creating profile: %w", err)
 		}
 
-		saveTLSFlagsOrExit(cmd, profile)
+		if err := saveTLSFlags(cmd, profile); err != nil {
+			return err
+		}
 		fmt.Printf("Profile '%s' created successfully\n", profile)
 
 		// Ask if they want to switch to this profile
@@ -37,6 +38,7 @@ var createCmd = &cobra.Command{
 				fmt.Printf("Switched to profile: %s\n", profile)
 			}
 		}
+		return nil
 	},
 }
 

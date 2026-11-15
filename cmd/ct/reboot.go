@@ -1,12 +1,10 @@
 package cmd
 
 import (
-	"os"
-
+	"fmt"
 	"github.com/scotty-c/prox/pkg/cmdutil"
 	"github.com/scotty-c/prox/pkg/completion"
 	"github.com/scotty-c/prox/pkg/container"
-	"github.com/scotty-c/prox/pkg/output"
 	"github.com/spf13/cobra"
 )
 
@@ -16,12 +14,12 @@ var rebootCmd = &cobra.Command{
 	Short:             "Reboot a running container",
 	Args:              cobra.ExactArgs(1),
 	ValidArgsFunction: completion.FirstArgOnly(completion.GetContainerNames),
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		wait := cmdutil.ResolveWait(cmd, true)
 		if err := container.RebootContainer(args[0], wait); err != nil {
-			output.UserError("rebooting container", err)
-			os.Exit(1)
+			return fmt.Errorf("rebooting container: %w", err)
 		}
+		return nil
 	},
 }
 

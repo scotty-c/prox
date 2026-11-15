@@ -3,12 +3,10 @@ package snapshot
 import (
 	"context"
 	"fmt"
-	"os"
 
 	c "github.com/scotty-c/prox/pkg/client"
 	"github.com/scotty-c/prox/pkg/cmdutil"
 	"github.com/scotty-c/prox/pkg/completion"
-	"github.com/scotty-c/prox/pkg/output"
 	"github.com/spf13/cobra"
 )
 
@@ -57,11 +55,12 @@ Examples:
 		}
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	}
-	exitOn := func(action string, err error) {
+	// wrap adds what was being done to an error, and passes nil through
+	wrap := func(action string, err error) error {
 		if err != nil {
-			output.UserError(action, err)
-			os.Exit(1)
+			return fmt.Errorf("%s: %w", action, err)
 		}
+		return nil
 	}
 
 	list := &cobra.Command{
@@ -70,8 +69,8 @@ Examples:
 		Short:             fmt.Sprintf("List a %s's snapshots", label),
 		Args:              cobra.ExactArgs(1),
 		ValidArgsFunction: completion.FirstArgOnly(names),
-		Run: func(cmd *cobra.Command, args []string) {
-			exitOn("listing snapshots", List(guestType, args[0], node(cmd)))
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return wrap("listing snapshots", List(guestType, args[0], node(cmd)))
 		},
 	}
 	addNode(list)
@@ -81,14 +80,14 @@ Examples:
 		Short:             fmt.Sprintf("Take a snapshot of a %s", label),
 		Args:              cobra.ExactArgs(2),
 		ValidArgsFunction: completion.FirstArgOnly(names),
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			description, _ := cmd.Flags().GetString("description")
 			vmState := false
 			if f := cmd.Flags().Lookup("vmstate"); f != nil {
 				vmState, _ = cmd.Flags().GetBool("vmstate")
 			}
 			wait := cmdutil.ResolveWait(cmd, true)
-			exitOn("creating snapshot", Create(guestType, args[0], node(cmd), args[1], description, vmState, wait))
+			return wrap("creating snapshot", Create(guestType, args[0], node(cmd), args[1], description, vmState, wait))
 		},
 	}
 	create.Flags().StringP("description", "d", "", "Snapshot description")
@@ -104,19 +103,22 @@ Examples:
 		Long:              fmt.Sprintf("Roll a %s back to a snapshot. Changes made since the snapshot are lost.", label),
 		Args:              cobra.ExactArgs(2),
 		ValidArgsFunction: complete,
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			force, _ := cmd.Flags().GetBool("force")
 			if !force {
 				_, _, t, err := prepare(guestType, args[0], node(cmd))
-				exitOn("rolling back", err)
-				if !cmdutil.ConfirmOrExit(
+				if err != nil {
+					return wrap("rolling back", err)
+				}
+				ok, err := cmdutil.Confirm(
 					fmt.Sprintf("Roll %s '%s' (ID %d, on %s) back to snapshot '%s'? Changes since the snapshot will be lost", label, t.name, t.id, t.node, args[1]),
-					"--force", "Rollback cancelled") {
-					return
+					"--force", "Rollback cancelled")
+				if err != nil || !ok {
+					return err
 				}
 			}
 			wait := cmdutil.ResolveWait(cmd, true)
-			exitOn("rolling back", Rollback(guestType, args[0], node(cmd), args[1], wait))
+			return wrap("rolling back", Rollback(guestType, args[0], node(cmd), args[1], wait))
 		},
 	}
 	rollback.Flags().BoolP("force", "f", false, "Skip the confirmation prompt")
@@ -129,19 +131,22 @@ Examples:
 		Short:             "Delete a snapshot",
 		Args:              cobra.ExactArgs(2),
 		ValidArgsFunction: complete,
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			force, _ := cmd.Flags().GetBool("force")
 			if !force {
 				_, _, t, err := prepare(guestType, args[0], node(cmd))
-				exitOn("deleting snapshot", err)
-				if !cmdutil.ConfirmOrExit(
+				if err != nil {
+					return wrap("deleting snapshot", err)
+				}
+				ok, err := cmdutil.Confirm(
 					fmt.Sprintf("Delete snapshot '%s' of %s '%s' (ID %d, on %s)?", args[1], label, t.name, t.id, t.node),
-					"--force", "Deletion cancelled") {
-					return
+					"--force", "Deletion cancelled")
+				if err != nil || !ok {
+					return err
 				}
 			}
 			wait := cmdutil.ResolveWait(cmd, true)
-			exitOn("deleting snapshot", Delete(guestType, args[0], node(cmd), args[1], wait))
+			return wrap("deleting snapshot", Delete(guestType, args[0], node(cmd), args[1], wait))
 		},
 	}
 	del.Flags().BoolP("force", "f", false, "Skip the confirmation prompt")

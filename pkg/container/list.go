@@ -111,12 +111,6 @@ func fetchContainerIPsConcurrently(client c.ProxmoxClientInterface, containers [
 func ListContainers(node string, runningOnly bool, jsonOutput bool, tag string) error {
 	client, err := c.CreateClient()
 	if err != nil {
-		if !jsonOutput {
-			output.ClientError(err)
-		} else {
-			// In JSON mode, only output the error to stderr without extra formatting
-			output.Error("Error: Failed to connect to Proxmox VE: %v\n", err)
-		}
 		return fmt.Errorf("failed to create client: %w", err)
 	}
 
@@ -127,11 +121,6 @@ func ListContainers(node string, runningOnly bool, jsonOutput bool, tag string) 
 	// Get cluster resources
 	resources, err := client.GetClusterResources(context.Background())
 	if err != nil {
-		if jsonOutput {
-			output.Error("Error getting cluster resources: %v\n", err)
-		} else {
-			output.Error("Error: Error getting cluster resources: %v\n", err)
-		}
 		return fmt.Errorf("failed to get cluster resources: %w", err)
 	}
 
@@ -205,7 +194,6 @@ func ListContainers(node string, runningOnly bool, jsonOutput bool, tag string) 
 			containers = []Container{} // print [] rather than null
 		}
 		if err := output.OutputJSON(containers); err != nil {
-			output.Error("Error encoding output: %v\n", err)
 			return fmt.Errorf("failed to encode output: %w", err)
 		}
 		return nil

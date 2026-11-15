@@ -116,7 +116,6 @@ func CreateFromTemplate(opts CreateOptions) error {
 	ctx := context.Background()
 	client, err := c.CreateClient()
 	if err != nil {
-		output.ClientError(err)
 		return fmt.Errorf("failed to create client: %w", err)
 	}
 

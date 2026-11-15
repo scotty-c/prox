@@ -1,8 +1,6 @@
 package cmd
 
 import (
-	"os"
-
 	"github.com/scotty-c/prox/pkg/cmdutil"
 	"github.com/scotty-c/prox/pkg/completion"
 	"github.com/scotty-c/prox/pkg/container"
@@ -15,14 +13,15 @@ var listCmd = &cobra.Command{
 	Aliases: []string{"ls"},
 	Short:   "List LXC containers",
 	Long:    `List all LXC containers on Proxmox VE with their status, resource usage, and node information.`,
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		node, _ := cmd.Flags().GetString("node")
 		running, _ := cmd.Flags().GetBool("running")
 		jsonOutput := cmdutil.StructuredOutput(cmd)
 		tag, _ := cmd.Flags().GetString("tag")
 		if err := container.ListContainers(node, running, jsonOutput, tag); err != nil {
-			os.Exit(1)
+			return err
 		}
+		return nil
 	},
 }
 

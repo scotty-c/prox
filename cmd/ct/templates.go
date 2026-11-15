@@ -1,12 +1,11 @@
 package cmd
 
 import (
-	"os"
+	"fmt"
 
 	"github.com/scotty-c/prox/pkg/cmdutil"
 	"github.com/scotty-c/prox/pkg/completion"
 	"github.com/scotty-c/prox/pkg/container"
-	"github.com/scotty-c/prox/pkg/output"
 	"github.com/spf13/cobra"
 )
 
@@ -23,19 +22,19 @@ Examples:
   prox ct templates                    # Downloaded templates
   prox ct templates --available        # Templates you can download
   prox ct templates pull debian:12     # Download a template`,
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		node, _ := cmd.Flags().GetString("node")
 		available, _ := cmd.Flags().GetBool("available")
 		if available {
 			if err := container.ListAvailableTemplates(node); err != nil {
-				output.UserError("listing downloadable templates", err)
-				os.Exit(1)
+				return fmt.Errorf("listing downloadable templates: %w", err)
 			}
-			return
+			return nil
 		}
 		if err := container.ListTemplates(node); err != nil {
-			os.Exit(1)
+			return err
 		}
+		return nil
 	},
 }
 
@@ -53,14 +52,14 @@ Examples:
   prox ct templates pull debian:12
   prox ct templates pull ubuntu:24.04 --node pve2 --storage nfs-templates`,
 	Args: cobra.ExactArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		node, _ := cmd.Flags().GetString("node")
 		storage, _ := cmd.Flags().GetString("storage")
 		wait := cmdutil.ResolveWait(cmd, true)
 		if err := container.PullTemplate(args[0], node, storage, wait); err != nil {
-			output.UserError("downloading template", err)
-			os.Exit(1)
+			return fmt.Errorf("downloading template: %w", err)
 		}
+		return nil
 	},
 }
 

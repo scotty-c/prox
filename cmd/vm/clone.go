@@ -7,7 +7,6 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/scotty-c/prox/pkg/output"
 	"github.com/scotty-c/prox/pkg/vm"
 	"github.com/spf13/cobra"
 )
@@ -28,14 +27,13 @@ Examples:
   prox vm clone web-server 300 web-clone`,
 	ValidArgsFunction: completion.FirstArgOnly(completion.GetVMNames),
 	Args:              cobra.MinimumNArgs(2),
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		sourceNameOrID := args[0]
 
 		// Parse new VM ID
 		newID, err := strconv.Atoi(args[1])
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: Invalid new VM ID '%s'. Must be a number.\n", args[1])
-			os.Exit(1)
+			return fmt.Errorf("Invalid new VM ID '%s'. Must be a number.", args[1])
 		}
 
 		// Get flags
@@ -57,15 +55,13 @@ Examples:
 		}
 
 		if name == "" {
-			fmt.Fprintln(os.Stderr, "Error: NAME (positional) or --name flag is required")
-			cmd.Usage()
-			os.Exit(1)
+			return fmt.Errorf("a name for the new VM is required: give NAME as the third argument or use --name")
 		}
 
 		if err := vm.CloneVMByNameOrIDWithWait(sourceNameOrID, node, name, newID, full, wait); err != nil {
-			output.VMError("clone", err)
-			os.Exit(1)
+			return err
 		}
+		return nil
 	},
 }
 

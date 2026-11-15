@@ -1,8 +1,6 @@
 package cmd
 
 import (
-	"os"
-
 	"github.com/scotty-c/prox/pkg/cmdutil"
 	"github.com/scotty-c/prox/pkg/completion"
 	v "github.com/scotty-c/prox/pkg/vm"
@@ -19,7 +17,7 @@ var listCmd = &cobra.Command{
 
 By default, this command shows basic information quickly. Use --ip to show IP addresses 
 and --detailed to get accurate disk usage information (both options are slower).`,
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		node, _ := cmd.Flags().GetString("node")
 		running, _ := cmd.Flags().GetBool("running")
 		showIPs, _ := cmd.Flags().GetBool("ip")
@@ -34,8 +32,9 @@ and --detailed to get accurate disk usage information (both options are slower).
 			JSONOutput:  jsonOutput,
 			Tag:         tag,
 		}); err != nil {
-			os.Exit(1)
+			return err
 		}
+		return nil
 	},
 }
 

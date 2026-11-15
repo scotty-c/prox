@@ -15,7 +15,6 @@ import (
 func ListTemplates(node string) error {
 	client, err := c.CreateClient()
 	if err != nil {
-		output.ClientError(err)
 		return fmt.Errorf("failed to create client: %w", err)
 	}
 
@@ -29,7 +28,6 @@ func ListTemplates(node string) error {
 		// Get all nodes in the cluster
 		clusterNodes, err := getClusterNodes(client)
 		if err != nil {
-			output.Error("Error: Error getting cluster nodes: %v\n", err)
 			return fmt.Errorf("failed to get cluster nodes: %w", err)
 		}
 		nodes = clusterNodes

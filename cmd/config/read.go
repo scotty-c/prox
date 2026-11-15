@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"fmt"
-	"os"
 
 	c "github.com/scotty-c/prox/pkg/config"
 	"github.com/spf13/cobra"
@@ -16,11 +15,10 @@ var readCmd = &cobra.Command{
 	Long: `Show the current profile's saved configuration.
 
 The password is masked unless --show-password is given.`,
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		user, pass, url, err := c.Read()
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error reading config: %v\n", err)
-			os.Exit(1)
+			return fmt.Errorf("reading config: %w", err)
 		}
 		fmt.Println("Username: ", user)
 		showPassword, _ := cmd.Flags().GetBool("show-password")
@@ -30,6 +28,7 @@ The password is masked unless --show-password is given.`,
 			fmt.Println("Password: ", maskPassword(pass))
 		}
 		fmt.Println("URL: ", url)
+		return nil
 	},
 }
 

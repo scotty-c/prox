@@ -3,7 +3,6 @@ package node
 import (
 	"context"
 	"fmt"
-	"os"
 
 	"github.com/jedib0t/go-pretty/v6/table"
 	"github.com/scotty-c/prox/pkg/client"
@@ -17,19 +16,17 @@ var listCmd = &cobra.Command{
 	Use:     "ls",
 	Aliases: []string{"list"},
 	Short:   "List all Proxmox nodes in the datacenter",
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		structured := cmdutil.StructuredOutput(cmd)
 
 		c, err := client.CreateClient()
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Failed to create client: %v\n", err)
-			os.Exit(1)
+			return fmt.Errorf("Failed to create client: %w", err)
 		}
 
 		nodes, err := c.GetNodes(context.Background())
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Failed to list nodes: %v\n", err)
-			os.Exit(1)
+			return fmt.Errorf("Failed to list nodes: %w", err)
 		}
 
 		if structured {
@@ -37,10 +34,9 @@ var listCmd = &cobra.Command{
 				nodes = []client.Node{} // print [] rather than null
 			}
 			if err := output.OutputJSON(nodes); err != nil {
-				fmt.Fprintf(os.Stderr, "Error encoding output: %v\n", err)
-				os.Exit(1)
+				return fmt.Errorf("encoding output: %w", err)
 			}
-			return
+			return nil
 		}
 
 		// Display nodes in a formatted table to match prox vm ls
@@ -55,6 +51,7 @@ var listCmd = &cobra.Command{
 		t.SetStyle(table.StyleRounded)
 		fmt.Printf("\n%s\n", t.Render())
 		fmt.Printf("Found %d node(s)\n", len(nodes))
+		return nil
 	},
 }
 

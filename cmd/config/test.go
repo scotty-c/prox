@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"context"
-	"os"
 	"time"
 
 	"github.com/scotty-c/prox/pkg/client"
@@ -15,7 +14,7 @@ var testCmd = &cobra.Command{
 	Use:   "test",
 	Short: "Test the configuration by connecting to the Proxmox server",
 	Long:  `Validates the current configuration by attempting to connect to the Proxmox server, authenticate, and retrieve basic information.`,
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		output.Resultln("Testing Proxmox configuration...")
 
 		// Step 1: Load Configuration
@@ -23,8 +22,7 @@ var testCmd = &cobra.Command{
 		user, pass, url, err := client.ReadConfig()
 		if err != nil {
 			output.Errorln("FAILED")
-			output.Error("   Error: %v\n", err)
-			os.Exit(1)
+			return err
 		}
 		output.Resultln("OK")
 		output.Result("   URL: %s\n", url)
@@ -37,14 +35,12 @@ var testCmd = &cobra.Command{
 		tlsOpts, err := client.ResolveTLSOptions()
 		if err != nil {
 			output.Errorln("FAILED")
-			output.Error("   Error: %v\n", err)
-			os.Exit(1)
+			return err
 		}
 		c, err := client.NewClientWithTLS(url, user, pass, tlsOpts)
 		if err != nil {
 			output.Errorln("FAILED")
-			output.Error("   Error: %v\n", err)
-			os.Exit(1)
+			return err
 		}
 		output.Resultln("OK")
 		switch {
@@ -64,8 +60,7 @@ var testCmd = &cobra.Command{
 		err = c.Authenticate(ctx)
 		if err != nil {
 			output.Errorln("FAILED")
-			output.Error("   Error: %v\n", err)
-			os.Exit(1)
+			return err
 		}
 		output.Resultln("OK")
 
@@ -74,8 +69,7 @@ var testCmd = &cobra.Command{
 		version, err := c.GetVersion(ctx)
 		if err != nil {
 			output.Errorln("FAILED")
-			output.Error("   Error: %v\n", err)
-			os.Exit(1)
+			return err
 		}
 		output.Resultln("OK")
 		output.Result("   Proxmox VE %s (Release %s)\n", version.Version, version.Release)
@@ -85,8 +79,7 @@ var testCmd = &cobra.Command{
 		nodes, err := c.GetNodes(ctx)
 		if err != nil {
 			output.Errorln("FAILED")
-			output.Error("   Error: %v\n", err)
-			os.Exit(1)
+			return err
 		}
 		output.Resultln("OK")
 		output.Result("   Found %d nodes: ", len(nodes))
@@ -99,6 +92,7 @@ var testCmd = &cobra.Command{
 		output.Resultln("")
 
 		output.Resultln("\nConfiguration is valid and working correctly!")
+		return nil
 	},
 }
 

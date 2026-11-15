@@ -1,12 +1,10 @@
 package cmd
 
 import (
-	"os"
-
+	"fmt"
 	"github.com/scotty-c/prox/pkg/cmdutil"
 	"github.com/scotty-c/prox/pkg/completion"
 	"github.com/scotty-c/prox/pkg/container"
-	"github.com/scotty-c/prox/pkg/output"
 	"github.com/spf13/cobra"
 )
 
@@ -24,7 +22,7 @@ Examples:
   prox ct start --tag web    # Start every container tagged 'web' (asks first)`,
 	Args:              cmdutil.NameOrTagArgs,
 	ValidArgsFunction: completion.FirstArgOnly(completion.GetContainerNames),
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		wait := cmdutil.ResolveWait(cmd, true)
 
 		if tag, _ := cmd.Flags().GetString("tag"); tag != "" {
@@ -32,19 +30,18 @@ Examples:
 				return container.StartContainerWithWait(id, wait)
 			})
 			if err != nil {
-				output.UserError("starting containers", err)
-				os.Exit(1)
+				return fmt.Errorf("starting containers: %w", err)
 			}
-			return
+			return nil
 		}
 		nameOrID := args[0]
 
 		// Start the container
 		err := container.StartContainerWithWait(nameOrID, wait)
 		if err != nil {
-			output.UserError("starting container", err)
-			os.Exit(1)
+			return fmt.Errorf("starting container: %w", err)
 		}
+		return nil
 	},
 }
 

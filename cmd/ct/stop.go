@@ -1,12 +1,10 @@
 package cmd
 
 import (
-	"os"
-
+	"fmt"
 	"github.com/scotty-c/prox/pkg/cmdutil"
 	"github.com/scotty-c/prox/pkg/completion"
 	"github.com/scotty-c/prox/pkg/container"
-	"github.com/scotty-c/prox/pkg/output"
 	"github.com/spf13/cobra"
 )
 
@@ -26,7 +24,7 @@ Examples:
   prox ct stop --tag web             # Stop every container tagged 'web' (asks first)`,
 	Args:              cmdutil.NameOrTagArgs,
 	ValidArgsFunction: completion.FirstArgOnly(completion.GetContainerNames),
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		wait := cmdutil.ResolveWait(cmd, true)
 		force, _ := cmd.Flags().GetBool("force")
 
@@ -39,19 +37,18 @@ Examples:
 				return container.StopContainerWithOptions(id, force, wait)
 			})
 			if err != nil {
-				output.UserError("stopping containers", err)
-				os.Exit(1)
+				return fmt.Errorf("stopping containers: %w", err)
 			}
-			return
+			return nil
 		}
 		nameOrID := args[0]
 
 		// Stop the container
 		err := container.StopContainerWithOptions(nameOrID, force, wait)
 		if err != nil {
-			output.UserError("stopping container", err)
-			os.Exit(1)
+			return fmt.Errorf("stopping container: %w", err)
 		}
+		return nil
 	},
 }
 

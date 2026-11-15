@@ -8,7 +8,6 @@ import (
 	"github.com/scotty-c/prox/pkg/cmdutil"
 	"github.com/scotty-c/prox/pkg/completion"
 	"github.com/scotty-c/prox/pkg/container"
-	"github.com/scotty-c/prox/pkg/output"
 	"github.com/scotty-c/prox/pkg/vm"
 	"github.com/spf13/cobra"
 )
@@ -29,7 +28,7 @@ Examples:
     --ip 10.0.0.20/24 --gateway 10.0.0.1 --ci-user admin \
     --ssh-keys-file ~/.ssh/id_ed25519.pub --start --wait`,
 	Args: cobra.ExactArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		opts := vm.CreateOptions{Name: args[0]}
 		opts.Template, _ = cmd.Flags().GetString("from")
 		opts.Node, _ = cmd.Flags().GetString("node")
@@ -47,16 +46,15 @@ Examples:
 		if keysFile, _ := cmd.Flags().GetString("ssh-keys-file"); keysFile != "" {
 			keys, err := readKeysFile(keysFile)
 			if err != nil {
-				output.UserError("reading SSH keys", err)
-				os.Exit(1)
+				return fmt.Errorf("reading SSH keys: %w", err)
 			}
 			opts.SSHKeys = keys
 		}
 
 		if err := vm.CreateFromTemplate(opts); err != nil {
-			output.VMError("create", err)
-			os.Exit(1)
+			return err
 		}
+		return nil
 	},
 }
 

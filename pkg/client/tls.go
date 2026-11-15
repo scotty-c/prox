@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/scotty-c/prox/pkg/apierr"
 	"github.com/scotty-c/prox/pkg/config"
 )
 
@@ -85,7 +86,7 @@ func buildTLSConfig(opts TLSOptions) (*tls.Config, error) {
 }
 
 // ErrCertificate marks errors caused by certificate verification failing
-var ErrCertificate = errors.New("TLS certificate verification failed")
+var ErrCertificate = apierr.ErrCertificate
 
 // wrapTLSError adds instructions to certificate verification errors
 func wrapTLSError(err error, baseURL string) error {

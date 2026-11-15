@@ -3,13 +3,11 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"os"
 	"strconv"
 
 	c "github.com/scotty-c/prox/pkg/client"
 	"github.com/scotty-c/prox/pkg/cmdutil"
 	"github.com/scotty-c/prox/pkg/completion"
-	"github.com/scotty-c/prox/pkg/output"
 	"github.com/scotty-c/prox/pkg/vm"
 	"github.com/spf13/cobra"
 )
@@ -27,26 +25,23 @@ Examples:
   prox vm console 100 --host pve1.lan`,
 	Args:              cobra.ExactArgs(1),
 	ValidArgsFunction: completion.FirstArgOnly(completion.GetVMNames),
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		node, _ := cmd.Flags().GetString("node")
 		cl, err := c.CreateClient()
 		if err != nil {
-			output.ClientError(err)
-			os.Exit(1)
+			return err
 		}
 		v, err := vm.FindByNameOrIDOnNode(context.Background(), cl, args[0], node)
 		if err != nil {
-			output.VMError("console", err)
-			os.Exit(1)
+			return err
 		}
 		if v.Status != "running" {
-			output.UserError("opening console", fmt.Errorf("VM %s is not running; start it with 'prox vm start %s'", v.Name, v.Name))
-			os.Exit(1)
+			return fmt.Errorf("opening console: VM %s is not running; start it with 'prox vm start %s'", v.Name, v.Name)
 		}
 		if err := cmdutil.RunOnNode(cmd, cl, v.Node, "qm", "terminal", strconv.Itoa(v.ID)); err != nil {
-			output.UserError("opening console", err)
-			os.Exit(1)
+			return fmt.Errorf("opening console: %w", err)
 		}
+		return nil
 	},
 }
 

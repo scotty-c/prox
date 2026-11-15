@@ -30,13 +30,18 @@ type Server struct {
 
 	mu       sync.Mutex
 	requests []string
-	failures map[string]string
+	failures map[string]failure
+}
+
+type failure struct {
+	status int
+	msg    string
 }
 
 // New starts a fake Proxmox API that is shut down when the test ends
 func New(t testing.TB) *Server {
 	t.Helper()
-	s := &Server{failures: map[string]string{}}
+	s := &Server{failures: map[string]failure{}}
 	s.Server = httptest.NewServer(http.HandlerFunc(s.handle))
 	t.Cleanup(s.Close)
 	return s
@@ -45,9 +50,15 @@ func New(t testing.TB) *Server {
 // FailRequest makes requests to "METHOD /path" (the path without /api2/json)
 // fail with HTTP 500 and msg as the reason
 func (s *Server) FailRequest(methodAndPath, msg string) {
+	s.FailRequestWithStatus(methodAndPath, http.StatusInternalServerError, msg)
+}
+
+// FailRequestWithStatus is FailRequest with a chosen HTTP status, for example
+// 401 for a login that is refused or 403 for a missing privilege
+func (s *Server) FailRequestWithStatus(methodAndPath string, status int, msg string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.failures[methodAndPath] = msg
+	s.failures[methodAndPath] = failure{status, msg}
 }
 
 // Requests returns every request received so far as "METHOD /path?query"
@@ -101,10 +112,10 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 	p := strings.TrimPrefix(r.URL.Path, "/api2/json")
 	s.mu.Lock()
 	s.requests = append(s.requests, r.Method+" "+strings.TrimPrefix(r.URL.RequestURI(), "/api2/json"))
-	msg, failed := s.failures[r.Method+" "+p]
+	f, failed := s.failures[r.Method+" "+p]
 	s.mu.Unlock()
 	if failed {
-		reply(w, nil, http.StatusInternalServerError, msg)
+		reply(w, nil, f.status, f.msg)
 		return
 	}
 

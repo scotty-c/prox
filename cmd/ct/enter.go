@@ -3,14 +3,12 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"os"
 	"strconv"
 
 	c "github.com/scotty-c/prox/pkg/client"
 	"github.com/scotty-c/prox/pkg/cmdutil"
 	"github.com/scotty-c/prox/pkg/completion"
 	"github.com/scotty-c/prox/pkg/container"
-	"github.com/scotty-c/prox/pkg/output"
 	"github.com/spf13/cobra"
 )
 
@@ -28,25 +26,22 @@ Examples:
   prox ct enter web --print     # Show the ssh command instead`,
 	Args:              cobra.ExactArgs(1),
 	ValidArgsFunction: completion.FirstArgOnly(completion.GetContainerNames),
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		cl, err := c.CreateClient()
 		if err != nil {
-			output.ClientError(err)
-			os.Exit(1)
+			return err
 		}
 		ct, err := container.FindByNameOrID(context.Background(), cl, args[0])
 		if err != nil {
-			output.ContainerError("enter", err)
-			os.Exit(1)
+			return err
 		}
 		if ct.Status != "running" {
-			output.UserError("entering container", fmt.Errorf("container %s is not running; start it with 'prox ct start %s'", ct.Name, ct.Name))
-			os.Exit(1)
+			return fmt.Errorf("entering container: container %s is not running; start it with 'prox ct start %s'", ct.Name, ct.Name)
 		}
 		if err := cmdutil.RunOnNode(cmd, cl, ct.Node, "pct", "enter", strconv.Itoa(ct.ID)); err != nil {
-			output.UserError("entering container", err)
-			os.Exit(1)
+			return fmt.Errorf("entering container: %w", err)
 		}
+		return nil
 	},
 }
 

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -15,6 +16,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/scotty-c/prox/pkg/apierr"
 	"github.com/scotty-c/prox/pkg/config"
 )
 
@@ -251,7 +253,10 @@ func (c *ProxmoxClient) usesAPIToken() bool {
 func (c *ProxmoxClient) Authenticate(ctx context.Context) error {
 	if c.usesAPIToken() {
 		if _, err := c.GetVersion(ctx); err != nil {
-			return fmt.Errorf("authentication failed: API token rejected: %w", err)
+			if errors.Is(err, apierr.ErrAuth) || errors.Is(err, apierr.ErrPermission) {
+				return fmt.Errorf("API token rejected: %w", err)
+			}
+			return err
 		}
 		return nil
 	}
@@ -278,7 +283,7 @@ func (c *ProxmoxClient) authenticateLocked(ctx context.Context) error {
 
 	resp, err := c.HTTPClient.Do(req)
 	if err != nil {
-		return wrapTLSError(fmt.Errorf("authentication request failed: %w", err), c.BaseURL)
+		return c.transportError(err)
 	}
 	defer resp.Body.Close()
 
@@ -288,7 +293,7 @@ func (c *ProxmoxClient) authenticateLocked(ctx context.Context) error {
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("authentication failed with status %d: %s", resp.StatusCode, string(body))
+		return &APIError{Status: resp.StatusCode, Message: apiErrorMessage(strings.TrimSpace(strings.TrimPrefix(resp.Status, strconv.Itoa(resp.StatusCode))), body), login: true}
 	}
 
 	var authResp AuthResponse
@@ -316,7 +321,7 @@ func (c *ProxmoxClient) makeRequest(ctx context.Context, method, path string, bo
 	for attempt := 0; ; attempt++ {
 		ticket, csrfToken, err := c.ensureTicket(ctx)
 		if err != nil {
-			return nil, fmt.Errorf("authentication failed: %w", err)
+			return nil, err
 		}
 
 		status, reason, respBody, err := c.doRequest(ctx, method, path, jsonBody, ticket, csrfToken)
@@ -331,7 +336,7 @@ func (c *ProxmoxClient) makeRequest(ctx context.Context, method, path string, bo
 		}
 
 		if status < 200 || status >= 300 {
-			return nil, fmt.Errorf("API request failed with status %d: %s", status, apiErrorMessage(reason, respBody))
+			return nil, &APIError{Status: status, Message: apiErrorMessage(reason, respBody)}
 		}
 		return respBody, nil
 	}
@@ -368,7 +373,7 @@ func (c *ProxmoxClient) doRequest(ctx context.Context, method, path string, json
 
 	resp, err := c.HTTPClient.Do(req)
 	if err != nil {
-		return 0, "", nil, wrapTLSError(fmt.Errorf("request failed: %w", err), c.BaseURL)
+		return 0, "", nil, c.transportError(err)
 	}
 	defer resp.Body.Close()
 
@@ -380,6 +385,45 @@ func (c *ProxmoxClient) doRequest(ctx context.Context, method, path string, json
 	// resp.Status is e.g. "500 VM 100 not running"; Proxmox puts the reason there
 	reason := strings.TrimSpace(strings.TrimPrefix(resp.Status, strconv.Itoa(resp.StatusCode)))
 	return resp.StatusCode, reason, respBody, nil
+}
+
+// APIError is an error response from the Proxmox API. It matches
+// apierr.ErrAuth for 401 and apierr.ErrPermission for 403.
+type APIError struct {
+	Status  int
+	Message string
+	login   bool // the failed request was the login itself
+}
+
+func (e *APIError) Error() string {
+	if e.login {
+		return fmt.Sprintf("authentication failed with status %d: %s", e.Status, e.Message)
+	}
+	return fmt.Sprintf("API request failed with status %d: %s", e.Status, e.Message)
+}
+
+// Is lets errors.Is classify the response by its status code
+func (e *APIError) Is(target error) bool {
+	switch target {
+	case apierr.ErrAuth:
+		return e.Status == http.StatusUnauthorized
+	case apierr.ErrPermission:
+		return e.Status == http.StatusForbidden
+	}
+	return false
+}
+
+// transportError explains a failure to get any response from the server. A
+// cancelled context (Ctrl-C) is returned as it is; certificate problems get
+// instructions; anything else means the server could not be reached.
+func (c *ProxmoxClient) transportError(err error) error {
+	if errors.Is(err, context.Canceled) {
+		return err
+	}
+	if wrapped := wrapTLSError(err, c.BaseURL); wrapped != err {
+		return wrapped
+	}
+	return fmt.Errorf("%w at %s: %w", apierr.ErrUnreachable, c.BaseURL, err)
 }
 
 // ensureTicket logs in if there is no ticket yet and returns the current

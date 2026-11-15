@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"fmt"
-	"os"
 
 	c "github.com/scotty-c/prox/pkg/config"
 	"github.com/spf13/cobra"
@@ -14,16 +13,18 @@ var updateCmd = &cobra.Command{
 	Use:   "update",
 	Short: "This command updates the configuration file for prox",
 	Long:  ``,
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		username, _ := cmd.Flags().GetString("username")
 		password, _ := cmd.Flags().GetString("password")
 		url, _ := cmd.Flags().GetString("url")
 
-		saveTLSFlagsOrExit(cmd, c.GetCurrentProfile())
-		if err := c.Update(username, password, url); err != nil {
-			fmt.Fprintf(os.Stderr, "Error updating config: %v\n", err)
-			os.Exit(1)
+		if err := saveTLSFlags(cmd, c.GetCurrentProfile()); err != nil {
+			return err
 		}
+		if err := c.Update(username, password, url); err != nil {
+			return fmt.Errorf("updating config: %w", err)
+		}
+		return nil
 	},
 }
 

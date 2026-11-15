@@ -73,6 +73,9 @@ Use "prox [command] --help" for more information about a command.`,
 		// error from here on is a runtime failure. Don't follow it with the full
 		// usage text, which suggests the command was typed incorrectly.
 		cmd.SilenceUsage = true
+		// From here on a failure is ours to report (once, in Execute); cobra
+		// prints the errors it finds itself, such as bad flags and arguments
+		cmd.SilenceErrors = true
 
 		// Set quiet mode based on flag
 		quiet, _ := cmd.Flags().GetBool("quiet")
@@ -105,8 +108,11 @@ Use "prox [command] --help" for more information about a command.`,
 // Execute adds all child commands to the root command and sets flags appropriately.
 // This is called by main.main(). It only needs to happen once to the rootCmd.
 func Execute() {
-	err := RootCmd.Execute()
+	cmd, err := RootCmd.ExecuteC()
 	if err != nil {
+		if cmd.SilenceErrors {
+			output.Fail(err)
+		}
 		os.Exit(1)
 	}
 }

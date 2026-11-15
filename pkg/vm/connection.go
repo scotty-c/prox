@@ -28,7 +28,6 @@ func TestConnection() error {
 	ctx := context.Background()
 	client, err := c.CreateClient()
 	if err != nil {
-		output.Error("Error creating client: %v\n", err)
 		return fmt.Errorf("failed to create client: %w", err)
 	}
 
@@ -38,13 +37,12 @@ func TestConnection() error {
 	output.Infoln("Testing nodes endpoint...")
 	nodes, err := client.GetNodes(ctx)
 	if err != nil {
-		output.Error("Error: Error getting nodes: %v\n", err)
+		output.Error("WARNING: Could not get nodes: %v\n", err)
 
 		// Try version endpoint as fallback
 		output.Infoln("Trying version endpoint...")
 		version, err2 := client.GetVersion(ctx)
 		if err2 != nil {
-			output.Error("Error: Error getting version: %v\n", err2)
 			output.Errorln("\nBoth nodes and version endpoints failed.")
 			output.Errorln("This suggests an authentication issue or API incompatibility.")
 			output.Errorln("\nTroubleshooting tips:")
@@ -77,7 +75,6 @@ func TestConnection() error {
 	output.Infoln("Testing cluster resources...")
 	resources, err := client.GetClusterResources(ctx)
 	if err != nil {
-		output.Error("Error: Error getting cluster resources: %v\n", err)
 		return fmt.Errorf("failed to get cluster resources: %w", err)
 	}
 	output.Info("Found %d resources\n", len(resources))

@@ -58,6 +58,7 @@ func RunBulk(verb, kind, tag string, targets []BulkTarget, skipConfirm bool) err
 	failed := 0
 	for _, t := range targets {
 		if err := t.Run(); err != nil {
+			// The loop carries on, so say which target failed as it happens
 			output.Error("Error: %s: %v\n", t.Label, err)
 			failed++
 		}

@@ -2,13 +2,11 @@ package cmd
 
 import (
 	"fmt"
-	"os"
 	"strconv"
 
 	"github.com/scotty-c/prox/pkg/cmdutil"
 	"github.com/scotty-c/prox/pkg/completion"
 	"github.com/scotty-c/prox/pkg/container"
-	"github.com/scotty-c/prox/pkg/output"
 	"github.com/spf13/cobra"
 )
 
@@ -25,11 +23,10 @@ Examples:
   prox ct clone ubuntu-template 202 api`,
 	Args:              cobra.RangeArgs(2, 3),
 	ValidArgsFunction: completion.FirstArgOnly(completion.GetContainerNames),
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		newID, err := strconv.Atoi(args[1])
 		if err != nil || newID <= 0 {
-			fmt.Fprintf(os.Stderr, "Error: Invalid new container ID '%s'. Must be a positive number.\n", args[1])
-			os.Exit(1)
+			return fmt.Errorf("Invalid new container ID '%s'. Must be a positive number.", args[1])
 		}
 
 		name, _ := cmd.Flags().GetString("name")
@@ -40,9 +37,9 @@ Examples:
 		wait := cmdutil.ResolveWait(cmd, true)
 
 		if err := container.CloneContainer(args[0], newID, name, full, wait); err != nil {
-			output.UserError("cloning container", err)
-			os.Exit(1)
+			return fmt.Errorf("cloning container: %w", err)
 		}
+		return nil
 	},
 }
 

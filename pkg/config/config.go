@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/scotty-c/prox/pkg/apierr"
 	"github.com/scotty-c/prox/pkg/crypto"
 	"github.com/scotty-c/prox/pkg/output"
 )
@@ -278,7 +279,7 @@ func ReadProfile(profile string) (string, string, string, error) {
 	}
 
 	if _, err := os.Stat(profilePath); os.IsNotExist(err) {
-		return "", "", "", fmt.Errorf("profile '%s' does not exist", profile)
+		return "", "", "", fmt.Errorf("%w: profile '%s' does not exist", apierr.ErrNoConfig, profile)
 	}
 
 	file, err := os.Open(profilePath)

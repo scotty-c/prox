@@ -1,6 +1,9 @@
 package cli
 
 import (
+	"bytes"
+	"os"
+	"os/exec"
 	"strings"
 	"testing"
 
@@ -222,4 +225,82 @@ func TestProxmoxErrorReasonIsShown(t *testing.T) {
 		t.Errorf("exit %d, want 1", r.code)
 	}
 	contains(t, "stderr", r.stderr, "VM 101 is locked (backup)")
+	if n := strings.Count(r.stderr, "VM 101 is locked"); n != 1 {
+		t.Errorf("the error was printed %d times, want once:\n%s", n, r.stderr)
+	}
+}
+
+func TestEachFailureIsPrintedOnce(t *testing.T) {
+	srv := fakepve.New(t)
+	srv.FailRequest("DELETE /nodes/pve1/lxc/200", "container is locked (snapshot)")
+	for _, args := range [][]string{
+		{"vm", "describe", "nope"},
+		{"ct", "start", "nope"},
+		{"ct", "delete", "ct1", "--force"},
+		{"vm", "edit", "100"},
+		{"node", "describe", "zzz"},
+		{"ssh", "nope", "--print"},
+	} {
+		r := run(t, srv, "", args...)
+		if r.code != 1 {
+			t.Errorf("prox %v: exit %d, want 1", args, r.code)
+		}
+		if n := strings.Count(r.stderr, "Error:"); n != 1 {
+			t.Errorf("prox %v printed %d error lines, want 1:\n%s", args, n, r.stderr)
+		}
+	}
+}
+
+// Error reporting: each failure is printed once, with a tip that fits it
+
+func TestUnreachableServerSaysSoWithATip(t *testing.T) {
+	srv := fakepve.New(t)
+	srv.Close() // nothing is listening any more
+	for _, args := range [][]string{{"vm", "list"}, {"vm", "start", "web"}, {"ct", "list"}, {"status"}, {"node", "ls"}} {
+		r := run(t, srv, "", args...)
+		if r.code != 1 {
+			t.Errorf("prox %v: exit %d, want 1", args, r.code)
+		}
+		contains(t, "prox "+strings.Join(args, " ")+" stderr", r.stderr, "cannot reach the Proxmox server", "Tip: Check the URL")
+		excludes(t, "stderr", r.stderr, "authentication failed")
+		if n := strings.Count(r.stderr, "cannot reach the Proxmox server"); n != 1 {
+			t.Errorf("prox %v printed the error %d times:\n%s", args, n, r.stderr)
+		}
+	}
+}
+
+func TestRejectedLoginIsAnAuthenticationError(t *testing.T) {
+	srv := fakepve.New(t)
+	srv.FailRequestWithStatus("POST /access/ticket", 401, "authentication failure")
+	r := run(t, srv, "", "vm", "list")
+	if r.code != 1 {
+		t.Errorf("exit %d, want 1", r.code)
+	}
+	contains(t, "stderr", r.stderr, "authentication failed", "Tip: Check your credentials")
+	excludes(t, "stderr", r.stderr, "cannot reach")
+}
+
+func TestMissingPrivilegeGetsAPermissionTip(t *testing.T) {
+	srv := fakepve.New(t)
+	srv.FailRequestWithStatus("POST /nodes/pve1/qemu/100/status/start", 403, "Permission check failed (/vms/100, VM.PowerMgmt)")
+	r := run(t, srv, "", "vm", "start", "100")
+	contains(t, "stderr", r.stderr, "VM.PowerMgmt", "Tip: Your Proxmox user lacks the privileges")
+}
+
+func TestNoSavedConfigSaysHowToSetOneUp(t *testing.T) {
+	cmd := exec.Command(binary, "vm", "list")
+	cmd.Env = []string{"HOME=" + t.TempDir(), "PATH=" + os.Getenv("PATH")}
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err == nil {
+		t.Fatal("expected a failure")
+	}
+	contains(t, "stderr", stderr.String(), "no configuration found", "Tip: Run 'prox config setup'")
+}
+
+func TestBadFlagValueIsReportedOnce(t *testing.T) {
+	r := run(t, fakepve.New(t), "", "vm", "list", "-o", "bogus")
+	if r.code != 1 || strings.Count(r.stderr, `invalid --output "bogus"`) != 1 {
+		t.Errorf("exit %d, stderr:\n%s", r.code, r.stderr)
+	}
 }

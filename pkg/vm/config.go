@@ -99,9 +99,7 @@ func EditVM(ctx context.Context, id int, node string, name string, cores int, me
 	}
 
 	if !hasChanges {
-		output.Error("WARNING: No changes specified for VM %d\n", id)
-		output.Error("Tip: Use flags like --name, --cpu, --memory, or --disk to specify changes\n")
-		return nil
+		return fmt.Errorf("no changes specified for VM %d: use --name, --cpu, --memory or --disk", id)
 	}
 
 	// Show what changes will be made
@@ -225,7 +223,6 @@ func EditVMByNameOrID(nameOrID string, node string, name string, cores int, mem 
 	ctx := context.Background()
 	client, err := c.CreateClient()
 	if err != nil {
-		output.ClientError(err)
 		return fmt.Errorf("failed to create client: %w", err)
 	}
 

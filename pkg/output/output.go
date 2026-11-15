@@ -3,6 +3,7 @@ package output
 import (
 	"bufio"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -10,6 +11,7 @@ import (
 	"time"
 
 	"github.com/briandowns/spinner"
+	"github.com/scotty-c/prox/pkg/apierr"
 	"golang.org/x/term"
 	"gopkg.in/yaml.v3"
 )
@@ -154,116 +156,30 @@ func confirmFrom(in io.Reader, out io.Writer, prompt, skipFlag string) (bool, er
 	return response == "y" || response == "yes", nil
 }
 
-// ClientError prints an error message for client creation failures with actionable advice
-func ClientError(err error) {
-	fmt.Fprintf(os.Stderr, "Error: Failed to connect to Proxmox VE\n")
-	fmt.Fprintf(os.Stderr, "Details: %v\n", err)
-
-	// Check for common error patterns and provide specific advice
-	errMsg := strings.ToLower(err.Error())
-
-	if strings.Contains(errMsg, "certificate") || strings.Contains(errMsg, "tls") || strings.Contains(errMsg, "ssl") {
-		fmt.Fprintf(os.Stderr, "\nTip: TLS certificate problem. Use --ca-cert with the Proxmox CA, or --insecure for a self-signed certificate\n")
-	} else if strings.Contains(errMsg, "decrypt") || strings.Contains(errMsg, "encryption") {
-		fmt.Fprintf(os.Stderr, "\nTip: Saved credentials could not be decrypted. Re-create the profile with 'prox config create <profile> -u <user> -p <password> -l <url>'\n")
-	} else if strings.Contains(errMsg, "config file does not exist") || strings.Contains(errMsg, "failed to read config") {
-		fmt.Fprintf(os.Stderr, "\nTip: No configuration found. Run 'prox config setup' to configure your connection\n")
-	} else if strings.Contains(errMsg, "authentication") || strings.Contains(errMsg, "401") || strings.Contains(errMsg, "unauthorized") {
-		fmt.Fprintf(os.Stderr, "\nTip: Authentication failed. Check your credentials with 'prox config setup'\n")
-	} else if strings.Contains(errMsg, "connection refused") || strings.Contains(errMsg, "no such host") || strings.Contains(errMsg, "timeout") {
-		fmt.Fprintf(os.Stderr, "\nTip: Cannot reach Proxmox server. Verify:\n")
-		fmt.Fprintf(os.Stderr, "  • Server URL is correct ('prox config setup' to update)\n")
-		fmt.Fprintf(os.Stderr, "  • Proxmox server is running and accessible\n")
-		fmt.Fprintf(os.Stderr, "  • Network connectivity\n")
-	} else {
-		fmt.Fprintf(os.Stderr, "\nTip: Run 'prox config setup' to verify your configuration\n")
+// Fail prints a command's error to stderr, followed by a tip when the kind of
+// error is recognised. Commands return their errors and cmd.Execute calls
+// this once, so an error is never printed twice.
+func Fail(err error) {
+	fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+	if tip := tipFor(err); tip != "" {
+		fmt.Fprintf(os.Stderr, "\nTip: %s\n", tip)
 	}
 }
 
-// AuthError prints an error message for authentication failures with actionable advice
-func AuthError(err error) {
-	fmt.Fprintf(os.Stderr, "Error: Authentication failed\n")
-	fmt.Fprintf(os.Stderr, "Details: %v\n", err)
-	fmt.Fprintf(os.Stderr, "\nTip: Check your credentials:\n")
-	fmt.Fprintf(os.Stderr, "  • Username should include realm (e.g., root@pam)\n")
-	fmt.Fprintf(os.Stderr, "  • For API tokens, use the token ID (user@realm!name) as the username and the secret as the password\n")
-	fmt.Fprintf(os.Stderr, "  • Password must be correct\n")
-	fmt.Fprintf(os.Stderr, "  • Run 'prox config setup' to update credentials\n")
-}
-
-// ConnectionError prints an error message for connection failures with actionable advice
-func ConnectionError(operation string, err error) {
-	fmt.Fprintf(os.Stderr, "Error: Failed to %s\n", operation)
-	fmt.Fprintf(os.Stderr, "Details: %v\n", err)
-
-	errMsg := strings.ToLower(err.Error())
-	if strings.Contains(errMsg, "connection refused") || strings.Contains(errMsg, "timeout") {
-		fmt.Fprintf(os.Stderr, "\nTip: Connection issue. Check:\n")
-		fmt.Fprintf(os.Stderr, "  • Proxmox server is running\n")
-		fmt.Fprintf(os.Stderr, "  • Network connectivity to server\n")
-		fmt.Fprintf(os.Stderr, "  • Firewall allows port 8006\n")
-	} else if strings.Contains(errMsg, "not found") || strings.Contains(errMsg, "404") {
-		fmt.Fprintf(os.Stderr, "\nTip: Resource not found. Verify the resource name or ID is correct\n")
-	} else {
-		fmt.Fprintf(os.Stderr, "\nTip: Run 'prox status' to verify cluster connectivity\n")
+// tipFor suggests what to do about err, or "" if there is nothing useful to
+// add (including when the error text already explains what to do)
+func tipFor(err error) string {
+	switch {
+	case errors.Is(err, apierr.ErrCertificate):
+		return "" // the message already lists the options
+	case errors.Is(err, apierr.ErrNoConfig):
+		return "Run 'prox config setup' to save your connection, or set PROX_URL, PROX_USER and PROX_PASSWORD"
+	case errors.Is(err, apierr.ErrUnreachable):
+		return "Check the URL with 'prox config read', that the server is up, and that port 8006 is not blocked"
+	case errors.Is(err, apierr.ErrAuth):
+		return "Check your credentials with 'prox config test'. For an API token, use the token ID (user@realm!name) as the username and the secret as the password"
+	case errors.Is(err, apierr.ErrPermission):
+		return "Your Proxmox user lacks the privileges this needs; check its role and permissions"
 	}
-}
-
-// APIError prints an error message for API operation failures with actionable advice
-func APIError(operation string, err error) {
-	fmt.Fprintf(os.Stderr, "Error: %s failed\n", operation)
-	fmt.Fprintf(os.Stderr, "Details: %v\n", err)
-
-	errMsg := strings.ToLower(err.Error())
-	if strings.Contains(errMsg, "permission") || strings.Contains(errMsg, "403") {
-		fmt.Fprintf(os.Stderr, "\nTip: Permission denied. Check that your user has the required privileges\n")
-	} else if strings.Contains(errMsg, "exists") || strings.Contains(errMsg, "duplicate") {
-		fmt.Fprintf(os.Stderr, "\nTip: Resource already exists. Use a different name or ID\n")
-	} else if strings.Contains(errMsg, "not found") {
-		fmt.Fprintf(os.Stderr, "\nTip: Resource not found. Use 'prox vm list' or 'prox ct list' to see available resources\n")
-	}
-}
-
-// UserError prints a simple, non-redundant error message for operation failures
-// operation should be a lowercase gerund phrase (e.g., "starting container", "reading file")
-func UserError(operation string, err error) {
-	fmt.Fprintf(os.Stderr, "Error: %s: %v\n", operation, err)
-}
-
-// VMError prints an error message for VM operation failures with helpful context
-func VMError(operation string, err error) {
-	fmt.Fprintf(os.Stderr, "Error: %s\n", err)
-
-	errMsg := strings.ToLower(err.Error())
-
-	// Provide contextual help based on error type
-	if strings.Contains(errMsg, "not found") {
-		fmt.Fprintf(os.Stderr, "\nTip: Run 'prox vm list' to see all available virtual machines\n")
-	} else if strings.Contains(errMsg, "permission") || strings.Contains(errMsg, "403") {
-		fmt.Fprintf(os.Stderr, "\nTip: Check that your user has permission to %s VMs\n", operation)
-	} else if strings.Contains(errMsg, "already running") {
-		fmt.Fprintf(os.Stderr, "\nTip: Use 'prox vm list' to check VM status\n")
-	} else if strings.Contains(errMsg, "already stopped") || strings.Contains(errMsg, "not running") {
-		fmt.Fprintf(os.Stderr, "\nTip: Use 'prox vm list' to check VM status\n")
-	}
-}
-
-// ContainerError prints an error message for container operation failures with helpful context
-func ContainerError(operation string, err error) {
-	fmt.Fprintf(os.Stderr, "Error: %s\n", err)
-
-	errMsg := strings.ToLower(err.Error())
-
-	// Provide contextual help based on error type
-	if strings.Contains(errMsg, "not found") {
-		fmt.Fprintf(os.Stderr, "\nTip: Run 'prox ct list' to see all available containers\n")
-	} else if strings.Contains(errMsg, "permission") || strings.Contains(errMsg, "403") {
-		fmt.Fprintf(os.Stderr, "\nTip: Check that your user has permission to %s containers\n", operation)
-	} else if strings.Contains(errMsg, "already running") {
-		fmt.Fprintf(os.Stderr, "\nTip: Use 'prox ct list' to check container status\n")
-	} else if strings.Contains(errMsg, "already stopped") || strings.Contains(errMsg, "not running") {
-		fmt.Fprintf(os.Stderr, "\nTip: Use 'prox ct list' to check container status\n")
-	} else if strings.Contains(errMsg, "template") {
-		fmt.Fprintf(os.Stderr, "\nTip: Use 'prox ct templates' to see available templates\n")
-	}
+	return ""
 }

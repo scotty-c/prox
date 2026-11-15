@@ -41,14 +41,14 @@ func applyTLSFlags(cmd *cobra.Command, profile string) (bool, error) {
 	return true, nil
 }
 
-// saveTLSFlagsOrExit saves TLS flags to profile, printing and exiting on failure
-func saveTLSFlagsOrExit(cmd *cobra.Command, profile string) {
+// saveTLSFlags saves --insecure and --ca-cert to profile if either was given
+func saveTLSFlags(cmd *cobra.Command, profile string) error {
 	saved, err := applyTLSFlags(cmd, profile)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error saving TLS settings: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("saving TLS settings: %w", err)
 	}
 	if saved {
 		fmt.Printf("TLS settings saved to profile '%s'\n", profile)
 	}
+	return nil
 }

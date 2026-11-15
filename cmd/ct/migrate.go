@@ -1,12 +1,10 @@
 package cmd
 
 import (
-	"os"
-
+	"fmt"
 	"github.com/scotty-c/prox/pkg/cmdutil"
 	"github.com/scotty-c/prox/pkg/completion"
 	"github.com/scotty-c/prox/pkg/container"
-	"github.com/scotty-c/prox/pkg/output"
 	"github.com/spf13/cobra"
 )
 
@@ -31,13 +29,13 @@ Examples:
 		}
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	},
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		restart, _ := cmd.Flags().GetBool("restart")
 		wait := cmdutil.ResolveWait(cmd, true)
 		if err := container.MigrateContainer(args[0], args[1], restart, wait); err != nil {
-			output.UserError("migrating container", err)
-			os.Exit(1)
+			return fmt.Errorf("migrating container: %w", err)
 		}
+		return nil
 	},
 }
 
