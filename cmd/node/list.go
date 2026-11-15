@@ -3,6 +3,7 @@ package node
 import (
 	"context"
 	"fmt"
+	"sort"
 
 	"github.com/jedib0t/go-pretty/v6/table"
 	"github.com/scotty-c/prox/pkg/client"
@@ -29,6 +30,8 @@ var listCmd = &cobra.Command{
 			return fmt.Errorf("Failed to list nodes: %w", err)
 		}
 
+		sort.Slice(nodes, func(i, j int) bool { return nodes[i].Node < nodes[j].Node })
+
 		if structured {
 			if nodes == nil {
 				nodes = []client.Node{} // print [] rather than null
@@ -49,7 +52,7 @@ var listCmd = &cobra.Command{
 		}
 
 		t.SetStyle(table.StyleRounded)
-		fmt.Printf("\n%s\n", t.Render())
+		fmt.Printf("%s\n", t.Render())
 		fmt.Printf("Found %d node(s)\n", len(nodes))
 		return nil
 	},

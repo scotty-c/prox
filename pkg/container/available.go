@@ -131,7 +131,7 @@ func ListAvailableTemplates(node string) error {
 		t.AppendRow(table.Row{tmpl.OS, tmpl.Version, tmpl.Name})
 	}
 	t.SetStyle(table.StyleRounded)
-	output.Result("\n%s\n", t.Render())
+	output.Result("%s\n", t.Render())
 	output.Result("Found %d template(s). Download one with: prox ct templates pull <os:version>\n", len(templates))
 	return nil
 }

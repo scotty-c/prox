@@ -494,7 +494,7 @@ func listSSHConfigEntries() error {
 	}
 
 	t.SetStyle(table.StyleRounded)
-	fmt.Printf("\n%s\n", t.Render())
+	fmt.Printf("%s\n", t.Render())
 	fmt.Printf("Found %d SSH host entry(ies) (%d alias name(s))\n", len(entries), aliasCount)
 	return nil
 }

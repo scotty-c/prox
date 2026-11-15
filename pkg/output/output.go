@@ -19,19 +19,19 @@ import (
 // QuietMode indicates whether to suppress non-essential output
 var QuietMode bool
 
-// Info prints informational messages (suppressed in quiet mode, and with
-// --output json/yaml so stdout stays machine-readable)
+// Info prints progress and informational messages to stderr, so stdout holds
+// only a command's result and can be piped. It is suppressed in quiet mode and
+// with --output json/yaml.
 func Info(format string, a ...interface{}) {
 	if !QuietMode && !Structured() {
-		fmt.Printf(format, a...)
+		fmt.Fprintf(os.Stderr, format, a...)
 	}
 }
 
-// Infoln prints informational messages with newline (suppressed in quiet
-// mode, and with --output json/yaml so stdout stays machine-readable)
+// Infoln is Info with a newline
 func Infoln(a ...interface{}) {
 	if !QuietMode && !Structured() {
-		fmt.Println(a...)
+		fmt.Fprintln(os.Stderr, a...)
 	}
 }
 

@@ -2,8 +2,10 @@ package cli
 
 import (
 	"bytes"
+	"encoding/json"
 	"os"
 	"os/exec"
+	"sort"
 	"strings"
 	"testing"
 
@@ -303,4 +305,63 @@ func TestBadFlagValueIsReportedOnce(t *testing.T) {
 	if r.code != 1 || strings.Count(r.stderr, `invalid --output "bogus"`) != 1 {
 		t.Errorf("exit %d, stderr:\n%s", r.code, r.stderr)
 	}
+}
+
+// Output streams and wording
+
+func TestListsAreSortedByID(t *testing.T) {
+	srv := fakepve.New(t)
+	r := run(t, srv, "", "vm", "list", "-o", "json")
+	var vms []struct{ ID int }
+	if err := json.Unmarshal([]byte(r.stdout), &vms); err != nil {
+		t.Fatalf("not JSON: %v\n%s", err, r.stdout)
+	}
+	var ids []int
+	for _, v := range vms {
+		ids = append(ids, v.ID)
+	}
+	if !sort.IntsAreSorted(ids) || len(ids) != 4 {
+		t.Errorf("VM IDs = %v, want 4 in ascending order", ids)
+	}
+
+	r = run(t, srv, "", "node", "ls", "-o", "json")
+	var nodes []struct{ Node string }
+	_ = json.Unmarshal([]byte(r.stdout), &nodes)
+	if len(nodes) != 2 || nodes[0].Node != "pve1" {
+		t.Errorf("nodes = %v", nodes)
+	}
+}
+
+func TestProgressGoesToStderrAndStdoutHoldsTheResult(t *testing.T) {
+	r := run(t, fakepve.New(t), "", "vm", "list")
+	contains(t, "stderr", r.stderr, "Retrieving virtual machines")
+	excludes(t, "stdout", r.stdout, "Retrieving")
+	if !strings.HasPrefix(r.stdout, "╭") {
+		t.Errorf("stdout should start with the table, got:\n%.80s", r.stdout)
+	}
+}
+
+func TestStartNamesTheVMAndReportsOneResultLine(t *testing.T) {
+	r := run(t, fakepve.New(t), "", "vm", "start", "100", "--wait")
+	if r.code != 0 {
+		t.Fatalf("exit %d: %s", r.code, r.stderr)
+	}
+	contains(t, "stderr", r.stderr, "Starting VM web (ID 100) on node pve1")
+	contains(t, "stdout", r.stdout, "Task started: "+upid, "VM web (ID 100) started in ")
+	excludes(t, "stdout", r.stdout, "command issued successfully", "Task ID:")
+}
+
+func TestStartWithoutWaitPointsAtTheLog(t *testing.T) {
+	r := run(t, fakepve.New(t), "", "vm", "start", "100")
+	contains(t, "stdout", r.stdout, "Task started: "+upid)
+	contains(t, "stderr", r.stderr, "prox logs --follow "+upid)
+	excludes(t, "stdout", r.stdout, "started in")
+}
+
+func TestDeleteAndShutdownNameTheVM(t *testing.T) {
+	srv := fakepve.New(t)
+	r := run(t, srv, "", "vm", "delete", "100", "--force", "--wait")
+	contains(t, "delete stdout", r.stdout, "VM web (ID 100) deleted")
+	r = run(t, srv, "", "vm", "shutdown", "100", "--wait")
+	contains(t, "shutdown stdout", r.stdout, "VM web (ID 100) shut down in ")
 }

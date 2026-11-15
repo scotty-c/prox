@@ -3,6 +3,7 @@ package vm
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 	"sync"
 
@@ -217,6 +218,9 @@ func ListVMs(opts ListVMsOptions) error {
 		vms = append(vms, vm)
 	}
 
+	// Proxmox returns resources in no particular order; list them by ID
+	sort.SliceStable(vms, func(i, j int) bool { return vms[i].ID < vms[j].ID })
+
 	// Fetch IPs concurrently if requested (for performance)
 	if opts.ShowIPs && len(vms) > 0 {
 		fetchIPsConcurrently(client, vms)
@@ -326,7 +330,7 @@ func displayVMsTable(vms []VM, runningOnly bool, showIPs bool, showDisk bool) {
 	}
 
 	t.SetStyle(table.StyleRounded)
-	output.Result("\n%s\n", t.Render())
+	output.Result("%s\n", t.Render())
 	if runningOnly {
 		output.Result("Found %d running virtual machine(s)\n", len(vms))
 	} else {

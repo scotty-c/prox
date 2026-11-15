@@ -3,6 +3,7 @@ package container
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 	"sync"
 
@@ -186,6 +187,9 @@ func ListContainers(node string, runningOnly bool, jsonOutput bool, tag string) 
 		containers = append(containers, container)
 	}
 
+	// Proxmox returns resources in no particular order; list them by ID
+	sort.SliceStable(containers, func(i, j int) bool { return containers[i].ID < containers[j].ID })
+
 	// Fetch IP addresses concurrently for all running containers
 	fetchContainerIPsConcurrently(client, containers)
 
@@ -272,7 +276,7 @@ func displayContainersTable(containers []Container, runningOnly bool) {
 	}
 
 	t.SetStyle(table.StyleRounded)
-	output.Result("\n%s\n", t.Render())
+	output.Result("%s\n", t.Render())
 	if runningOnly {
 		output.Result("Found %d running container(s)\n", len(containers))
 	} else {

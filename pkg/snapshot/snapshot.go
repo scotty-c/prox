@@ -112,7 +112,7 @@ func List(guestType, nameOrID, node string) error {
 		tw.AppendRow(row)
 	}
 	tw.SetStyle(table.StyleRounded)
-	output.Result("\n%s\n", tw.Render())
+	output.Result("%s\n", tw.Render())
 	output.Result("Found %d snapshot(s)\n", len(snapshots))
 	return nil
 }

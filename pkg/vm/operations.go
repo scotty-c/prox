@@ -9,6 +9,19 @@ import (
 	"github.com/scotty-c/prox/pkg/output"
 )
 
+// vmLabel names a VM for messages, like "web (ID 100)". It reads the cluster
+// resources the client has already fetched; with no name it is just "ID 100".
+func vmLabel(ctx context.Context, client c.ProxmoxClientInterface, id int) string {
+	if resources, err := client.GetClusterResources(ctx); err == nil {
+		for _, r := range resources {
+			if r.Type == "qemu" && r.VMID != nil && *r.VMID == id && r.Name != "" {
+				return fmt.Sprintf("%s (ID %d)", r.Name, id)
+			}
+		}
+	}
+	return fmt.Sprintf("ID %d", id)
+}
+
 // GetID checks if a VM ID is available
 func GetID(ctx context.Context, id int) error {
 	client, err := c.CreateClient()
@@ -86,39 +99,33 @@ func ShutdownVMWithOptions(ctx context.Context, id int, node string, wait bool, 
 		Client: client,
 	}
 
+	label := vmLabel(ctx, client, id)
 	startTime := time.Now()
 	var task *Task
 	var err error
 	if force {
-		output.Info("Force stopping VM %d on node %s...\n", id, node)
+		output.Info("Force stopping VM %s on node %s...\n", label, node)
 		var upid string
 		upid, err = client.ForceStopVM(ctx, node, id)
 		task = NewTask(upid)
 	} else {
-		output.Info("Shutting down VM %d on node %s...\n", id, node)
+		output.Info("Shutting down VM %s on node %s...\n", label, node)
 		task, err = vm.Shutdown(ctx)
 	}
 	if err != nil {
 		return fmt.Errorf("failed to shutdown VM %d: %w", id, err)
 	}
 
-	if force {
-		output.Result("VM %d force stop command issued successfully\n", id)
-	} else {
-		output.Result("VM %d shutdown command issued successfully\n", id)
-	}
-	output.Result("Task ID: %s\n", task.ID)
+	output.Result("Task started: %s\n", task.ID)
 
 	if wait {
-		output.Infoln("Waiting for shutdown operation to complete...")
 		err = waitForTask(ctx, client, node, task.ID)
 		if err != nil {
 			return fmt.Errorf("shutdown failed: %w", err)
 		}
-		duration := time.Since(startTime)
-		output.Result("VM %d shut down successfully in %s\n", id, duration.Round(time.Millisecond))
+		output.Result("VM %s shut down in %s\n", label, time.Since(startTime).Round(time.Millisecond))
 	} else {
-		output.Info("Tip: Use 'prox vm list' to check the current status\n")
+		output.Info("Tip: Follow progress with 'prox logs --follow %s'\n", task.ID)
 	}
 
 	return nil
@@ -161,7 +168,8 @@ func StartVMWithWait(ctx context.Context, id int, node string, wait bool, client
 		output.Info("Found VM %d on node %s\n", id, node)
 	}
 
-	output.Info("Starting VM %d on node %s...\n", id, node)
+	label := vmLabel(ctx, client, id)
+	output.Info("Starting VM %s on node %s...\n", label, node)
 
 	vm := &VirtualMachine{
 		ID:     id,
@@ -175,19 +183,16 @@ func StartVMWithWait(ctx context.Context, id int, node string, wait bool, client
 		return fmt.Errorf("failed to start VM %d: %w", id, err)
 	}
 
-	output.Result("VM %d start command issued successfully\n", id)
-	output.Result("Task ID: %s\n", task.ID)
+	output.Result("Task started: %s\n", task.ID)
 
 	if wait {
-		output.Infoln("Waiting for start operation to complete...")
 		err = waitForTask(ctx, client, node, task.ID)
 		if err != nil {
 			return fmt.Errorf("start failed: %w", err)
 		}
-		duration := time.Since(startTime)
-		output.Result("VM %d started successfully in %s\n", id, duration.Round(time.Millisecond))
+		output.Result("VM %s started in %s\n", label, time.Since(startTime).Round(time.Millisecond))
 	} else {
-		output.Info("Tip: Use 'prox vm list' to check the current status\n")
+		output.Info("Tip: Follow progress with 'prox logs --follow %s'\n", task.ID)
 	}
 	return nil
 }
@@ -309,8 +314,8 @@ func DeleteVMWithWait(ctx context.Context, id int, node string, wait bool) error
 		output.Info("Found VM %d on node %s\n", id, node)
 	}
 
-	output.Info("Deleting VM %d on node %s...\n", id, node)
-	output.Infoln("WARNING: This action cannot be undone!")
+	label := vmLabel(ctx, client, id)
+	output.Info("Deleting VM %s on node %s...\n", label, node)
 
 	vm := &VirtualMachine{
 		ID:     id,
@@ -323,19 +328,17 @@ func DeleteVMWithWait(ctx context.Context, id int, node string, wait bool) error
 		return fmt.Errorf("failed to delete VM %d: %w", id, err)
 	}
 
-	output.Result("VM %d deletion command issued successfully\n", id)
-	output.Result("Task ID: %s\n", task.ID)
+	output.Result("Task started: %s\n", task.ID)
 
 	if wait {
-		output.Infoln("Waiting for deletion to complete...")
 		if err := waitForTask(ctx, client, node, task.ID); err != nil {
 			return fmt.Errorf("deletion failed: %w", err)
 		}
-		output.Result("VM %d deleted\n", id)
+		output.Result("VM %s deleted\n", label)
 		return nil
 	}
 
-	output.Info("Tip: Use 'prox vm list' to verify the VM has been removed\n")
+	output.Info("Tip: Follow progress with 'prox logs --follow %s'\n", task.ID)
 	return nil
 }
 

@@ -134,16 +134,15 @@ func showStatus() error {
 	}
 
 	// Display connection information
-	fmt.Printf("\n Connection Status\n")
-	fmt.Printf("╭─────────────────────────────────────────────────────────╮\n")
-	fmt.Printf("│ URL:       %-45s│\n", url)
-	fmt.Printf("│ Version:   %-45s│\n", version.Version)
-	fmt.Printf("│ Release:   %-45s│\n", version.Release)
-	fmt.Printf("╰─────────────────────────────────────────────────────────╯\n")
+	conn := table.NewWriter()
+	conn.SetTitle("Connection Status")
+	conn.AppendRows([]table.Row{{"URL", url}, {"Version", version.Version}, {"Release", version.Release}})
+	conn.SetStyle(table.StyleRounded)
+	fmt.Printf("\n%s\n", conn.Render())
 
 	// Display cluster health
-	fmt.Printf("\n Cluster Health\n")
 	t := table.NewWriter()
+	t.SetTitle("Cluster Health")
 	t.AppendHeader(table.Row{"METRIC", "COUNT", "DETAILS"})
 
 	// Nodes
@@ -174,7 +173,7 @@ func showStatus() error {
 	t.AppendRow(table.Row{"LXC Containers", totalCTs, ctDetails})
 
 	t.SetStyle(table.StyleRounded)
-	fmt.Printf("%s\n", t.Render())
+	fmt.Printf("\n%s\n", t.Render())
 
 	// Summary status
 	fmt.Printf("\nStatus: ")

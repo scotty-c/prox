@@ -1,18 +1,5 @@
 [
   {
-    "id": 1000,
-    "name": "big",
-    "status": "running",
-    "node": "pve2",
-    "cpus": 50,
-    "memory": 1073741824,
-    "max_memory": 4294967296,
-    "disk": 0,
-    "max_disk": 68719476736,
-    "uptime": "1h 0m 0s",
-    "ip": "N/A"
-  },
-  {
     "id": 100,
     "name": "web",
     "status": "running",
@@ -51,6 +38,19 @@
     "disk": 0,
     "max_disk": 34359738368,
     "uptime": "",
+    "ip": "N/A"
+  },
+  {
+    "id": 1000,
+    "name": "big",
+    "status": "running",
+    "node": "pve2",
+    "cpus": 50,
+    "memory": 1073741824,
+    "max_memory": 4294967296,
+    "disk": 0,
+    "max_disk": 68719476736,
+    "uptime": "1h 0m 0s",
     "ip": "N/A"
   }
 ]

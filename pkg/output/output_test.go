@@ -11,15 +11,26 @@ import (
 // captureStdout runs fn and returns what it wrote to stdout
 func captureStdout(t *testing.T, fn func()) string {
 	t.Helper()
+	return capture(t, &os.Stdout, fn)
+}
+
+// captureStderr runs fn and returns what it wrote to stderr
+func captureStderr(t *testing.T, fn func()) string {
+	t.Helper()
+	return capture(t, &os.Stderr, fn)
+}
+
+func capture(t *testing.T, stream **os.File, fn func()) string {
+	t.Helper()
 	r, w, err := os.Pipe()
 	if err != nil {
 		t.Fatal(err)
 	}
-	old := os.Stdout
-	os.Stdout = w
+	old := *stream
+	*stream = w
 	fn()
 	w.Close()
-	os.Stdout = old
+	*stream = old
 	out, _ := io.ReadAll(r)
 	return string(out)
 }
@@ -48,12 +59,21 @@ func TestOutputFormats(t *testing.T) {
 	}
 
 	// Progress messages must not mix into structured output
-	if got := captureStdout(t, func() { Info("Retrieving...\n") }); got != "" {
+	if got := captureStderr(t, func() { Info("Retrieving...\n") }); got != "" {
 		t.Errorf("Info printed %q in yaml mode", got)
 	}
+	// ...and go to stderr, never stdout, so piped results stay clean
 	_ = SetFormat(FormatTable)
-	if got := captureStdout(t, func() { Info("Retrieving...\n") }); got != "Retrieving...\n" {
-		t.Errorf("Info in table mode = %q", got)
+	if got := captureStdout(t, func() { Info("Retrieving...\n"); Infoln("more") }); got != "" {
+		t.Errorf("Info wrote %q to stdout", got)
+	}
+	if got := captureStderr(t, func() { Info("Retrieving...\n") }); got != "Retrieving...\n" {
+		t.Errorf("Info in table mode wrote %q to stderr", got)
+	}
+	SetQuiet(true)
+	defer SetQuiet(false)
+	if got := captureStderr(t, func() { Info("Retrieving...\n") }); got != "" {
+		t.Errorf("Info printed %q in quiet mode", got)
 	}
 }
 

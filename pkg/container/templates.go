@@ -101,7 +101,7 @@ func displayTemplatesTable(templates []Template) {
 	}
 
 	t.SetStyle(table.StyleRounded)
-	output.Result("\n%s\n", t.Render())
+	output.Result("%s\n", t.Render())
 	output.Result("Found %d container template(s)\n", len(templates))
 }
 
