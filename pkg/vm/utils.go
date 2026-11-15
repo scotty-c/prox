@@ -134,7 +134,7 @@ func FindByTag(ctx context.Context, client c.ProxmoxClientInterface, tag, node s
 	}
 	var vms []VM
 	for _, r := range resources {
-		if r.Type == "qemu" && r.VMID != nil && hasTag(r.Tags, tag) && (node == "" || r.Node == node) {
+		if r.Type == "qemu" && r.VMID != nil && util.HasTag(r.Tags, tag) && (node == "" || r.Node == node) {
 			vms = append(vms, vmFromResource(r))
 		}
 	}

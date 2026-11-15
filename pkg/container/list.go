@@ -4,8 +4,6 @@ import (
 	"context"
 	"fmt"
 	"sort"
-	"strings"
-	"sync"
 
 	"github.com/jedib0t/go-pretty/v6/table"
 	c "github.com/scotty-c/prox/pkg/client"
@@ -13,99 +11,24 @@ import (
 	"github.com/scotty-c/prox/pkg/util"
 )
 
-// hasTag checks if a tag exists in the semicolon-separated tags string
-func hasTag(tags, tag string) bool {
-	if tags == "" {
-		return false
-	}
-	tagList := strings.Split(tags, ";")
-	for _, t := range tagList {
-		if strings.TrimSpace(t) == tag {
-			return true
+// fetchContainerIPs looks up the IP address of every running container,
+// several at a time, and stores it in the container. Containers without a
+// known address show as N/A.
+func fetchContainerIPs(client c.ProxmoxClientInterface, containers []Container) {
+	var running []int
+	for i := range containers {
+		if containers[i].Status == "running" {
+			running = append(running, i)
 		}
 	}
-	return false
-}
-
-// ipLookupJob represents a container that needs IP address lookup
-type ipLookupJob struct {
-	index int
-	node  string
-	ctid  int
-}
-
-// ipLookupResult represents the result of an IP lookup
-type ipLookupResult struct {
-	index int
-	ip    string
-}
-
-// fetchContainerIPsConcurrently fetches IP addresses for running containers using a worker pool
-// This provides 5-10x performance improvement over sequential fetching
-func fetchContainerIPsConcurrently(client c.ProxmoxClientInterface, containers []Container) {
-	maxWorkers := c.MaxConcurrentIPLookups
-
-	// Collect jobs for running containers only
-	var jobs []ipLookupJob
-	for i, container := range containers {
-		if container.Status == "running" {
-			jobs = append(jobs, ipLookupJob{
-				index: i,
-				node:  container.Node,
-				ctid:  container.ID,
-			})
+	util.ForEach(len(running), c.MaxConcurrentIPLookups, func(k int) {
+		ct := &containers[running[k]]
+		ip, err := client.GetContainerIPAlternative(context.Background(), ct.Node, ct.ID)
+		if err != nil || ip == "" {
+			ip = "N/A" // shown as-is in tables and JSON
 		}
-	}
-
-	if len(jobs) == 0 {
-		return
-	}
-
-	// Create channels
-	jobChan := make(chan ipLookupJob, len(jobs))
-	resultChan := make(chan ipLookupResult, len(jobs))
-
-	// Determine number of workers (max 10, or fewer if we have fewer jobs)
-	numWorkers := maxWorkers
-	if len(jobs) < maxWorkers {
-		numWorkers = len(jobs)
-	}
-
-	// Start workers
-	var wg sync.WaitGroup
-	for w := 0; w < numWorkers; w++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			for job := range jobChan {
-				ip, err := client.GetContainerIPAlternative(context.Background(), job.node, job.ctid)
-				if err != nil || ip == "" {
-					ip = "N/A" // shown as-is in tables and JSON
-				}
-				resultChan <- ipLookupResult{
-					index: job.index,
-					ip:    ip,
-				}
-			}
-		}()
-	}
-
-	// Send jobs to workers
-	for _, job := range jobs {
-		jobChan <- job
-	}
-	close(jobChan)
-
-	// Wait for all workers to finish and close result channel
-	go func() {
-		wg.Wait()
-		close(resultChan)
-	}()
-
-	// Collect results and update containers
-	for result := range resultChan {
-		containers[result.index].IP = result.ip
-	}
+		ct.IP = ip
+	})
 }
 
 // ListContainers lists all LXC containers
@@ -148,7 +71,7 @@ func ListContainers(node string, runningOnly bool, jsonOutput bool, tag string) 
 		}
 
 		// Filter by tag if specified
-		if tag != "" && !hasTag(resource.Tags, tag) {
+		if tag != "" && !util.HasTag(resource.Tags, tag) {
 			continue
 		}
 
@@ -191,7 +114,7 @@ func ListContainers(node string, runningOnly bool, jsonOutput bool, tag string) 
 	sort.SliceStable(containers, func(i, j int) bool { return containers[i].ID < containers[j].ID })
 
 	// Fetch IP addresses concurrently for all running containers
-	fetchContainerIPsConcurrently(client, containers)
+	fetchContainerIPs(client, containers)
 
 	if jsonOutput {
 		if containers == nil {

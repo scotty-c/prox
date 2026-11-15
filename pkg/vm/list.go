@@ -4,8 +4,6 @@ import (
 	"context"
 	"fmt"
 	"sort"
-	"strings"
-	"sync"
 
 	"github.com/jedib0t/go-pretty/v6/table"
 	c "github.com/scotty-c/prox/pkg/client"
@@ -23,99 +21,23 @@ type ListVMsOptions struct {
 	Tag         string // Filter by tag (empty for all VMs)
 }
 
-// hasTag checks if a tag exists in the semicolon-separated tags string
-func hasTag(tags, tag string) bool {
-	if tags == "" {
-		return false
-	}
-	tagList := strings.Split(tags, ";")
-	for _, t := range tagList {
-		if strings.TrimSpace(t) == tag {
-			return true
+// fetchIPs looks up the IP address of every running VM, several at a time,
+// and stores it in the VM. VMs without a known address show as N/A.
+func fetchIPs(client c.ProxmoxClientInterface, vms []VM) {
+	var running []int
+	for i := range vms {
+		if vms[i].Status == "running" {
+			running = append(running, i)
 		}
 	}
-	return false
-}
-
-// ipLookupJob represents a VM that needs IP address lookup
-type ipLookupJob struct {
-	index int
-	node  string
-	vmid  int
-}
-
-// ipLookupResult represents the result of an IP lookup
-type ipLookupResult struct {
-	index int
-	ip    string
-}
-
-// fetchIPsConcurrently fetches IP addresses for running VMs using a worker pool
-// This provides 5-10x performance improvement over sequential fetching
-func fetchIPsConcurrently(client c.ProxmoxClientInterface, vms []VM) {
-	maxWorkers := c.MaxConcurrentIPLookups
-
-	// Collect jobs for running VMs only
-	var jobs []ipLookupJob
-	for i, vm := range vms {
-		if vm.Status == "running" {
-			jobs = append(jobs, ipLookupJob{
-				index: i,
-				node:  vm.Node,
-				vmid:  vm.ID,
-			})
+	util.ForEach(len(running), c.MaxConcurrentIPLookups, func(k int) {
+		vm := &vms[running[k]]
+		ip, err := client.GetVMIP(context.Background(), vm.Node, vm.ID)
+		if err != nil || ip == "" {
+			ip = "N/A" // shown as-is in tables and JSON
 		}
-	}
-
-	if len(jobs) == 0 {
-		return
-	}
-
-	// Create channels
-	jobChan := make(chan ipLookupJob, len(jobs))
-	resultChan := make(chan ipLookupResult, len(jobs))
-
-	// Determine number of workers (max 10, or fewer if we have fewer jobs)
-	numWorkers := maxWorkers
-	if len(jobs) < maxWorkers {
-		numWorkers = len(jobs)
-	}
-
-	// Start workers
-	var wg sync.WaitGroup
-	for w := 0; w < numWorkers; w++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			for job := range jobChan {
-				ip, err := client.GetVMIP(context.Background(), job.node, job.vmid)
-				if err != nil || ip == "" {
-					ip = "N/A" // shown as-is in tables and JSON
-				}
-				resultChan <- ipLookupResult{
-					index: job.index,
-					ip:    ip,
-				}
-			}
-		}()
-	}
-
-	// Send jobs to workers
-	for _, job := range jobs {
-		jobChan <- job
-	}
-	close(jobChan)
-
-	// Wait for all workers to finish and close result channel
-	go func() {
-		wg.Wait()
-		close(resultChan)
-	}()
-
-	// Collect results and update VMs
-	for result := range resultChan {
-		vms[result.index].IP = result.ip
-	}
+		vm.IP = ip
+	})
 }
 
 // ListVMs lists virtual machines with the provided options
@@ -158,7 +80,7 @@ func ListVMs(opts ListVMsOptions) error {
 		}
 
 		// Filter by tag if specified
-		if opts.Tag != "" && !hasTag(resource.Tags, opts.Tag) {
+		if opts.Tag != "" && !util.HasTag(resource.Tags, opts.Tag) {
 			continue
 		}
 
@@ -223,7 +145,7 @@ func ListVMs(opts ListVMsOptions) error {
 
 	// Fetch IPs concurrently if requested (for performance)
 	if opts.ShowIPs && len(vms) > 0 {
-		fetchIPsConcurrently(client, vms)
+		fetchIPs(client, vms)
 	}
 
 	if opts.JSONOutput {

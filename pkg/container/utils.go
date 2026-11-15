@@ -266,7 +266,7 @@ func FindByTag(ctx context.Context, client c.ProxmoxClientInterface, tag string)
 	}
 	var containers []Container
 	for _, r := range resources {
-		if r.Type == "lxc" && r.VMID != nil && hasTag(r.Tags, tag) {
+		if r.Type == "lxc" && r.VMID != nil && util.HasTag(r.Tags, tag) {
 			containers = append(containers, Container{ID: *r.VMID, Name: r.Name, Status: r.Status, Node: r.Node})
 		}
 	}
