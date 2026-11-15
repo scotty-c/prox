@@ -457,6 +457,8 @@ PRs welcome. See CONTRIBUTING.md (branch from main, add tests, run `make release
 ## Releases
 GitHub Actions builds & publishes multi‑arch binaries + Docker images on version tags (`vX.Y.Z`). Check the Releases page.
 
+See [CHANGELOG.md](CHANGELOG.md) for what changed in each release. If you are upgrading from 0.x, read the "Upgrading from 0.0.3" section first: 1.0.0 has breaking changes.
+
 ## License
 Apache 2.0 (see LICENSE).
 
